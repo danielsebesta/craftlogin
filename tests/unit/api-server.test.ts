@@ -1,0 +1,406 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+import type { AuthenticatedAccessToken } from '../../src/api/access-token-authenticator.js';
+import type { AppRegistrationInput, RegisteredApp } from '../../src/api/app-registration.js';
+import type { CurrentUser } from '../../src/api/current-user.js';
+import { ApiError } from '../../src/api/errors.js';
+import type { ApiInteractionService } from '../../src/api/interaction-routes.js';
+import {
+  appRegistrationRateLimit,
+  tokenRateLimit,
+  verificationStatusRateLimit,
+} from '../../src/api/rate-limit.js';
+import { createApiServer } from '../../src/api/server.js';
+import type { OAuthInteractionCompletion } from '../../src/oauth/interaction-service.js';
+import type { VerificationStatus } from '../../src/verification/types.js';
+
+const errorResponseSchema = z.object({
+  error: z.object({ code: z.string(), message: z.string() }),
+});
+
+class InteractionStub implements ApiInteractionService {
+  public completion: OAuthInteractionCompletion = { status: 'pending' };
+  public statusValue: VerificationStatus = { status: 'pending', code: 'ABCDEFGH' };
+  public expectedIds: (string | undefined)[] = [];
+
+  public start(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<{ clientId: string; code: string; interactionId: string }> {
+    this.expectedIds.push(expectedInteractionId);
+    return Promise.resolve({
+      clientId: 'client-id',
+      code: 'ABCDEFGH',
+      interactionId: 'interaction-id',
+    });
+  }
+
+  public status(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<VerificationStatus> {
+    this.expectedIds.push(expectedInteractionId);
+    return Promise.resolve(this.statusValue);
+  }
+
+  public complete(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<OAuthInteractionCompletion> {
+    this.expectedIds.push(expectedInteractionId);
+    return Promise.resolve(this.completion);
+  }
+}
+
+describe('CraftLogin API server', (): void => {
+  const servers: FastifyInstance[] = [];
+
+  afterEach(async (): Promise<void> => {
+    await Promise.all(
+      servers.splice(0).map(async (server): Promise<void> => {
+        await server.close();
+      }),
+    );
+  });
+
+  it('renders a secure semantic interaction page with a no-JavaScript fallback', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    const server = await buildServer('test', interactions);
+    const response = await server.inject({ method: 'GET', url: '/interaction/interaction-id' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.body).toContain('<main');
+    expect(response.body).toContain('<h1 id="verification-heading">');
+    expect(response.body).toContain('<noscript>');
+    expect(response.body).toContain('ABCDEFGH.craftlogin.com');
+    expect(response.body).toContain('Maps &amp; More');
+    expect(response.body).not.toContain('Maps & More</strong>');
+    expect(interactions.expectedIds).toEqual(['interaction-id']);
+  });
+
+  it('returns only verification state and redirects native completion safely', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    const server = await buildServer('test', interactions);
+
+    const status = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/status',
+    });
+    expect(status.json()).toEqual({ status: 'pending' });
+    expect(status.body).not.toContain('ABCDEFGH');
+
+    const pending = await server.inject({
+      method: 'POST',
+      url: '/interaction/interaction-id/complete',
+    });
+    expect(pending.statusCode).toBe(303);
+    expect(pending.headers.location).toBe('/interaction/interaction-id');
+
+    interactions.completion = { status: 'complete', redirectTo: '/oauth2/authorize/resume-id' };
+    const complete = await server.inject({
+      method: 'POST',
+      url: '/interaction/interaction-id/complete',
+    });
+    expect(complete.statusCode).toBe(303);
+    expect(complete.headers.location).toBe('/oauth2/authorize/resume-id');
+
+    interactions.completion = { status: 'expired' };
+    const expired = await server.inject({
+      method: 'POST',
+      url: '/interaction/interaction-id/complete',
+    });
+    expect(expired.statusCode).toBe(410);
+    expect(errorResponseSchema.parse(expired.json()).error.code).toBe('interaction_expired');
+  });
+
+  it('authenticates the current-user endpoint and keeps every error in one shape', async (): Promise<void> => {
+    const server = await buildServer('test', new InteractionStub());
+
+    const missing = await server.inject({ method: 'GET', url: '/api/users/@me' });
+    expect(missing.statusCode).toBe(401);
+    expect(errorResponseSchema.parse(missing.json()).error.code).toBe('unauthorized');
+    expect(missing.headers['www-authenticate']).toBe('Bearer');
+
+    const accepted = await server.inject({
+      headers: { authorization: 'Bearer valid-token' },
+      method: 'GET',
+      url: '/api/users/@me',
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toEqual({
+      username: 'VerifiedPlayer',
+      uuid: '123e4567-e89b-42d3-a456-426614174000',
+    });
+
+    const allowedCors = await server.inject({
+      headers: {
+        authorization: 'Bearer valid-token',
+        origin: 'https://maps.example',
+      },
+      method: 'GET',
+      url: '/api/users/@me',
+    });
+    expect(allowedCors.headers['access-control-allow-origin']).toBe('https://maps.example');
+
+    const rejectedCors = await server.inject({
+      headers: {
+        authorization: 'Bearer valid-token',
+        origin: 'https://attacker.example',
+      },
+      method: 'GET',
+      url: '/api/users/@me',
+    });
+    expect(rejectedCors.headers['access-control-allow-origin']).toBeUndefined();
+
+    const missingRoute = await server.inject({ method: 'GET', url: '/not-a-route' });
+    expect(missingRoute.statusCode).toBe(404);
+    expect(errorResponseSchema.parse(missingRoute.json()).error.code).toBe('not_found');
+  });
+
+  it('reports dependency readiness without caching health responses', async (): Promise<void> => {
+    const readyServer = await buildServer('test', new InteractionStub());
+    const ready = await readyServer.inject({ method: 'GET', url: '/health' });
+    expect(ready.statusCode).toBe(200);
+    expect(ready.json()).toEqual({ status: 'ok' });
+    expect(ready.headers['cache-control']).toBe('no-store');
+
+    const unavailableServer = await buildServer(
+      'test',
+      new InteractionStub(),
+      [],
+      undefined,
+      (): Promise<void> => Promise.reject(new Error('dependency unavailable')),
+    );
+    const unavailable = await unavailableServer.inject({ method: 'GET', url: '/health' });
+    expect(unavailable.statusCode).toBe(500);
+    expect(errorResponseSchema.parse(unavailable.json()).error.code).toBe('internal_error');
+    expect(unavailable.headers['cache-control']).toBe('no-store');
+  });
+
+  it('rejects malformed app registration before calling its service', async (): Promise<void> => {
+    const registeredInputs: AppRegistrationInput[] = [];
+    const server = await buildServer('test', new InteractionStub(), registeredInputs);
+
+    const malformed = await server.inject({
+      method: 'POST',
+      payload: {
+        clientType: 'public',
+        name: ' Map viewer ',
+        redirectUris: ['https://maps.example/callback'],
+        unknown: true,
+      },
+      url: '/api/apps',
+    });
+    expect(malformed.statusCode).toBe(400);
+    expect(errorResponseSchema.parse(malformed.json()).error.code).toBe('bad_request');
+    expect(registeredInputs).toHaveLength(0);
+
+    const unsupported = await server.inject({
+      headers: { 'content-type': 'text/plain' },
+      method: 'POST',
+      payload: 'not-json',
+      url: '/api/apps',
+    });
+    expect(unsupported.statusCode).toBe(400);
+    expect(errorResponseSchema.parse(unsupported.json()).error.code).toBe('bad_request');
+
+    const valid = await server.inject({
+      method: 'POST',
+      payload: {
+        clientType: 'confidential',
+        name: 'Map viewer',
+        redirectUris: ['https://maps.example/callback'],
+      },
+      url: '/api/apps',
+    });
+    expect(valid.statusCode).toBe(201);
+    expect(valid.json()).toMatchObject({
+      clientId: 'cl_test',
+      clientSecret: 'cls_returned-once',
+      clientType: 'confidential',
+    });
+    expect(registeredInputs).toHaveLength(1);
+  });
+
+  it('generates OpenAPI 3.1 from routes and exposes Swagger UI outside production', async (): Promise<void> => {
+    const development = await buildServer('development', new InteractionStub());
+    const document: unknown = development.swagger();
+    const parsed = z
+      .object({
+        openapi: z.literal('3.1.0'),
+        paths: z.record(z.string(), z.unknown()),
+      })
+      .parse(document);
+    expect(parsed.paths).toHaveProperty('/api/users/@me');
+    expect(parsed.paths).toHaveProperty('/api/apps');
+    expect(parsed.paths).toHaveProperty('/oauth2/token');
+    expect((await development.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(200);
+
+    const production = await buildServer('production', new InteractionStub());
+    expect((await production.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(404);
+  });
+
+  it('forwards OIDC routes before Fastify consumes their request bodies', async (): Promise<void> => {
+    let bodyWasReadable = false;
+    const server = await buildServer(
+      'test',
+      new InteractionStub(),
+      [],
+      (request, response): void => {
+        bodyWasReadable = !request.readableEnded;
+        response.statusCode = 200;
+        response.setHeader('content-type', 'application/json');
+        response.end('{"token_type":"Bearer","access_token":"opaque"}');
+      },
+    );
+
+    const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'grant_type=authorization_code&code=secret-code',
+      url: '/oauth2/token',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(bodyWasReadable).toBe(true);
+  });
+
+  it('rate-limits token exchange, app registration, and verification polling independently', async (): Promise<void> => {
+    let oidcCalls = 0;
+    const server = await buildServer(
+      'test',
+      new InteractionStub(),
+      [],
+      (_request, response): void => {
+        oidcCalls += 1;
+        response.statusCode = 200;
+        response.setHeader('content-type', 'application/json');
+        response.end('{}');
+      },
+    );
+
+    for (let index = 0; index < appRegistrationRateLimit.max; index += 1) {
+      const response = await registerTestApp(server);
+      expect(response.statusCode).toBe(201);
+    }
+    const limitedRegistration = await registerTestApp(server);
+    expectRateLimited(limitedRegistration);
+
+    for (let index = 0; index < verificationStatusRateLimit.max; index += 1) {
+      const response = await server.inject({
+        method: 'GET',
+        url: '/interaction/interaction-id/status',
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    const limitedStatus = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/status',
+    });
+    expectRateLimited(limitedStatus);
+
+    for (let index = 0; index < tokenRateLimit.max; index += 1) {
+      const response = await exchangeTestToken(server);
+      expect(response.statusCode).toBe(200);
+    }
+    const limitedToken = await exchangeTestToken(server);
+    expectRateLimited(limitedToken);
+    expect(oidcCalls).toBe(tokenRateLimit.max);
+  });
+
+  async function buildServer(
+    nodeEnvironment: 'development' | 'production' | 'test',
+    interactions: InteractionStub,
+    registeredInputs: AppRegistrationInput[] = [],
+    oidcHandler: (request: IncomingMessage, response: ServerResponse) => void = (
+      _request,
+      response,
+    ): void => {
+      response.statusCode = 200;
+      response.setHeader('content-type', 'application/json');
+      response.end('{}');
+    },
+    readinessCheck: () => Promise<void> = (): Promise<void> => Promise.resolve(),
+  ): Promise<FastifyInstance> {
+    const server = await createApiServer({
+      accessTokens: {
+        authenticate: (header): Promise<AuthenticatedAccessToken> =>
+          header === 'Bearer valid-token'
+            ? Promise.resolve({ accountId: 'account-id', clientId: 'client-id' })
+            : Promise.reject(new ApiError(401, 'unauthorized', 'Unauthorized')),
+      },
+      apps: {
+        register: (input): Promise<RegisteredApp> => {
+          registeredInputs.push(input);
+          return Promise.resolve({
+            clientId: 'cl_test',
+            clientSecret: 'cls_returned-once',
+            clientType: 'confidential',
+            createdAt: '2026-09-06T12:00:00.000Z',
+            id: '123e4567-e89b-42d3-a456-426614174001',
+            name: input.name,
+            redirectUris: input.redirectUris,
+          });
+        },
+      },
+      clients: {
+        findClientName: (): Promise<string> => Promise.resolve('Maps & More'),
+        isAllowedOrigin: (origin): Promise<boolean> =>
+          Promise.resolve(origin === 'https://maps.example'),
+      },
+      interactions,
+      issuer: 'https://craftlogin.com',
+      minecraftBaseDomain: 'craftlogin.com',
+      nodeEnvironment,
+      oidcHandler,
+      readiness: { check: readinessCheck },
+      users: {
+        findCurrentUser: (): Promise<CurrentUser> =>
+          Promise.resolve({
+            username: 'VerifiedPlayer',
+            uuid: '123e4567-e89b-42d3-a456-426614174000',
+          }),
+      },
+    });
+    servers.push(server);
+    await server.ready();
+    return server;
+  }
+
+  async function registerTestApp(server: FastifyInstance): Promise<LightMyRequestResponse> {
+    return await server.inject({
+      method: 'POST',
+      payload: {
+        clientType: 'public',
+        name: 'Rate limit client',
+        redirectUris: ['https://rate-limit.example/callback'],
+      },
+      url: '/api/apps',
+    });
+  }
+
+  async function exchangeTestToken(server: FastifyInstance): Promise<LightMyRequestResponse> {
+    return await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'grant_type=authorization_code&code=not-a-real-code',
+      url: '/oauth2/token',
+    });
+  }
+
+  function expectRateLimited(response: LightMyRequestResponse): void {
+    expect(response.statusCode).toBe(429);
+    expect(errorResponseSchema.parse(response.json()).error.code).toBe('rate_limited');
+    expect(response.headers['retry-after']).toBeTypeOf('string');
+    expect(response.headers['cache-control']).toBe('no-store');
+  }
+});
