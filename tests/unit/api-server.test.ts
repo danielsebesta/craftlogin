@@ -70,6 +70,28 @@ describe('CraftLogin API server', (): void => {
     );
   });
 
+  it('serves a simple accessible project overview at the default route', async (): Promise<void> => {
+    const server = await buildServer('development', new InteractionStub());
+    const response = await server.inject({ method: 'GET', url: '/' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(response.headers['cache-control']).toBe('public, max-age=300');
+    expect(response.body).toContain('<main>');
+    expect(response.body).toContain('<h1 id="hero-heading">Sign in with Minecraft.</h1>');
+    expect(response.body).toContain('K7MPQ4RX.login.example.com');
+    expect(response.body).toContain('href="/docs/"');
+    expect(response.body).toContain('/assets/landing.css');
+    expect(response.body).not.toContain('<script');
+
+    const stylesheet = await server.inject({ method: 'GET', url: '/assets/landing.css' });
+    expect(stylesheet.statusCode).toBe(200);
+    expect(stylesheet.headers['content-type']).toContain('text/css');
+    expect(stylesheet.headers['cache-control']).toBe('public, max-age=3600');
+    expect(stylesheet.body).toContain(':focus-visible');
+  });
+
   it('renders a secure semantic interaction page with a no-JavaScript fallback', async (): Promise<void> => {
     const interactions = new InteractionStub();
     const server = await buildServer('test', interactions);
@@ -248,6 +270,9 @@ describe('CraftLogin API server', (): void => {
 
     const production = await buildServer('production', new InteractionStub());
     expect((await production.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(404);
+    const productionLanding = await production.inject({ method: 'GET', url: '/' });
+    expect(productionLanding.statusCode).toBe(200);
+    expect(productionLanding.body).not.toContain('href="/docs/"');
   });
 
   it('forwards OIDC routes before Fastify consumes their request bodies', async (): Promise<void> => {

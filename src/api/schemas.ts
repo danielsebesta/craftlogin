@@ -200,6 +200,27 @@ export const interactionAssetRouteSchema: FastifySchema = {
   },
 };
 
+export const landingPageRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: {
+      content: {
+        'text/html': {
+          schema: { type: 'string' },
+        },
+      },
+      description: english.landing.hero.lead,
+    },
+  },
+};
+
+export const landingAssetRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+  },
+};
+
 export const currentUserRouteSchema: FastifySchema = {
   description: operations.currentUser.description,
   headers: bearerHeadersSchema,

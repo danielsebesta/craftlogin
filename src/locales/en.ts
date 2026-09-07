@@ -77,6 +77,57 @@ export const english = {
     oauthArtifactUnavailable: 'The token is missing, expired, or has already been used.',
     oauthStateRequired: 'state parameter is required and must be at most 1024 characters',
   },
+  landing: {
+    affiliation: 'Not affiliated with Mojang or Microsoft.',
+    example: {
+      address: 'K7MPQ4RX.login.example.com',
+      addressLabel: 'Temporary Minecraft address',
+      ariaLabel: 'Example CraftLogin identity exchange',
+      claimLabel: 'OIDC profile',
+      claimValue: '{ sub: "minecraft-uuid", preferred_username: "Player" }',
+    },
+    footer: {
+      license: 'MIT licensed',
+    },
+    hero: {
+      documentationAction: 'Read the API docs',
+      eyebrow: 'Open-source Minecraft identity provider',
+      githubAction: 'View on GitHub',
+      heading: 'Sign in with Minecraft.',
+      lead: 'CraftLogin verifies a Minecraft Java account through an online-mode server and returns the player identity using standard OAuth 2.0 and OpenID Connect.',
+    },
+    navigation: {
+      ariaLabel: 'Primary navigation',
+      brand: 'CraftLogin',
+      documentation: 'Documentation',
+      github: 'GitHub',
+    },
+    protocol: 'OAuth 2.0 / OpenID Connect',
+    steps: {
+      heading: 'How it works',
+      items: [
+        {
+          detail:
+            'Your application redirects the user to CraftLogin with a normal OAuth authorization request and S256 PKCE.',
+          title: 'Start OAuth',
+        },
+        {
+          detail:
+            'CraftLogin shows a short-lived server address. The player joins it using Minecraft Java Edition.',
+          title: 'Join Minecraft',
+        },
+        {
+          detail:
+            'Minecraft online mode authenticates the account. Your application receives the UUID and current username.',
+          title: 'Receive identity',
+        },
+      ],
+    },
+    summary: {
+      heading: 'Small identity surface',
+      text: 'CraftLogin stores no email address or password—only the Minecraft UUID, username, and verification timestamps.',
+    },
+  },
   interaction: {
     addressLabel: 'Minecraft server address',
     appLead: 'Continue to the Minecraft server below to sign in to',

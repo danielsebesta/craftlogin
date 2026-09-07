@@ -50,9 +50,10 @@ npm start
 ```
 
 `npm start` runs the HTTP/OIDC service and the Minecraft ghost server in one process. During focused
-development they can instead be run separately with `npm run start:api` and `npm run start:mc`.
-Swagger UI is available at <http://localhost:3000/docs> outside production. The generated OpenAPI
-3.1 reference is committed as [`openapi.yaml`](openapi.yaml).
+development they can instead be run separately with `npm run start:api` and `npm run start:mc`. The
+project overview is available at <http://localhost:3000/>. Swagger UI is available at
+<http://localhost:3000/docs> outside production. The generated OpenAPI 3.1 reference is committed as
+[`openapi.yaml`](openapi.yaml).
 
 ## Container deployment
 
