@@ -1,0 +1,64 @@
+import pino, { type DestinationStream, type Logger } from 'pino';
+
+const REDACTED = '[REDACTED]';
+
+export function createLogger(level: string, destination?: DestinationStream): Logger {
+  const options = {
+    base: {
+      service: 'craftlogin',
+    },
+    level,
+    redact: {
+      censor: REDACTED,
+      paths: [
+        '*.accessToken',
+        '*.access_token',
+        '*.authorization',
+        '*.clientSecret',
+        '*.client_secret',
+        '*.code',
+        '*.cookie',
+        '*.idToken',
+        '*.id_token',
+        '*.password',
+        '*.refreshToken',
+        '*.refresh_token',
+        '*.secret',
+        '*.serverHost',
+        '*.state',
+        '*.token',
+        '*.verificationCode',
+        'accessToken',
+        'access_token',
+        'authorization',
+        'clientSecret',
+        'client_secret',
+        'code',
+        'cookie',
+        'headers.authorization',
+        'headers.cookie',
+        'idToken',
+        'id_token',
+        'password',
+        'query',
+        'refreshToken',
+        'refresh_token',
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.body',
+        'req.query',
+        'req.url',
+        'request.body',
+        'request.query',
+        'request.url',
+        'secret',
+        'serverHost',
+        'state',
+        'token',
+        'url',
+        'verificationCode',
+      ],
+    },
+  };
+  return destination === undefined ? pino(options) : pino(options, destination);
+}
