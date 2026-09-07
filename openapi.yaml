@@ -1,0 +1,762 @@
+openapi: 3.1.0
+info:
+  description: OAuth 2.0 and OpenID Connect identity for Minecraft Java Edition accounts.
+  license:
+    name: MIT
+  title: CraftLogin API
+  version: 0.1.0
+components:
+  securitySchemes:
+    bearerAuth:
+      bearerFormat: opaque
+      scheme: bearer
+      type: http
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://craftlogin.com/oauth2/authorize
+          scopes:
+            openid: Authenticate the Minecraft account.
+            profile: Read the current Minecraft username.
+          tokenUrl: https://craftlogin.com/oauth2/token
+      type: oauth2
+  schemas:
+    craftlogin.error-response:
+      additionalProperties: false
+      properties:
+        error:
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+          required:
+            - code
+            - message
+          type: object
+      required:
+        - error
+      type: object
+    craftlogin.user-response:
+      additionalProperties: false
+      properties:
+        username:
+          maxLength: 16
+          minLength: 1
+          type: string
+        uuid:
+          format: uuid
+          type: string
+      required:
+        - uuid
+        - username
+      type: object
+    craftlogin.app-response:
+      additionalProperties: false
+      properties:
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+        clientType:
+          enum:
+            - public
+            - confidential
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        name:
+          maxLength: 100
+          minLength: 1
+          pattern: ^(?!\s)(?!.*\s$)[^\u0000-\u001F\u007F-\u009F]+$
+          type: string
+        redirectUris:
+          items:
+            format: uri
+            maxLength: 2048
+            pattern: ^(?:https://|http://(?:localhost|127\.0\.0\.1|\[::1\])(?::|/))
+            type: string
+          minItems: 1
+          type: array
+          uniqueItems: true
+      required:
+        - id
+        - clientId
+        - clientType
+        - name
+        - redirectUris
+        - createdAt
+      type: object
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  status:
+                    enum:
+                      - ok
+                    type: string
+                required:
+                  - status
+                type: object
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /oauth2/authorize:
+    get:
+      summary: Authorize
+      tags:
+        - OAuth
+      description: Begin or resume an OAuth 2.0 authorization-code flow.
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: client_id
+          required: true
+        - schema:
+            type: string
+          in: query
+          name: code_challenge
+          required: true
+        - schema:
+            enum:
+              - S256
+            type: string
+          in: query
+          name: code_challenge_method
+          required: true
+        - schema:
+            type: string
+          in: query
+          name: prompt
+          required: false
+        - schema:
+            format: uri
+            type: string
+          in: query
+          name: redirect_uri
+          required: true
+        - schema:
+            enum:
+              - code
+            type: string
+          in: query
+          name: response_type
+          required: true
+        - schema:
+            type: string
+          in: query
+          name: scope
+          required: true
+        - schema:
+            maxLength: 1024
+            minLength: 1
+            type: string
+          in: query
+          name: state
+          required: true
+      responses:
+        "302":
+          description: Default Response
+        "303":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+  /oauth2/token:
+    post:
+      summary: Exchange a token
+      tags:
+        - OAuth
+      description: Redeem a single-use authorization code or rotate a refresh token.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              additionalProperties: false
+              properties:
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                code:
+                  type: string
+                code_verifier:
+                  type: string
+                grant_type:
+                  enum:
+                    - authorization_code
+                    - refresh_token
+                  type: string
+                redirect_uri:
+                  format: uri
+                  type: string
+                refresh_token:
+                  type: string
+              required:
+                - grant_type
+              type: object
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  access_token:
+                    type: string
+                  expires_in:
+                    minimum: 1
+                    type: integer
+                  id_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  scope:
+                    type: string
+                  token_type:
+                    type: string
+                required:
+                  - access_token
+                  - token_type
+                type: object
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /oauth2/revoke:
+    post:
+      summary: Revoke a token
+      tags:
+        - OAuth
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              additionalProperties: false
+              properties:
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                token:
+                  type: string
+                token_type_hint:
+                  enum:
+                    - access_token
+                    - refresh_token
+                  type: string
+              required:
+                - token
+              type: object
+      responses:
+        "200":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+  /oauth2/userinfo:
+    get: &a1
+      summary: Get OIDC UserInfo
+      tags:
+        - OAuth
+      description: Return standard OIDC claims for an OpenID-scoped access token.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "403":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+    post: *a1
+  /oauth2/jwks:
+    get:
+      summary: Get signing keys
+      tags:
+        - OAuth
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  keys:
+                    items:
+                      additionalProperties: true
+                      type: object
+                    type: array
+                required:
+                  - keys
+                type: object
+  /.well-known/openid-configuration:
+    get:
+      summary: Get authorization server metadata
+      tags: &a2
+        - OAuth
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+  /.well-known/oauth-authorization-server:
+    get:
+      summary: Get authorization server metadata
+      tags: *a2
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+  /.well-known/webfinger:
+    get:
+      summary: Resolve issuer metadata
+      tags:
+        - OAuth
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: rel
+          required: false
+        - schema:
+            type: string
+          in: query
+          name: resource
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+  /interaction/{uid}:
+    get:
+      summary: Show Minecraft verification
+      tags:
+        - Interactions
+      description: Render the Minecraft account verification interaction.
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "200":
+          description: Accessible Minecraft verification page.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/status:
+    get:
+      summary: Check Minecraft verification
+      tags:
+        - Interactions
+      description: Read verification state for the active signed OIDC interaction.
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  status:
+                    enum:
+                      - expired
+                      - pending
+                      - verified
+                    type: string
+                required:
+                  - status
+                type: object
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/complete:
+    post:
+      summary: Complete Minecraft verification
+      tags:
+        - Interactions
+      description: Claim a verified Minecraft identity and resume the OIDC
+        authorization flow.
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "303":
+          description: Default Response
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "410":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/users/@me:
+    get:
+      summary: Get the current Minecraft user
+      tags:
+        - Identity
+      description: Return the Minecraft UUID and current username represented by the
+        access token.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.user-response"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "403":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/apps:
+    post:
+      summary: Register an OAuth client
+      tags:
+        - Applications
+      description: Register an OAuth client. Confidential client secrets are returned
+        once and stored only as an Argon2id hash.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              properties:
+                clientType:
+                  enum:
+                    - public
+                    - confidential
+                  type: string
+                name:
+                  maxLength: 100
+                  minLength: 1
+                  pattern: ^(?!\s)(?!.*\s$)[^\u0000-\u001F\u007F-\u009F]+$
+                  type: string
+                redirectUris:
+                  items:
+                    format: uri
+                    maxLength: 2048
+                    pattern: ^(?:https://|http://(?:localhost|127\.0\.0\.1|\[::1\])(?::|/))
+                    type: string
+                  maxItems: 20
+                  minItems: 1
+                  type: array
+                  uniqueItems: true
+              required:
+                - clientType
+                - name
+                - redirectUris
+              type: object
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.app-response"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+servers:
+  - url: https://craftlogin.com
+tags:
+  - description: Standards-based OAuth 2.0 and OpenID Connect endpoints.
+    name: OAuth
+  - description: Complete Minecraft account verification.
+    name: Interactions
+  - description: Read the Minecraft identity represented by an access token.
+    name: Identity
+  - description: Register public and confidential OAuth clients.
+    name: Applications

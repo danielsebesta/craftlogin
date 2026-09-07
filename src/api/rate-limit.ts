@@ -1,0 +1,43 @@
+import rateLimit from '@fastify/rate-limit';
+import type { FastifyInstance } from 'fastify';
+import type { Redis } from 'ioredis';
+
+import { english } from '../locales/en.js';
+import { ApiError } from './errors.js';
+
+export const appRegistrationRateLimit = {
+  groupId: 'app-registration',
+  max: 5,
+  timeWindow: 60 * 60 * 1_000,
+};
+
+export const tokenRateLimit = {
+  groupId: 'oauth-token',
+  max: 30,
+  timeWindow: 60 * 1_000,
+};
+
+export const verificationStatusRateLimit = {
+  groupId: 'verification-status',
+  max: 60,
+  timeWindow: 60 * 1_000,
+};
+
+export async function registerRateLimiting(
+  server: FastifyInstance,
+  redis?: Redis,
+  namespace = 'craftlogin:rate-limit:',
+): Promise<void> {
+  const options = {
+    errorResponseBuilder: buildRateLimitError,
+    global: false,
+    nameSpace: namespace,
+    skipOnError: false,
+  };
+
+  await server.register(rateLimit, redis === undefined ? options : { ...options, redis });
+}
+
+function buildRateLimitError(): ApiError {
+  return new ApiError(429, 'rate_limited', english.api.errors.rateLimited);
+}
