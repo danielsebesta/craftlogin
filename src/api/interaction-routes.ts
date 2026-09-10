@@ -11,6 +11,7 @@ import type { VerificationStatus } from '../verification/types.js';
 import { ApiError } from './errors.js';
 import { interactionScript, interactionStyles } from './interaction-assets.js';
 import { renderInteractionPage } from './interaction-page.js';
+import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import { verificationStatusRateLimit } from './rate-limit.js';
 import {
   interactionAssetRouteSchema,
@@ -18,17 +19,6 @@ import {
   interactionPageRouteSchema,
   interactionStatusRouteSchema,
 } from './schemas.js';
-
-const INTERACTION_CSP = [
-  "default-src 'none'",
-  "base-uri 'none'",
-  "connect-src 'self'",
-  "font-src 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-].join('; ');
 
 interface InteractionParams {
   readonly uid: string;
@@ -150,7 +140,7 @@ export function registerInteractionRoutes(
 function setInteractionHeaders(reply: FastifyReply): void {
   void reply.headers({
     'cache-control': 'no-store',
-    'content-security-policy': INTERACTION_CSP,
+    'content-security-policy': PAGE_CONTENT_SECURITY_POLICY,
     'referrer-policy': 'no-referrer',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',

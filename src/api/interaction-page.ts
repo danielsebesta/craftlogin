@@ -24,7 +24,6 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     documentTitle: `${input.appName} · ${strings.title}`,
     footer: strings.footer,
     heading: strings.heading,
-    headingId: 'verification-heading',
     initialStatus: strings.status.pending,
     initialStatusState: 'pending',
     lead: strings.lead,

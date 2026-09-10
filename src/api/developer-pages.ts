@@ -27,13 +27,13 @@ export function renderDeveloperLoginPage(
   attempt: DeveloperLoginAttempt,
   minecraftBaseDomain: string,
 ): string {
-  const strings = english.developer;
+  const developer = english.developer;
   const interaction = english.interaction;
   const address =
     attempt.code === null
       ? attempt.status === 'verified'
-        ? strings.login.verifiedAddress
-        : strings.login.addressPending
+        ? developer.login.verifiedAddress
+        : developer.login.addressPending
       : `${attempt.code}.${minecraftBaseDomain}`;
   const verified = attempt.status === 'verified';
 
@@ -41,17 +41,17 @@ export function renderDeveloperLoginPage(
     action: '/developers/login/complete',
     address,
     addressLabel: interaction.addressLabel,
-    brand: strings.navigation.brand,
+    appName: developer.login.appName,
+    brand: developer.navigation.brand,
     continueLabel: interaction.continueButton,
     copiedLabel: interaction.copied,
     copyLabel: interaction.copyAddress,
-    documentTitle: `${strings.login.documentTitle} · ${strings.navigation.brand}`,
-    footer: strings.footer,
-    heading: strings.login.heading,
-    headingId: 'developer-login-heading',
+    documentTitle: `${developer.login.appName} · ${interaction.title}`,
+    footer: interaction.footer,
+    heading: interaction.heading,
     initialStatus: verified ? interaction.status.verified : interaction.status.pending,
     initialStatusState: verified ? 'verified' : 'pending',
-    lead: strings.login.lead,
+    lead: interaction.lead,
     messages: interaction.status,
     noJavaScript: interaction.noJavaScript,
     securityNote: interaction.securityNote,

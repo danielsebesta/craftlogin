@@ -33,7 +33,7 @@ describe('Developer Console', (): void => {
     const response = await server.inject({ method: 'GET', url: '/developers/login' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('<h1 id="developer-login-heading">');
+    expect(response.body).toContain('<h1 id="verification-heading">');
     expect(response.body).toContain('ABCDEFGH.craftlogin.com');
     expect(response.body).toContain('<noscript>');
     expect(response.body).toContain('/assets/interaction.js');

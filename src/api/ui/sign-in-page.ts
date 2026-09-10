@@ -2,6 +2,8 @@ import { escapeHtml } from '../html.js';
 
 export const MAXIMUM_POLL_ATTEMPTS = 48;
 
+export const SIGN_IN_HEADING_ID = 'verification-heading';
+
 export interface SignInMessages {
   readonly expired: string;
   readonly networkError: string;
@@ -22,7 +24,6 @@ export interface SignInPageInput {
   readonly documentTitle: string;
   readonly footer: string;
   readonly heading: string;
-  readonly headingId: string;
   readonly initialStatus: string;
   readonly initialStatusState: string;
   readonly lead: string;
@@ -72,7 +73,7 @@ export function renderSignInPage(input: SignInPageInput): string {
       data-stopped-message="${escapeHtml(input.messages.stopped)}"
     >
       <div class="signin-intro">
-        <h1 id="${escapeHtml(input.headingId)}">${escapeHtml(input.heading)}${headingSuffix}</h1>
+        <h1 id="${SIGN_IN_HEADING_ID}">${escapeHtml(input.heading)}${headingSuffix}</h1>
         <p class="lead">${escapeHtml(input.lead)}</p>
         <h2>${escapeHtml(input.stepsHeading)}</h2>
         <ol class="steps">

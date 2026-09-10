@@ -30,6 +30,7 @@ import {
   type DashboardNotice,
   type DeveloperDashboardInput,
 } from './developer-pages.js';
+import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import {
   appRegistrationRateLimit,
   developerLoginRateLimit,
@@ -49,17 +50,6 @@ import {
   developerRevokeConfirmRouteSchema,
   developerRevokeRouteSchema,
 } from './schemas.js';
-
-const DEVELOPER_CSP = [
-  "default-src 'none'",
-  "base-uri 'none'",
-  "connect-src 'self'",
-  "font-src 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-].join('; ');
 
 interface DeveloperAppBody {
   readonly clientType: 'confidential' | 'public';
@@ -463,7 +453,7 @@ function readAppFormValues(source: unknown): NonNullable<DeveloperDashboardInput
 function setDeveloperPageHeaders(reply: FastifyReply): void {
   void reply.headers({
     'cache-control': 'no-store',
-    'content-security-policy': DEVELOPER_CSP,
+    'content-security-policy': PAGE_CONTENT_SECURITY_POLICY,
     'referrer-policy': 'no-referrer',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',

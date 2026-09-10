@@ -166,9 +166,7 @@ export const english = {
       'Developer access is verified by Minecraft online mode. No Microsoft password is collected.',
     login: {
       addressPending: 'Preparing secure address…',
-      documentTitle: 'Developer Console sign in',
-      heading: 'Sign in to the Developer Console',
-      lead: 'Only Minecraft UUIDs with developer access can continue.',
+      appName: 'Developer Console',
       verifiedAddress: 'Minecraft verification complete',
     },
     navigation: {
