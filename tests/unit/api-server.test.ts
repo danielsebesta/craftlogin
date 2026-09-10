@@ -78,10 +78,11 @@ describe('CraftLogin API server', (): void => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(response.headers['content-security-policy']).toContain("font-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
     expect(response.body).toContain('<main>');
     expect(response.body).toContain('<h1 id="hero-heading">Sign in with Minecraft.</h1>');
-    expect(response.body).toContain('K7MPQ4RX.login.example.com');
+    expect(response.body).toContain('K7MPQ4RX.craftlogin.com');
     expect(response.body).toContain('href="/docs/"');
     expect(response.body).toContain('/assets/landing.css');
     expect(response.body).not.toContain('<script');
@@ -90,7 +91,22 @@ describe('CraftLogin API server', (): void => {
     expect(stylesheet.statusCode).toBe(200);
     expect(stylesheet.headers['content-type']).toContain('text/css');
     expect(stylesheet.headers['cache-control']).toBe('public, max-age=3600');
+    expect(stylesheet.body).toContain('@font-face');
+    expect(stylesheet.body).toContain('font-family: "Pixeloid Sans"');
     expect(stylesheet.body).toContain(':focus-visible');
+
+    const font = await server.inject({
+      method: 'GET',
+      url: '/assets/fonts/pixeloid-sans-3a54c9da.woff2',
+    });
+    expect(font.statusCode).toBe(200);
+    expect(font.headers['content-type']).toContain('font/woff2');
+    expect(font.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect(font.rawPayload.subarray(0, 4).toString('ascii')).toBe('wOF2');
+
+    const fontLicense = await server.inject({ method: 'GET', url: '/assets/fonts/OFL.txt' });
+    expect(fontLicense.statusCode).toBe(200);
+    expect(fontLicense.body).toContain('SIL OPEN FONT LICENSE Version 1.1');
   });
 
   it('renders a secure semantic interaction page with a no-JavaScript fallback', async (): Promise<void> => {
@@ -268,7 +284,15 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).toHaveProperty('/api/users/@me');
     expect(parsed.paths).toHaveProperty('/api/apps');
     expect(parsed.paths).toHaveProperty('/oauth2/token');
-    expect((await development.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(200);
+    const documentation = await development.inject({ method: 'GET', url: '/docs/' });
+    expect(documentation.statusCode).toBe(200);
+    expect(documentation.body).toContain('pixeloid.css');
+    const documentationTheme = await development.inject({
+      method: 'GET',
+      url: '/docs/static/theme/pixeloid.css',
+    });
+    expect(documentationTheme.statusCode).toBe(200);
+    expect(documentationTheme.body).toContain('font-family: "Pixeloid Sans"');
 
     const production = await buildServer('production', new InteractionStub());
     expect((await production.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(404);

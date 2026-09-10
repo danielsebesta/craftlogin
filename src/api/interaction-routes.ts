@@ -23,6 +23,7 @@ const INTERACTION_CSP = [
   "default-src 'none'",
   "base-uri 'none'",
   "connect-src 'self'",
+  "font-src 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "script-src 'self'",

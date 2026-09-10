@@ -490,6 +490,15 @@ export const developerAssetRouteSchema: FastifySchema = {
   response: { 200: { type: 'string' } },
 };
 
+export const fontAssetRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
 export const oauthAuthorizationRouteSchema: FastifySchema = {
   description: operations.authorize.description,
   querystring: {

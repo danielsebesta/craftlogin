@@ -1,4 +1,6 @@
-export const interactionStyles = `
+import { fontFaceStyles } from './font-assets.js';
+
+export const interactionStyles = `${fontFaceStyles}
 :root {
   color-scheme: light;
   --ink: #172019;
@@ -10,7 +12,7 @@ export const interactionStyles = `
   --green-bright: #b9e769;
   --night: #111814;
   --danger: #8d2f25;
-  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+  font-family: "Pixeloid Sans", sans-serif;
 }
 
 * {
@@ -30,6 +32,11 @@ body {
     linear-gradient(rgb(17 24 20 / 82%), rgb(17 24 20 / 94%)),
     repeating-linear-gradient(90deg, transparent 0 39px, rgb(185 231 105 / 9%) 40px),
     repeating-linear-gradient(0deg, transparent 0 39px, rgb(185 231 105 / 9%) 40px);
+}
+
+code,
+pre {
+  font-family: "Pixeloid Mono", monospace;
 }
 
 .site-header,
@@ -52,7 +59,7 @@ body {
   display: inline-flex;
   gap: 11px;
   align-items: center;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Pixeloid Sans", sans-serif;
   font-size: 1.16rem;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -70,7 +77,7 @@ body {
 .eyebrow,
 .address-label,
 .status-label {
-  font-family: "Courier New", Courier, monospace;
+  font-family: "Pixeloid Mono", monospace;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -117,11 +124,11 @@ body {
 h1 {
   max-width: 620px;
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Pixeloid Sans", sans-serif;
   font-size: clamp(3rem, 7vw, 6.6rem);
   font-weight: 700;
   line-height: 0.88;
-  letter-spacing: -0.065em;
+  letter-spacing: -0.015em;
 }
 
 .lead {
@@ -138,7 +145,7 @@ h1 {
 
 .steps-heading {
   margin: 46px 0 18px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Pixeloid Sans", sans-serif;
   font-size: 1.35rem;
 }
 
@@ -168,7 +175,7 @@ h1 {
   background: var(--green);
   place-items: center;
   content: counter(steps, decimal-leading-zero);
-  font-family: "Courier New", Courier, monospace;
+  font-family: "Pixeloid Mono", monospace;
   font-size: 0.7rem;
   font-weight: 700;
 }
@@ -208,11 +215,11 @@ h1 {
   display: block;
   overflow-wrap: anywhere;
   color: #fff;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "Pixeloid Mono", monospace;
   font-size: clamp(1.45rem, 4vw, 2.65rem);
   font-weight: 700;
   line-height: 1.15;
-  letter-spacing: -0.045em;
+  letter-spacing: 0;
 }
 
 .status-block {
@@ -256,7 +263,7 @@ h1 {
   border-radius: 0;
   box-shadow: 6px 6px 0 #0b100d;
   cursor: pointer;
-  font: 700 0.86rem/1.2 "Courier New", Courier, monospace;
+  font: 700 0.86rem/1.2 "Pixeloid Mono", monospace;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;

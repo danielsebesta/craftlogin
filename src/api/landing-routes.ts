@@ -7,6 +7,7 @@ import { landingAssetRouteSchema, landingPageRouteSchema } from './schemas.js';
 const LANDING_CSP = [
   "default-src 'none'",
   "base-uri 'none'",
+  "font-src 'self'",
   "form-action 'none'",
   "frame-ancestors 'none'",
   "style-src 'self'",

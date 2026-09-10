@@ -24,6 +24,7 @@ COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_m
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json package-lock.json prisma.config.ts ./
 COPY --chown=node:node prisma ./prisma
+COPY --chown=node:node public ./public
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/craftlogin-entrypoint
 
 USER node

@@ -173,6 +173,13 @@ administrator. Developer Console sessions are opaque Redis records with signed `
 `SameSite=Lax` cookies, sliding expiration, an absolute lifetime, CSRF protection, and rotation
 after role changes.
 
+## Typography
+
+The web interface bundles the Pixeloid Sans, Pixeloid Sans Bold, and Pixeloid Mono typefaces by
+GGBotNet. They are self-hosted as WOFF2 assets and distributed under the SIL Open Font License 1.1;
+the required copyright notice and license are available in
+[`public/fonts/OFL.txt`](public/fonts/OFL.txt). The CraftLogin source code remains MIT-licensed.
+
 ## License
 
 CraftLogin is available under the [MIT License](LICENSE).

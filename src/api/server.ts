@@ -16,6 +16,7 @@ import type { CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
 import { registerDeveloperRoutes } from './developer-routes.js';
 import { registerErrorHandling } from './errors.js';
+import { registerFontAssetRoutes } from './font-assets.js';
 import { registerHealthRoute, type ReadinessCheck } from './health-route.js';
 import {
   registerInteractionRoutes,
@@ -74,6 +75,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
 
   registerSharedSchemas(server);
   registerErrorHandling(server);
+  registerFontAssetRoutes(server);
   registerLandingRoutes(server, { showDocumentation: options.nodeEnvironment !== 'production' });
   registerHealthRoute(server, options.readiness);
   registerOidcHttpRoutes(server, options.oidcHandler);

@@ -1,4 +1,6 @@
-export const landingStyles = `
+import { fontFaceStyles } from './font-assets.js';
+
+export const landingStyles = `${fontFaceStyles}
 :root {
   color-scheme: light;
   --primary: #246b45;
@@ -12,7 +14,7 @@ export const landingStyles = `
   --dark: #17231c;
   --radius: 4px;
   --shadow: 0 1px 3px rgb(20 38 27 / 12%), 0 1px 2px rgb(20 38 27 / 8%);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Pixeloid Sans", sans-serif;
 }
 
 * {
@@ -44,6 +46,11 @@ a:hover {
 a:focus-visible {
   outline: 3px solid #87c6a0;
   outline-offset: 3px;
+}
+
+code,
+pre {
+  font-family: "Pixeloid Mono", monospace;
 }
 
 .container {
@@ -135,7 +142,7 @@ h1 {
   margin-bottom: 20px;
   font-size: clamp(2.4rem, 6vw, 4rem);
   line-height: 1.08;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.015em;
 }
 
 .hero-lead {
@@ -218,7 +225,7 @@ h1 {
 
 .protocol {
   color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: "Pixeloid Mono", monospace;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.045em;
@@ -250,7 +257,7 @@ h1 {
   display: block;
   overflow-wrap: anywhere;
   color: var(--ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: "Pixeloid Mono", monospace;
 }
 
 .server-address {
@@ -303,7 +310,7 @@ h1 {
   margin-bottom: 28px;
   color: var(--primary);
   content: "0" counter(steps);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: "Pixeloid Mono", monospace;
   font-size: 0.78rem;
   font-weight: 700;
 }

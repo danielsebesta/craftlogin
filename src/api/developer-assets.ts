@@ -1,4 +1,6 @@
-export const developerStyles = `
+import { fontFaceStyles } from './font-assets.js';
+
+export const developerStyles = `${fontFaceStyles}
 :root {
   color-scheme: dark;
   --night: #101814;
@@ -13,7 +15,7 @@ export const developerStyles = `
   --amber: #f4c76d;
   --danger: #ad4439;
   --white: #f9fbf7;
-  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+  font-family: "Pixeloid Sans", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -33,6 +35,7 @@ body {
 
 button, input, select, textarea { font: inherit; }
 a { color: inherit; }
+code, pre { font-family: "Pixeloid Mono", monospace; }
 
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid var(--green);
@@ -57,7 +60,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   display: inline-flex;
   align-items: center;
   gap: 11px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Pixeloid Sans", sans-serif;
   font-size: 1.13rem;
   font-weight: 700;
   text-decoration: none;
@@ -72,7 +75,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .developer-nav nav { display: flex; align-items: center; gap: 22px; font-size: .82rem; }
 .developer-nav nav a { color: #b4bdb6; text-decoration: none; }
-.developer-nav nav strong { color: var(--green); font-family: "Courier New", monospace; text-transform: uppercase; letter-spacing: .08em; }
+.developer-nav nav strong { color: var(--green); font-family: "Pixeloid Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
 
 .developer-footer {
   min-height: 76px;
@@ -83,7 +86,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .kicker, .panel-index, .terminal-label, .role-stamp, .login-status span, .credential span, dt, label > span, legend {
-  font-family: "Courier New", Courier, monospace;
+  font-family: "Pixeloid Mono", monospace;
   font-size: .71rem;
   font-weight: 700;
   letter-spacing: .105em;
@@ -91,7 +94,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 h1, h2, h3, p { margin-top: 0; }
-h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.04em; }
+h1, h2 { font-family: "Pixeloid Sans", sans-serif; letter-spacing: -.015em; }
 
 .developer-login {
   display: grid;
@@ -108,11 +111,11 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.04em;
 
 .login-steps { display: grid; gap: 13px; padding: 30px 0 0; margin: 30px 0 0; border-top: 1px solid var(--line); list-style: none; counter-reset: login-step; }
 .login-steps li { display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: start; counter-increment: login-step; }
-.login-steps li::before { display: grid; width: 27px; height: 27px; color: #fff; background: var(--green-dark); content: counter(login-step); place-items: center; font: 700 .72rem/1 "Courier New", monospace; }
+.login-steps li::before { display: grid; width: 27px; height: 27px; color: #fff; background: var(--green-dark); content: counter(login-step); place-items: center; font: 700 .72rem/1 "Pixeloid Mono", monospace; }
 
 .login-terminal { display: flex; flex-direction: column; justify-content: center; background: var(--night-raised); border: 1px solid #34453a; border-left: 0; }
 .terminal-label { margin-bottom: 14px; color: var(--green); }
-.login-address { overflow-wrap: anywhere; color: #fff; font: 700 clamp(1.45rem, 4vw, 2.7rem)/1.16 "Courier New", monospace; letter-spacing: -.045em; }
+.login-address { overflow-wrap: anywhere; color: #fff; font: 700 clamp(1.45rem, 4vw, 2.7rem)/1.16 "Pixeloid Mono", monospace; letter-spacing: 0; }
 .login-status { padding-top: 25px; margin-top: 34px; border-top: 1px solid rgb(255 255 255 / 17%); }
 .login-status span { color: #a8b2aa; }
 .login-status p { min-height: 48px; margin: 7px 0 0; }
@@ -125,7 +128,7 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.04em;
   min-height: 42px;
   border-radius: 0;
   cursor: pointer;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "Pixeloid Mono", monospace;
   font-size: .74rem;
   font-weight: 700;
   letter-spacing: .045em;
@@ -165,7 +168,7 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.04em;
 .stack-form small, .choice-row small, .access-row small { display: block; color: var(--muted); font-size: .77rem; line-height: 1.4; }
 input, textarea, select { width: 100%; color: var(--ink); background: #fffef9; border: 1px solid #989b91; border-radius: 0; }
 input, select { min-height: 44px; padding: 9px 11px; }
-textarea { min-height: 112px; padding: 11px; resize: vertical; font-family: "Courier New", monospace; font-size: .82rem; }
+textarea { min-height: 112px; padding: 11px; resize: vertical; font-family: "Pixeloid Mono", monospace; font-size: .82rem; }
 fieldset { padding: 0; margin: 0; border: 0; }
 legend { margin-bottom: 9px; }
 .choice-row { display: grid; grid-template-columns: 19px 1fr; gap: 10px; padding: 11px; border: 1px solid #c2c0b6; }
@@ -177,8 +180,8 @@ legend { margin-bottom: 9px; }
 .app-row { padding: 26px clamp(25px, 4vw, 42px); }
 .app-row + .app-row { border-top: 1px solid var(--line); }
 .app-heading { display: flex; justify-content: space-between; gap: 20px; align-items: start; }
-.app-heading h3 { margin: 3px 0 18px; font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; }
-.client-type { color: var(--green-dark); font: 700 .65rem/1 "Courier New", monospace; text-transform: uppercase; letter-spacing: .08em; }
+.app-heading h3 { margin: 3px 0 18px; font-family: "Pixeloid Sans", sans-serif; font-size: 1.35rem; }
+.client-type { color: var(--green-dark); font: 700 .65rem/1 "Pixeloid Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
 dl { display: grid; gap: 14px; margin: 0; }
 dl div { display: grid; grid-template-columns: 100px 1fr; gap: 16px; }
 dt { color: var(--muted); }

@@ -3,6 +3,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import type { FastifyInstance } from 'fastify';
 
 import { english } from '../locales/en.js';
+import { swaggerTypographyStyles } from './font-assets.js';
 
 export interface OpenApiOptions {
   readonly issuer: string;
@@ -72,6 +73,10 @@ export async function registerOpenApi(
     await server.register(swaggerUi, {
       routePrefix: '/docs',
       staticCSP: true,
+      theme: {
+        css: [{ content: swaggerTypographyStyles, filename: 'pixeloid.css' }],
+        title: 'CraftLogin API',
+      },
       uiConfig: {
         deepLinking: true,
         docExpansion: 'list',
