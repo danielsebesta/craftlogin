@@ -1,5 +1,3 @@
-import { createServer as createTcpServer } from 'node:net';
-
 import minecraftProtocol from 'minecraft-protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -7,6 +5,7 @@ import { z } from 'zod';
 import { english } from '../../src/locales/en.js';
 import { createLogger } from '../../src/logging/logger.js';
 import { type MinecraftGhostServer, startGhostServer } from '../../src/mc-server/ghost-server.js';
+import { findAvailablePort } from './support/tcp-port.js';
 
 const loginDisconnectSchema = z.object({ reason: z.string() });
 const chatComponentSchema = z.object({ text: z.string() });
@@ -96,29 +95,6 @@ async function connectAndWaitForRejection(port: number): Promise<string> {
       settled = true;
       clearTimeout(timeout);
       reject(new Error(`Minecraft connection ended before rejection: ${reason}`));
-    });
-  });
-}
-
-async function findAvailablePort(): Promise<number> {
-  const listener = createTcpServer();
-  return await new Promise<number>((resolve, reject): void => {
-    listener.once('error', reject);
-    listener.listen(0, '127.0.0.1', (): void => {
-      const address = listener.address();
-      if (address === null || typeof address === 'string') {
-        listener.close();
-        reject(new Error('Could not allocate a TCP test port'));
-        return;
-      }
-
-      listener.close((error?: Error): void => {
-        if (error === undefined) {
-          resolve(address.port);
-        } else {
-          reject(error);
-        }
-      });
     });
   });
 }

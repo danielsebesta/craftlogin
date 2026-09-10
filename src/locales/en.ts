@@ -328,7 +328,8 @@ export const english = {
     title: 'Signed out',
   },
   minecraft: {
-    motd: 'CraftLogin Minecraft verification',
+    motd: 'CraftLogin verification',
+    motdDetail: 'Join with the code shown in your browser',
     success: 'Verification complete. You can return to your browser.',
     unavailable:
       'This verification code is invalid or has expired. Return to your browser and try again.',

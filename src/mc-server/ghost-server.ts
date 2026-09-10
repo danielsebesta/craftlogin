@@ -1,4 +1,5 @@
 import debug from 'debug';
+import { readFile } from 'node:fs/promises';
 import minecraftProtocol, {
   type Server,
   type ServerClient,
@@ -18,13 +19,23 @@ import type {
   VerificationResolution,
   VerificationResolver,
 } from '../verification/verification-resolver.js';
-import { disconnect } from './disconnect.js';
+import { disconnect, markLoggedIn } from './disconnect.js';
 import { extractVerificationCode } from './hostname.js';
+
+// Shutdown must not stall on a client that never completes configuration; the reason is best effort.
+const SHUTDOWN_PLAY_WAIT_TIMEOUT_MS = 1_500;
 
 const loginHandshakeSchema = z.object({
   nextState: z.literal(2),
   serverHost: z.string(),
 });
+
+const serverIconFileUrl = new URL('../../public/server-icon.png', import.meta.url);
+
+interface ServerPingResponse {
+  readonly favicon?: string;
+  readonly [key: string]: unknown;
+}
 
 type CodeAvailability = 'available' | 'error' | 'unavailable';
 
@@ -72,9 +83,13 @@ export class MinecraftGhostServer {
     }
     this.closed = true;
 
-    for (const client of Object.values(this.server.clients)) {
-      disconnect(client, english.minecraft.shutdown);
-    }
+    await Promise.all(
+      Object.values(this.server.clients).map((client) =>
+        disconnect(client, english.minecraft.shutdown, {
+          playWaitTimeoutMs: SHUTDOWN_PLAY_WAIT_TIMEOUT_MS,
+        }),
+      ),
+    );
 
     await new Promise<void>((resolve): void => {
       this.server.once('close', resolve);
@@ -90,6 +105,7 @@ export async function startGhostServer(
   // minecraft-protocol's debug output serializes handshake packets, which contain verification codes.
   debug.disable();
 
+  const serverIcon = await loadServerIcon(dependencies.logger);
   const pendingClients = new WeakMap<ServerClient, PendingClientVerification>();
   const options: ServerOptions = {
     host: config.host,
@@ -100,12 +116,20 @@ export async function startGhostServer(
     keepAlive: false,
     maxPlayers: 10_000,
     motd: english.minecraft.motd,
+    motdMsg: {
+      text: english.minecraft.motd,
+      color: 'green',
+      extra: [{ text: `\n${english.minecraft.motdDetail}`, color: 'gray' }],
+    },
+    ...(serverIcon === null
+      ? {}
+      : { favicon: serverIcon, beforePing: createPingIconHook(serverIcon) }),
     errorHandler: (client, error): void => {
       dependencies.logger.warn(
         { errorKind: getErrorKind(error) },
         'Minecraft client connection failed',
       );
-      disconnect(client, english.minecraft.temporaryFailure);
+      void disconnect(client, english.minecraft.temporaryFailure);
     },
   };
   const server = minecraftProtocol.createServer(options);
@@ -120,7 +144,7 @@ export async function startGhostServer(
 
       const code = extractVerificationCode(parsedHandshake.data.serverHost, config.baseDomain);
       if (code === null) {
-        disconnect(client, english.minecraft.unavailable);
+        void disconnect(client, english.minecraft.unavailable);
         return;
       }
 
@@ -128,9 +152,9 @@ export async function startGhostServer(
       pendingClients.set(client, { availability, code });
       void availability.then((result): void => {
         if (result === 'unavailable') {
-          disconnect(client, english.minecraft.unavailable);
+          void disconnect(client, english.minecraft.unavailable);
         } else if (result === 'error') {
-          disconnect(client, english.minecraft.temporaryFailure);
+          void disconnect(client, english.minecraft.temporaryFailure);
         }
       });
     });
@@ -139,13 +163,15 @@ export async function startGhostServer(
   // minecraft-protocol emits login only after online-mode session authentication populated the
   // UUID and username. Resolving earlier would treat an unauthenticated profile as verified.
   server.on('login', (client): void => {
+    // Login success has been written, so the client is no longer addressable in the login state.
+    markLoggedIn(client);
     void handleAuthenticatedLogin(client, pendingClients, dependencies).catch(
       (error: unknown): void => {
         dependencies.logger.error(
           { errorKind: getErrorKind(error) },
           'Authenticated Minecraft verification failed',
         );
-        disconnect(client, english.minecraft.temporaryFailure);
+        void disconnect(client, english.minecraft.temporaryFailure);
       },
     );
   });
@@ -185,6 +211,26 @@ async function lookupCodeAvailability(
   }
 }
 
+// The status ping expects a data URI, while the login exchange decodes raw base64. Keep the option
+// as raw base64 and enrich the ping response so both paths receive the format they expect.
+function createPingIconHook(
+  iconBase64: string,
+): (response: ServerPingResponse) => ServerPingResponse {
+  return (response: ServerPingResponse): ServerPingResponse => ({
+    ...response,
+    favicon: `data:image/png;base64,${iconBase64}`,
+  });
+}
+
+async function loadServerIcon(logger: Logger): Promise<string | null> {
+  try {
+    return (await readFile(serverIconFileUrl)).toString('base64');
+  } catch (error: unknown) {
+    logger.warn({ errorKind: getErrorKind(error) }, 'Minecraft server icon could not be loaded');
+    return null;
+  }
+}
+
 async function handleAuthenticatedLogin(
   client: ServerClient,
   pendingClients: WeakMap<ServerClient, PendingClientVerification>,
@@ -192,7 +238,7 @@ async function handleAuthenticatedLogin(
 ): Promise<void> {
   const pending = pendingClients.get(client);
   if (pending === undefined) {
-    disconnect(client, english.minecraft.unavailable);
+    void disconnect(client, english.minecraft.unavailable);
     return;
   }
 
@@ -214,7 +260,7 @@ async function handleAuthenticatedLogin(
     parsedPlayer.data,
     new Date(),
   );
-  disconnect(
+  void disconnect(
     client,
     resolution === 'resolved' ? english.minecraft.success : english.minecraft.unavailable,
   );
