@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
+    "admin:grant": "tsx src/admin/grant-admin.ts",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run db:validate && npm run openapi:check && npm test",
     "db:format": "prisma format",
     "db:generate": "prisma generate",
@@ -32,8 +33,8 @@
     "start:production": "node dist/main.js",
     "test": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:integration:postgres": "vitest run tests/integration/postgres-oidc-adapter.test.ts",
-    "test:integration:redis": "vitest run tests/integration/redis-verification-store.test.ts tests/integration/redis-rate-limit.test.ts",
+    "test:integration:postgres": "vitest run tests/integration/postgres-oidc-adapter.test.ts tests/integration/postgres-developer-access.test.ts",
+    "test:integration:redis": "vitest run tests/integration/redis-verification-store.test.ts tests/integration/redis-developer-session.test.ts tests/integration/redis-rate-limit.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

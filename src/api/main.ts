@@ -3,6 +3,11 @@ import type { Logger } from 'pino';
 
 import { loadEnvironment } from '../config/environment.js';
 import { loadOAuthCredentials } from '../config/oauth-credentials.js';
+import { PrismaAppManager } from '../developers/app-management.js';
+import { PrismaDeveloperAccessRepository } from '../developers/developer-repository.js';
+import { DeveloperLoginService } from '../developers/login-service.js';
+import { DeveloperSessionService } from '../developers/session-service.js';
+import { RedisDeveloperSessionStore } from '../developers/session-store.js';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { createDatabaseClient } from '../infrastructure/database.js';
 import { createRedisClient } from '../infrastructure/redis.js';
@@ -11,11 +16,13 @@ import { getErrorKind } from '../logging/error-kind.js';
 import { createLogger } from '../logging/logger.js';
 import { createOAuthRuntime } from '../oauth/runtime.js';
 import { installSessionSignalLogging } from '../oauth/session-security.js';
+import { RedisVerificationStore } from '../verification/redis-verification-store.js';
 import { ProviderAccessTokenAuthenticator } from './access-token-authenticator.js';
 import { PrismaAppRegistrar } from './app-registration.js';
 import { renderAuthorizationError } from './authorization-error-page.js';
 import { PrismaClientDirectory } from './client-directory.js';
 import { PrismaCurrentUserLookup } from './current-user.js';
+import { DeveloperRequestAuthenticator } from './developer-authentication.js';
 import { createApiServer } from './server.js';
 
 const bootstrapLogger = createLogger('info');
@@ -47,11 +54,29 @@ async function main(): Promise<void> {
     );
     oauth.provider.proxy = environment.httpTrustProxy;
     installSessionSignalLogging(oauth.provider, logger, credentials.cookieKeys);
+    const [developerSessionKey] = credentials.cookieKeys;
+    if (developerSessionKey === undefined) {
+      throw new TypeError('A cookie key is required for developer sessions');
+    }
+    const developers = new PrismaDeveloperAccessRepository(database);
+    const verification = new RedisVerificationStore(redis);
+    const developerSessions = new DeveloperSessionService(
+      new RedisDeveloperSessionStore(redis),
+      developers,
+      logger,
+      developerSessionKey,
+    );
+    const developerAuthentication = new DeveloperRequestAuthenticator(developerSessions);
     const clients = new PrismaClientDirectory(database);
     server = await createApiServer({
       accessTokens: new ProviderAccessTokenAuthenticator(oauth.provider),
+      appManager: new PrismaAppManager(database),
       apps: new PrismaAppRegistrar(database),
       clients,
+      cookieKeys: credentials.cookieKeys,
+      developerAuthentication,
+      developerLogins: new DeveloperLoginService(verification, developers, developerSessions),
+      developers,
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,
       logger,

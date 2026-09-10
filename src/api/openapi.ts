@@ -23,6 +23,11 @@ export async function registerOpenApi(
             scheme: 'bearer',
             type: 'http',
           },
+          developerSession: {
+            in: 'cookie',
+            name: '__Host-craftlogin_developer_session',
+            type: 'apiKey',
+          },
           oauth2: {
             flows: {
               authorizationCode: {

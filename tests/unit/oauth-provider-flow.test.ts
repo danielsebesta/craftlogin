@@ -221,11 +221,22 @@ describe('CraftLogin OIDC provider', (): void => {
     const accessTokens = new ProviderAccessTokenAuthenticator(provider);
     server = await createApiServer({
       accessTokens,
+      appManager: { list: unavailable, remove: unavailable },
       apps: { register: unavailable },
       clients: {
         findClientName: (): Promise<string> => Promise.resolve('OAuth flow test client'),
         isAllowedOrigin: (): Promise<boolean> => Promise.resolve(false),
       },
+      cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      developerAuthentication: {
+        authenticate: unavailable,
+        logout: unavailable,
+        require: unavailable,
+        requireAdministrator: unavailable,
+        requireCsrf: unavailable,
+      },
+      developerLogins: { complete: unavailable, start: unavailable, status: unavailable },
+      developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
       interactions,
       issuer,
       minecraftBaseDomain: 'craftlogin.com',

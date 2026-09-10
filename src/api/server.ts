@@ -1,14 +1,20 @@
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import formBody from '@fastify/formbody';
 import helmet from '@fastify/helmet';
 import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 
+import type { AppManager } from '../developers/app-management.js';
+import type { DeveloperAccessRepository } from '../developers/developer-repository.js';
+import type { DeveloperLoginService } from '../developers/login-service.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
 import type { RegisteredOriginLookup } from './client-directory.js';
 import type { CurrentUserLookup } from './current-user.js';
+import type { DeveloperAuthentication } from './developer-authentication.js';
+import { registerDeveloperRoutes } from './developer-routes.js';
 import { registerErrorHandling } from './errors.js';
 import { registerHealthRoute, type ReadinessCheck } from './health-route.js';
 import {
@@ -25,8 +31,13 @@ import { registerUserRoutes } from './user-routes.js';
 
 export interface ApiServerOptions {
   readonly accessTokens: AccessTokenAuthenticator;
+  readonly appManager: AppManager;
   readonly apps: AppRegistrar;
   readonly clients: ClientNameLookup & RegisteredOriginLookup;
+  readonly cookieKeys: readonly string[];
+  readonly developerAuthentication: DeveloperAuthentication;
+  readonly developers: DeveloperAccessRepository;
+  readonly developerLogins: Pick<DeveloperLoginService, 'complete' | 'start' | 'status'>;
   readonly interactions: ApiInteractionService;
   readonly issuer: string;
   readonly logger?: FastifyBaseLogger;
@@ -48,10 +59,11 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     nodeEnvironment: options.nodeEnvironment,
   });
   await registerRateLimiting(server, options.rateLimitRedis, options.rateLimitNamespace);
+  await server.register(cookie, { secret: [...options.cookieKeys] });
   await server.register(formBody);
   await server.register(helmet, { contentSecurityPolicy: false });
   await server.register(cors, {
-    allowedHeaders: ['authorization', 'content-type'],
+    allowedHeaders: ['authorization', 'content-type', 'x-csrf-token'],
     credentials: false,
     hook: 'preHandler',
     maxAge: 600,
@@ -71,7 +83,16 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     minecraftBaseDomain: options.minecraftBaseDomain,
   });
   registerUserRoutes(server, options.accessTokens, options.users);
-  registerAppRoutes(server, options.apps);
+  registerDeveloperRoutes(server, {
+    appManager: options.appManager,
+    apps: options.apps,
+    authentication: options.developerAuthentication,
+    developers: options.developers,
+    logins: options.developerLogins,
+    logger: server.log,
+    minecraftBaseDomain: options.minecraftBaseDomain,
+  });
+  registerAppRoutes(server, options.apps, options.appManager, options.developerAuthentication);
 
   return server;
 }

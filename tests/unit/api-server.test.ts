@@ -8,6 +8,7 @@ import type { AuthenticatedAccessToken } from '../../src/api/access-token-authen
 import type { AppRegistrationInput, RegisteredApp } from '../../src/api/app-registration.js';
 import type { CurrentUser } from '../../src/api/current-user.js';
 import { ApiError } from '../../src/api/errors.js';
+import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 import type { ApiInteractionService } from '../../src/api/interaction-routes.js';
 import {
   appRegistrationRateLimit,
@@ -237,6 +238,7 @@ describe('CraftLogin API server', (): void => {
     expect(errorResponseSchema.parse(unsupported.json()).error.code).toBe('bad_request');
 
     const valid = await server.inject({
+      headers: { 'x-csrf-token': 'test-csrf-token' },
       method: 'POST',
       payload: {
         clientType: 'confidential',
@@ -356,12 +358,23 @@ describe('CraftLogin API server', (): void => {
     },
     readinessCheck: () => Promise<void> = (): Promise<void> => Promise.resolve(),
   ): Promise<FastifyInstance> {
+    const developerSession = {
+      csrfToken: 'test-csrf-token',
+      expiresInSeconds: 60,
+      role: 'developer',
+      sessionId: `ds_${'a'.repeat(43)}`,
+      userUuid: '123e4567-e89b-42d3-a456-426614174000',
+    } satisfies AuthenticatedDeveloperSession;
     const server = await createApiServer({
       accessTokens: {
         authenticate: (header): Promise<AuthenticatedAccessToken> =>
           header === 'Bearer valid-token'
             ? Promise.resolve({ accountId: 'account-id', clientId: 'client-id' })
             : Promise.reject(new ApiError(401, 'unauthorized', 'Unauthorized')),
+      },
+      appManager: {
+        list: (): Promise<[]> => Promise.resolve([]),
+        remove: (): Promise<boolean> => Promise.resolve(true),
       },
       apps: {
         register: (input): Promise<RegisteredApp> => {
@@ -381,6 +394,39 @@ describe('CraftLogin API server', (): void => {
         findClientName: (): Promise<string> => Promise.resolve('Maps & More'),
         isAllowedOrigin: (origin): Promise<boolean> =>
           Promise.resolve(origin === 'https://maps.example'),
+      },
+      cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      developerAuthentication: {
+        authenticate: (): Promise<undefined> => Promise.resolve(undefined),
+        logout: (): Promise<void> => Promise.resolve(),
+        require: (): Promise<typeof developerSession> => Promise.resolve(developerSession),
+        requireAdministrator: (): void => undefined,
+        requireCsrf: (_session, candidate): void => {
+          if (candidate !== developerSession.csrfToken) {
+            throw new ApiError(403, 'forbidden', 'Invalid CSRF token');
+          }
+        },
+      },
+      developerLogins: {
+        complete: (): never => {
+          throw new Error('Unexpected developer login completion');
+        },
+        start: (): never => {
+          throw new Error('Unexpected developer login start');
+        },
+        status: (): never => {
+          throw new Error('Unexpected developer login status');
+        },
+      },
+      developers: {
+        find: (): Promise<undefined> => Promise.resolve(undefined),
+        grant: (): never => {
+          throw new Error('Unexpected developer grant');
+        },
+        list: (): Promise<[]> => Promise.resolve([]),
+        revoke: (): never => {
+          throw new Error('Unexpected developer revoke');
+        },
       },
       interactions,
       issuer: 'https://craftlogin.com',
@@ -403,6 +449,7 @@ describe('CraftLogin API server', (): void => {
 
   async function registerTestApp(server: FastifyInstance): Promise<LightMyRequestResponse> {
     return await server.inject({
+      headers: { 'x-csrf-token': 'test-csrf-token' },
       method: 'POST',
       payload: {
         clientType: 'public',

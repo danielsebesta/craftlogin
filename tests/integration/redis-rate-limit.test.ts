@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { appRegistrationRateLimit } from '../../src/api/rate-limit.js';
 import { createApiServer } from '../../src/api/server.js';
+import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 
 const redisUrl = requireRedisUrl();
 const errorResponseSchema = z.object({
@@ -60,8 +61,16 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
   const unavailable = (): never => {
     throw new Error('Unexpected dependency call');
   };
+  const developerSession = {
+    csrfToken: 'test-csrf-token',
+    expiresInSeconds: 60,
+    role: 'developer',
+    sessionId: `ds_${'a'.repeat(43)}`,
+    userUuid: '123e4567-e89b-42d3-a456-426614174000',
+  } satisfies AuthenticatedDeveloperSession;
   const server = await createApiServer({
     accessTokens: { authenticate: unavailable },
+    appManager: { list: unavailable, remove: unavailable },
     apps: {
       register: (input) =>
         Promise.resolve({
@@ -74,6 +83,16 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
         }),
     },
     clients: { findClientName: unavailable, isAllowedOrigin: unavailable },
+    cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+    developerAuthentication: {
+      authenticate: (): Promise<undefined> => Promise.resolve(undefined),
+      logout: unavailable,
+      require: (): Promise<AuthenticatedDeveloperSession> => Promise.resolve(developerSession),
+      requireAdministrator: unavailable,
+      requireCsrf: (): void => undefined,
+    },
+    developerLogins: { complete: unavailable, start: unavailable, status: unavailable },
+    developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
     interactions: { complete: unavailable, start: unavailable, status: unavailable },
     issuer: 'https://craftlogin.com',
     minecraftBaseDomain: 'craftlogin.com',
@@ -90,6 +109,7 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
 
 async function registerApp(server: FastifyInstance): Promise<LightMyRequestResponse> {
   return await server.inject({
+    headers: { 'x-csrf-token': 'test-csrf-token' },
     method: 'POST',
     payload: {
       clientType: 'public',

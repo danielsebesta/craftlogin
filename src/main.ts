@@ -7,9 +7,15 @@ import { PrismaAppRegistrar } from './api/app-registration.js';
 import { renderAuthorizationError } from './api/authorization-error-page.js';
 import { PrismaClientDirectory } from './api/client-directory.js';
 import { PrismaCurrentUserLookup } from './api/current-user.js';
+import { DeveloperRequestAuthenticator } from './api/developer-authentication.js';
 import { createApiServer } from './api/server.js';
 import { loadEnvironment } from './config/environment.js';
 import { loadOAuthCredentials } from './config/oauth-credentials.js';
+import { PrismaAppManager } from './developers/app-management.js';
+import { PrismaDeveloperAccessRepository } from './developers/developer-repository.js';
+import { DeveloperLoginService } from './developers/login-service.js';
+import { DeveloperSessionService } from './developers/session-service.js';
+import { RedisDeveloperSessionStore } from './developers/session-store.js';
 import type { PrismaClient } from './generated/prisma/client.js';
 import { createDatabaseClient } from './infrastructure/database.js';
 import { InfrastructureReadinessCheck } from './infrastructure/readiness.js';
@@ -68,11 +74,28 @@ async function main(): Promise<void> {
     );
     oauth.provider.proxy = environment.httpTrustProxy;
     installSessionSignalLogging(oauth.provider, logger, credentials.cookieKeys);
+    const [developerSessionKey] = credentials.cookieKeys;
+    if (developerSessionKey === undefined) {
+      throw new TypeError('A cookie key is required for developer sessions');
+    }
+    const developers = new PrismaDeveloperAccessRepository(database);
+    const developerSessions = new DeveloperSessionService(
+      new RedisDeveloperSessionStore(redis),
+      developers,
+      logger,
+      developerSessionKey,
+    );
+    const developerAuthentication = new DeveloperRequestAuthenticator(developerSessions);
     const clients = new PrismaClientDirectory(database);
     api = await createApiServer({
       accessTokens: new ProviderAccessTokenAuthenticator(oauth.provider),
+      appManager: new PrismaAppManager(database),
       apps: new PrismaAppRegistrar(database),
       clients,
+      cookieKeys: credentials.cookieKeys,
+      developerAuthentication,
+      developerLogins: new DeveloperLoginService(verification, developers, developerSessions),
+      developers,
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,
       logger,

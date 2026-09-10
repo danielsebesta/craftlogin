@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
+import { developerUuidSchema } from '../developers/developer-repository.js';
 import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import { hashClientSecret } from '../oauth/client-secret.js';
 import { redirectUriSchema } from '../oauth/redirect-uri.js';
@@ -40,7 +41,7 @@ export interface RegisteredApp {
 }
 
 export interface AppRegistrar {
-  register(input: AppRegistrationInput): Promise<RegisteredApp>;
+  register(input: AppRegistrationInput, ownerUuid: string): Promise<RegisteredApp>;
 }
 
 export function parseAppRegistrationInput(input: unknown): AppRegistrationInput {
@@ -50,8 +51,9 @@ export function parseAppRegistrationInput(input: unknown): AppRegistrationInput 
 export class PrismaAppRegistrar implements AppRegistrar {
   public constructor(private readonly database: PrismaClient) {}
 
-  public async register(input: AppRegistrationInput): Promise<RegisteredApp> {
+  public async register(input: AppRegistrationInput, ownerUuid: string): Promise<RegisteredApp> {
     const registration = parseAppRegistrationInput(input);
+    const owner = developerUuidSchema.parse(ownerUuid);
     const clientSecret =
       registration.clientType === 'confidential'
         ? `cls_${randomBytes(32).toString('base64url')}`
@@ -67,6 +69,7 @@ export class PrismaAppRegistrar implements AppRegistrar {
             clientId,
             clientSecretHash,
             name: registration.name,
+            ownerUuid: owner,
             redirectUris: registration.redirectUris,
           },
           select: {

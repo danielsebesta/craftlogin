@@ -10,11 +10,25 @@ const unavailable = (): never => {
 async function generate(): Promise<void> {
   const server = await createApiServer({
     accessTokens: { authenticate: unavailable },
+    appManager: { list: unavailable, remove: unavailable },
     apps: { register: unavailable },
     clients: {
       findClientName: unavailable,
       isAllowedOrigin: unavailable,
     },
+    cookieKeys: [
+      'documentation-cookie-key-a'.padEnd(48, 'a'),
+      'documentation-cookie-key-b'.padEnd(48, 'b'),
+    ],
+    developerAuthentication: {
+      authenticate: unavailable,
+      logout: unavailable,
+      require: unavailable,
+      requireAdministrator: unavailable,
+      requireCsrf: unavailable,
+    },
+    developerLogins: { complete: unavailable, start: unavailable, status: unavailable },
+    developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
     interactions: {
       complete: unavailable,
       start: unavailable,

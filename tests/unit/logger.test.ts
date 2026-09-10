@@ -20,7 +20,11 @@ describe('structured logger', (): void => {
         },
         req: {
           body: 'grant_type=authorization_code&code=raw-code',
-          headers: { authorization: 'Bearer raw-token', cookie: 'raw-cookie' },
+          headers: {
+            authorization: 'Bearer raw-token',
+            cookie: 'raw-cookie',
+            'x-csrf-token': 'raw-csrf-token',
+          },
           url: '/oauth2/authorize?state=raw-state',
         },
       },
@@ -34,6 +38,7 @@ describe('structured logger', (): void => {
     expect(output).not.toContain('raw-code');
     expect(output).not.toContain('raw-token');
     expect(output).not.toContain('raw-cookie');
+    expect(output).not.toContain('raw-csrf-token');
     expect(output).not.toContain('raw-state');
   });
 });

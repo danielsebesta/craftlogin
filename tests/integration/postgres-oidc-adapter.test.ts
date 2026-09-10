@@ -29,6 +29,7 @@ describe('PostgresRefreshTokenAdapter', (): void => {
         lastVerifiedAt: new Date(),
       },
     });
+    await database.developer.create({ data: { uuid: userUuid } });
     await database.app.create({
       data: {
         clientId,
@@ -47,6 +48,7 @@ describe('PostgresRefreshTokenAdapter', (): void => {
       await database.app.deleteMany({ where: { clientId: { in: registeredClientIds } } });
     }
     await database.app.deleteMany({ where: { clientId } });
+    await database.developer.deleteMany({ where: { uuid: userUuid } });
     await database.user.deleteMany({ where: { uuid: userUuid } });
     await database.$disconnect();
   });
@@ -112,11 +114,14 @@ describe('PostgresRefreshTokenAdapter', (): void => {
 
   it('returns a confidential secret once and persists only its Argon2id hash', async (): Promise<void> => {
     const databaseClient = requireDatabase(database);
-    const registered = await new PrismaAppRegistrar(databaseClient).register({
-      clientType: 'confidential',
-      name: 'Confidential integration client',
-      redirectUris: ['https://client.example/callback'],
-    });
+    const registered = await new PrismaAppRegistrar(databaseClient).register(
+      {
+        clientType: 'confidential',
+        name: 'Confidential integration client',
+        redirectUris: ['https://client.example/callback'],
+      },
+      userUuid,
+    );
     registeredClientIds.push(registered.clientId);
     if (registered.clientSecret === undefined) {
       throw new Error('Expected a confidential client secret');
@@ -124,8 +129,9 @@ describe('PostgresRefreshTokenAdapter', (): void => {
 
     const stored = await databaseClient.app.findUniqueOrThrow({
       where: { clientId: registered.clientId },
-      select: { clientSecretHash: true },
+      select: { clientSecretHash: true, ownerUuid: true },
     });
+    expect(stored.ownerUuid).toBe(userUuid);
     expect(stored.clientSecretHash).not.toBe(registered.clientSecret);
     expect(stored.clientSecretHash).toMatch(/^\$argon2id\$/u);
     await expect(

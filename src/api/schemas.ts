@@ -19,6 +19,7 @@ const redirectUriJsonSchema = {
 export const ERROR_RESPONSE_SCHEMA_ID = 'craftlogin.error-response';
 export const USER_RESPONSE_SCHEMA_ID = 'craftlogin.user-response';
 export const APP_RESPONSE_SCHEMA_ID = 'craftlogin.app-response';
+export const MANAGED_APP_RESPONSE_SCHEMA_ID = 'craftlogin.managed-app-response';
 
 const errorResponseSchema = {
   $id: ERROR_RESPONSE_SCHEMA_ID,
@@ -70,6 +71,27 @@ const appResponseSchema = {
   type: 'object',
 };
 
+const managedAppResponseSchema = {
+  $id: MANAGED_APP_RESPONSE_SCHEMA_ID,
+  additionalProperties: false,
+  properties: {
+    clientId: { type: 'string' },
+    clientType: { enum: ['public', 'confidential'], type: 'string' },
+    createdAt: { format: 'date-time', type: 'string' },
+    id: { format: 'uuid', type: 'string' },
+    name: appNameJsonSchema,
+    ownerUuid: { format: 'uuid', type: 'string' },
+    redirectUris: {
+      items: redirectUriJsonSchema,
+      minItems: 1,
+      type: 'array',
+      uniqueItems: true,
+    },
+  },
+  required: ['id', 'clientId', 'clientType', 'name', 'redirectUris', 'createdAt'],
+  type: 'object',
+};
+
 const interactionParamsSchema = {
   additionalProperties: false,
   properties: {
@@ -94,6 +116,38 @@ const appRegistrationBodySchema = {
   },
   required: ['clientType', 'name', 'redirectUris'],
   type: 'object',
+};
+
+const csrfHeadersSchema = {
+  additionalProperties: true,
+  properties: {
+    'x-csrf-token': { minLength: 1, type: 'string' },
+  },
+  required: ['x-csrf-token'],
+  type: 'object',
+};
+
+const csrfFormProperty = { maxLength: 128, minLength: 1, type: 'string' };
+const developerRoleProperty = { enum: ['developer', 'admin'], type: 'string' };
+const minecraftUuidProperty = {
+  format: 'uuid',
+  pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  type: 'string',
+};
+const appIdParamsSchema = {
+  additionalProperties: false,
+  properties: { id: { format: 'uuid', type: 'string' } },
+  required: ['id'],
+  type: 'object',
+};
+const developerUuidParamsSchema = {
+  additionalProperties: false,
+  properties: { uuid: minecraftUuidProperty },
+  required: ['uuid'],
+  type: 'object',
+};
+const htmlResponseSchema = {
+  content: { 'text/html': { schema: { type: 'string' } } },
 };
 
 const bearerHeadersSchema = {
@@ -141,6 +195,7 @@ export function registerSharedSchemas(server: FastifyInstance): void {
   server.addSchema(errorResponseSchema);
   server.addSchema(userResponseSchema);
   server.addSchema(appResponseSchema);
+  server.addSchema(managedAppResponseSchema);
 }
 
 export const interactionPageRouteSchema: FastifySchema = {
@@ -240,15 +295,199 @@ export const currentUserRouteSchema: FastifySchema = {
 export const appRegistrationRouteSchema: FastifySchema = {
   body: appRegistrationBodySchema,
   description: operations.appRegistration.description,
+  headers: csrfHeadersSchema,
   response: {
     201: { $ref: `${APP_RESPONSE_SCHEMA_ID}#` },
     400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
   summary: operations.appRegistration.summary,
+  security: [{ developerSession: [] }],
   tags: ['Applications'],
+};
+
+export const appListRouteSchema: FastifySchema = {
+  response: {
+    200: { items: { $ref: `${MANAGED_APP_RESPONSE_SCHEMA_ID}#` }, type: 'array' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  security: [{ developerSession: [] }],
+  summary: operations.appList.summary,
+  tags: ['Applications'],
+};
+
+export const appDeleteRouteSchema: FastifySchema = {
+  headers: csrfHeadersSchema,
+  params: appIdParamsSchema,
+  response: {
+    204: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  security: [{ developerSession: [] }],
+  summary: operations.appDelete.summary,
+  tags: ['Applications'],
+};
+
+export const developerLoginPageRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerLoginStatusRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: verificationStatusSchema,
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerLoginCompleteRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    403: htmlResponseSchema,
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerDashboardRouteSchema: FastifySchema = {
+  hide: true,
+  querystring: {
+    additionalProperties: false,
+    properties: { notice: { enum: ['last-admin'], type: 'string' } },
+    type: 'object',
+  },
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppCreateRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      clientType: { enum: ['public', 'confidential'], type: 'string' },
+      csrfToken: csrfFormProperty,
+      name: appNameJsonSchema,
+      redirectUris: { maxLength: 41_000, minLength: 1, type: 'string' },
+    },
+    required: ['clientType', 'csrfToken', 'name', 'redirectUris'],
+    type: 'object',
+  },
+  hide: true,
+  response: {
+    201: htmlResponseSchema,
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppDeleteRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: { csrfToken: csrfFormProperty },
+    required: ['csrfToken'],
+    type: 'object',
+  },
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerLogoutRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: { csrfToken: csrfFormProperty },
+    required: ['csrfToken'],
+    type: 'object',
+  },
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerGrantRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      csrfToken: csrfFormProperty,
+      role: developerRoleProperty,
+      uuid: minecraftUuidProperty,
+    },
+    required: ['csrfToken', 'role', 'uuid'],
+    type: 'object',
+  },
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerRevokeRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: { csrfToken: csrfFormProperty },
+    required: ['csrfToken'],
+    type: 'object',
+  },
+  hide: true,
+  params: developerUuidParamsSchema,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAssetRouteSchema: FastifySchema = {
+  hide: true,
+  response: { 200: { type: 'string' } },
 };
 
 export const oauthAuthorizationRouteSchema: FastifySchema = {

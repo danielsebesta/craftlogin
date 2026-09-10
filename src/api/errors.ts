@@ -8,10 +8,12 @@ import { VerificationStateError } from '../verification/redis-verification-store
 
 export type ApiErrorCode =
   | 'bad_request'
+  | 'developer_unauthorized'
   | 'interaction_expired'
   | 'interaction_invalid'
   | 'insufficient_scope'
   | 'internal_error'
+  | 'forbidden'
   | 'not_found'
   | 'rate_limited'
   | 'unauthorized';
@@ -87,7 +89,7 @@ async function sendError(
   message: string,
 ): Promise<void> {
   void reply.header('cache-control', 'no-store');
-  if (statusCode === 401) {
+  if (statusCode === 401 && code === 'unauthorized') {
     void reply.header('www-authenticate', 'Bearer');
   } else if (statusCode === 403 && code === 'insufficient_scope') {
     void reply.header('www-authenticate', 'Bearer error="insufficient_scope", scope="profile"');
