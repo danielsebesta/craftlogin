@@ -19,11 +19,19 @@ import type {
   VerificationResolution,
   VerificationResolver,
 } from '../verification/verification-resolver.js';
-import { disconnect, markLoggedIn } from './disconnect.js';
-import { extractVerificationCode } from './hostname.js';
+import { disconnect, isLoggedIn, markLoggedIn, markWorldReady } from './disconnect.js';
+import { extractVerificationCode, isLobbyHost } from './hostname.js';
+import { MinecraftLobby } from './lobby.js';
+import { presentVoidWorld, sendVoidMessage } from './void-world.js';
 
 // Shutdown must not stall on a client that never completes configuration; the reason is best effort.
-const SHUTDOWN_PLAY_WAIT_TIMEOUT_MS = 1_500;
+const SHUTDOWN_WORLD_WAIT_TIMEOUT_MS = 1_500;
+const MAX_PLAYERS = 10_000;
+const LOBBY_MAX_PLAYERS = 64;
+const LOBBY_LIFETIME_MS = 10 * 60 * 1000;
+const LOBBY_PROMPT_COOLDOWN_MS = 3_000;
+// Keep the player in the void long enough for the final chat message to render before the kick.
+const VERIFICATION_LINGER_MS = 1_500;
 
 const loginHandshakeSchema = z.object({
   nextState: z.literal(2),
@@ -39,10 +47,18 @@ interface ServerPingResponse {
 
 type CodeAvailability = 'available' | 'error' | 'unavailable';
 
-interface PendingClientVerification {
-  readonly availability: Promise<CodeAvailability>;
+interface PendingVerification {
+  readonly kind: 'verification';
   readonly code: string;
+  readonly availability: Promise<CodeAvailability>;
+  outcome: Promise<VerificationResolution> | null;
 }
+
+interface PendingLobby {
+  readonly kind: 'lobby';
+}
+
+type PendingClient = PendingVerification | PendingLobby;
 
 export interface GhostServerConfig {
   readonly baseDomain: string;
@@ -75,7 +91,10 @@ export class GhostServerStartError extends Error {
 export class MinecraftGhostServer {
   private closed = false;
 
-  public constructor(private readonly server: Server) {}
+  public constructor(
+    private readonly server: Server,
+    private readonly lobby: MinecraftLobby,
+  ) {}
 
   public async close(): Promise<void> {
     if (this.closed) {
@@ -83,10 +102,14 @@ export class MinecraftGhostServer {
     }
     this.closed = true;
 
+    for (const client of Object.values(this.server.clients)) {
+      this.lobby.leave(client);
+    }
+
     await Promise.all(
       Object.values(this.server.clients).map((client) =>
         disconnect(client, english.minecraft.shutdown, {
-          playWaitTimeoutMs: SHUTDOWN_PLAY_WAIT_TIMEOUT_MS,
+          worldWaitTimeoutMs: SHUTDOWN_WORLD_WAIT_TIMEOUT_MS,
         }),
       ),
     );
@@ -106,15 +129,20 @@ export async function startGhostServer(
   debug.disable();
 
   const serverIcon = await loadServerIcon(dependencies.logger);
-  const pendingClients = new WeakMap<ServerClient, PendingClientVerification>();
+  const lobby = new MinecraftLobby({
+    maxPlayers: LOBBY_MAX_PLAYERS,
+    lifetimeMs: LOBBY_LIFETIME_MS,
+    promptCooldownMs: LOBBY_PROMPT_COOLDOWN_MS,
+  });
+  const pendingClients = new WeakMap<ServerClient, PendingClient>();
   const options: ServerOptions = {
     host: config.host,
     port: config.port,
     version: false,
     'online-mode': true,
     hideErrors: true,
-    keepAlive: false,
-    maxPlayers: 10_000,
+    keepAlive: true,
+    maxPlayers: MAX_PLAYERS,
     motd: english.minecraft.motd,
     motdMsg: {
       text: english.minecraft.motd,
@@ -142,21 +170,31 @@ export async function startGhostServer(
         return;
       }
 
-      const code = extractVerificationCode(parsedHandshake.data.serverHost, config.baseDomain);
-      if (code === null) {
-        void disconnect(client, english.minecraft.unavailable);
+      const { serverHost } = parsedHandshake.data;
+      const code = extractVerificationCode(serverHost, config.baseDomain);
+      if (code !== null) {
+        const availability = lookupCodeAvailability(code, dependencies);
+        pendingClients.set(client, { kind: 'verification', code, availability, outcome: null });
+        void availability.then((result): void => {
+          // A logged-in client is rejected after its world is presented so the reason renders.
+          if (isLoggedIn(client)) {
+            return;
+          }
+          if (result === 'unavailable') {
+            void disconnect(client, english.minecraft.unavailable);
+          } else if (result === 'error') {
+            void disconnect(client, english.minecraft.temporaryFailure);
+          }
+        });
         return;
       }
 
-      const availability = lookupCodeAvailability(code, dependencies);
-      pendingClients.set(client, { availability, code });
-      void availability.then((result): void => {
-        if (result === 'unavailable') {
-          void disconnect(client, english.minecraft.unavailable);
-        } else if (result === 'error') {
-          void disconnect(client, english.minecraft.temporaryFailure);
-        }
-      });
+      if (isLobbyHost(serverHost, config.baseDomain)) {
+        pendingClients.set(client, { kind: 'lobby' });
+        return;
+      }
+
+      void disconnect(client, english.minecraft.unavailable);
     });
   });
 
@@ -165,15 +203,39 @@ export async function startGhostServer(
   server.on('login', (client): void => {
     // Login success has been written, so the client is no longer addressable in the login state.
     markLoggedIn(client);
-    void handleAuthenticatedLogin(client, pendingClients, dependencies).catch(
-      (error: unknown): void => {
-        dependencies.logger.error(
-          { errorKind: getErrorKind(error) },
-          'Authenticated Minecraft verification failed',
-        );
-        void disconnect(client, english.minecraft.temporaryFailure);
-      },
-    );
+
+    const pending = pendingClients.get(client);
+    if (pending?.kind === 'verification') {
+      pending.outcome = resolveVerification(client, pending, dependencies);
+    }
+  });
+
+  // The play state exists here, so the Join Game packet can be written and a later kick is rendered.
+  server.on('playerJoin', (client): void => {
+    try {
+      presentVoidWorld(client, { entityId: client.id, maxPlayers: MAX_PLAYERS });
+    } catch (error: unknown) {
+      dependencies.logger.warn(
+        { errorKind: getErrorKind(error) },
+        'Minecraft void world could not be presented',
+      );
+    }
+    markWorldReady(client);
+
+    const pending = pendingClients.get(client);
+    if (pending?.kind === 'lobby') {
+      if (!lobby.enter(client)) {
+        sendVoidMessage(client, english.minecraft.lobbyFull);
+        void disconnect(client, english.minecraft.lobbyFull);
+      }
+      return;
+    }
+    if (pending?.kind === 'verification' && pending.outcome !== null) {
+      void finalizeVerification(client, pending.outcome, dependencies.logger);
+      return;
+    }
+
+    void disconnect(client, english.minecraft.unavailable);
   });
 
   let listening = false;
@@ -191,8 +253,54 @@ export async function startGhostServer(
     });
     server.once('listening', (): void => {
       listening = true;
-      resolve(new MinecraftGhostServer(server));
+      resolve(new MinecraftGhostServer(server, lobby));
     });
+  });
+}
+
+async function resolveVerification(
+  client: ServerClient,
+  pending: PendingVerification,
+  dependencies: GhostServerDependencies,
+): Promise<VerificationResolution> {
+  const availability = await pending.availability;
+  if (availability !== 'available') {
+    return 'unavailable';
+  }
+
+  const parsedPlayer = authenticatedMinecraftPlayerSchema.safeParse({
+    uuid: client.uuid.toLowerCase(),
+    username: client.username,
+  });
+  if (!parsedPlayer.success) {
+    throw new Error('Authenticated Minecraft profile has an invalid shape');
+  }
+
+  return await dependencies.resolver.resolve(pending.code, parsedPlayer.data, new Date());
+}
+
+async function finalizeVerification(
+  client: ServerClient,
+  outcome: Promise<VerificationResolution>,
+  logger: Logger,
+): Promise<void> {
+  let message: string;
+  try {
+    const resolution = await outcome;
+    message = resolution === 'resolved' ? english.minecraft.success : english.minecraft.unavailable;
+  } catch (error: unknown) {
+    logger.error({ errorKind: getErrorKind(error) }, 'Authenticated Minecraft verification failed');
+    message = english.minecraft.temporaryFailure;
+  }
+
+  sendVoidMessage(client, message);
+  await linger(VERIFICATION_LINGER_MS);
+  await disconnect(client, message);
+}
+
+async function linger(durationMs: number): Promise<void> {
+  await new Promise<void>((resolve): void => {
+    setTimeout(resolve, durationMs);
   });
 }
 
@@ -229,39 +337,4 @@ async function loadServerIcon(logger: Logger): Promise<string | null> {
     logger.warn({ errorKind: getErrorKind(error) }, 'Minecraft server icon could not be loaded');
     return null;
   }
-}
-
-async function handleAuthenticatedLogin(
-  client: ServerClient,
-  pendingClients: WeakMap<ServerClient, PendingClientVerification>,
-  dependencies: GhostServerDependencies,
-): Promise<void> {
-  const pending = pendingClients.get(client);
-  if (pending === undefined) {
-    void disconnect(client, english.minecraft.unavailable);
-    return;
-  }
-
-  const availability = await pending.availability;
-  if (availability !== 'available') {
-    return;
-  }
-
-  const parsedPlayer = authenticatedMinecraftPlayerSchema.safeParse({
-    uuid: client.uuid.toLowerCase(),
-    username: client.username,
-  });
-  if (!parsedPlayer.success) {
-    throw new Error('Authenticated Minecraft profile has an invalid shape');
-  }
-
-  const resolution = await dependencies.resolver.resolve(
-    pending.code,
-    parsedPlayer.data,
-    new Date(),
-  );
-  void disconnect(
-    client,
-    resolution === 'resolved' ? english.minecraft.success : english.minecraft.unavailable,
-  );
 }

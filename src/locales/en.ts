@@ -336,5 +336,10 @@ export const english = {
     temporaryFailure:
       'Verification is temporarily unavailable. Return to your browser and try again.',
     shutdown: 'CraftLogin is restarting. Return to your browser and try again.',
+    lobbyWelcome: 'Welcome to CraftLogin. This server verifies Minecraft accounts for sign-in.',
+    lobbyHint:
+      'Start signing in from the application, then join the server address it shows in your browser.',
+    lobbyTimeout: 'You have been disconnected from the CraftLogin lobby. Reconnect to continue.',
+    lobbyFull: 'The CraftLogin lobby is at capacity. Please try again shortly.',
   },
 };

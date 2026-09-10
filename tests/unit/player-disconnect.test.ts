@@ -2,7 +2,7 @@ import minecraftProtocol from 'minecraft-protocol';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { disconnect, markLoggedIn } from '../../src/mc-server/disconnect.js';
+import { disconnect, markLoggedIn, markWorldReady } from '../../src/mc-server/disconnect.js';
 import { findAvailablePort } from './support/tcp-port.js';
 
 const message = 'Verification complete. You can return to your browser.';
@@ -60,7 +60,13 @@ async function deliverDisconnect(
   server.on('login', (client): void => {
     if (stage === 'after-login') {
       markLoggedIn(client);
+      // The kick must wait until the void world has been presented to be a valid play-state kick.
       void disconnect(client, message);
+    }
+  });
+  server.on('playerJoin', (client): void => {
+    if (stage === 'after-login') {
+      markWorldReady(client);
     }
   });
 

@@ -14,9 +14,13 @@ through standard OIDC endpoints. CraftLogin stores no email address or password.
    `ABCDEFGH.craftlogin.com`.
 3. The player joins that address with Minecraft Java Edition. The online-mode login sequence asks
    the Mojang/Microsoft session service to authenticate the client.
-4. The ghost server records the authenticated UUID and username, then immediately disconnects the
-   player with a success message.
+4. The ghost server records the authenticated UUID and username, presents an empty void world, and
+   then disconnects the player with a play-state kick that shows a success message.
 5. The browser interaction resumes and `oidc-provider` issues the standard authorization response.
+
+The server address only ever accepts the exact code shown in the browser. Connecting to the bare
+base domain instead opens a public void lobby where a player can chat; the lobby never reads or
+changes verification state.
 
 Verification, authorization-code consumption, and refresh-token rotation use atomic Redis or
 PostgreSQL operations so concurrent redemption has one winner. Raw secrets, codes, and tokens are

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractVerificationCode } from '../../src/mc-server/hostname.js';
+import { extractVerificationCode, isLobbyHost } from '../../src/mc-server/hostname.js';
 
 describe('extractVerificationCode', (): void => {
   it.each([
@@ -32,5 +32,21 @@ describe('extractVerificationCode', (): void => {
     'ABCDEFGH.craftlogin.com\n\0FML',
   ])('rejects invalid handshake host %s', (serverHost): void => {
     expect(extractVerificationCode(serverHost, 'craftlogin.com')).toBeNull();
+  });
+});
+
+describe('isLobbyHost', (): void => {
+  it.each([
+    ['craftlogin.com', true],
+    ['CRAFTLOGIN.COM', true],
+    ['craftlogin.com.', true],
+    ['craftlogin.com:25565', true],
+    ['craftlogin.com\0FML\0', true],
+    ['ABCDEFGH.craftlogin.com', false],
+    ['login.craftlogin.com', false],
+    ['craftlogin.com.evil.example', false],
+    ['', false],
+  ])('classifies %s as lobby: %s', (serverHost, expected): void => {
+    expect(isLobbyHost(serverHost, 'craftlogin.com')).toBe(expected);
   });
 });

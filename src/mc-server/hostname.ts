@@ -23,7 +23,7 @@ function withoutOptionalPort(serverHost: string): string | null {
   return serverHost.slice(0, separatorIndex);
 }
 
-export function extractVerificationCode(serverHost: string, baseDomain: string): string | null {
+function normalizeHost(serverHost: string): string | null {
   const metadataSeparatorIndex = serverHost.indexOf('\0');
   // Forge/FML appends forwarding metadata after a NUL delimiter. Only the first segment is the
   // hostname supplied by the player and is therefore eligible to select a verification code.
@@ -45,11 +45,21 @@ export function extractVerificationCode(serverHost: string, baseDomain: string):
   const hostname = hostWithoutPort.endsWith('.')
     ? hostWithoutPort.slice(0, hostWithoutPort.length - 1)
     : hostWithoutPort;
-  if (hostname.length > 253) {
+  if (hostname.length === 0 || hostname.length > 253) {
     return null;
   }
+
+  return hostname.toLowerCase();
+}
+
+export function extractVerificationCode(serverHost: string, baseDomain: string): string | null {
+  const hostname = normalizeHost(serverHost);
+  if (hostname === null) {
+    return null;
+  }
+
   const labels = hostname.split('.');
-  const baseLabels = baseDomain.split('.');
+  const baseLabels = baseDomain.toLowerCase().split('.');
 
   if (labels.length !== baseLabels.length + 1) {
     return null;
@@ -57,7 +67,7 @@ export function extractVerificationCode(serverHost: string, baseDomain: string):
 
   const candidateBaseLabels = labels.slice(1);
   const hasExpectedBaseDomain = candidateBaseLabels.every(
-    (label, index): boolean => label.toLowerCase() === baseLabels[index],
+    (label, index): boolean => label === baseLabels[index],
   );
   if (!hasExpectedBaseDomain) {
     return null;
@@ -67,4 +77,10 @@ export function extractVerificationCode(serverHost: string, baseDomain: string):
   const parsedCode = verificationCodeSchema.safeParse(code);
 
   return parsedCode.success ? parsedCode.data : null;
+}
+
+/** True when the handshake targets the bare base domain, which is the public verification lobby. */
+export function isLobbyHost(serverHost: string, baseDomain: string): boolean {
+  const hostname = normalizeHost(serverHost);
+  return hostname !== null && hostname === baseDomain.toLowerCase();
 }

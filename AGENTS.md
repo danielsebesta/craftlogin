@@ -30,7 +30,8 @@ the end of a stage.
 Keep modules small and organized by responsibility:
 
 - `src/mc-server/` owns Minecraft protocol handling, hostname code extraction, online-mode login,
-  success/error disconnect messages, and the Redis transition that resolves a verification.
+  the void world presentation, the public chat lobby, success/error disconnect messages, and the
+  Redis transition that resolves a verification.
 - `src/oauth/` owns `oidc-provider` configuration, custom interactions, standards-compliant client
   metadata, and provider adapters. Never implement authorization or token protocols by hand.
 - `src/api/` owns Fastify setup, schemas, HTTP routes, the verification page/status endpoint, API
@@ -85,10 +86,15 @@ The verification flow is fixed:
    authentication is the identity security boundary; do not add custom anti-spoofing schemes.
 6. After successful login, atomically consume the verification code, associate the authenticated
    UUID and username with its pending interaction, upsert the user, mark the interaction resolved,
-   and immediately disconnect with a clear success message.
-7. The accessible interaction page progressively enhances its initial server-rendered content with
+   then present the void world and disconnect with a clear success message. The disconnect must be a
+   play-state kick sent after the Join Game packet; a login- or configuration-state disconnect is
+   dropped by the client and surfaces to the player as a generic connection error.
+7. A connection to the bare base domain enters the public void lobby, which renders an empty world,
+   answers chat, and never reads or mutates verification state. Every lobby session is bounded by a
+   lifetime timeout and a connection cap.
+8. The accessible interaction page progressively enhances its initial server-rendered content with
    bounded polling, a short starting interval, and exponential backoff.
-8. A resolved interaction resumes `oidc-provider`, which completes the standard authorization code,
+9. A resolved interaction resumes `oidc-provider`, which completes the standard authorization code,
    token, and `/api/users/@me` flow.
 
 Never log verification codes, authorization codes, access/refresh tokens, client secrets, cookie
