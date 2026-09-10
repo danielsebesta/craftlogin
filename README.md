@@ -11,7 +11,7 @@ through standard OIDC endpoints. CraftLogin stores no email address or password.
 
 1. An application starts an authorization-code request with `state` and S256 PKCE.
 2. CraftLogin displays an unambiguous, five-minute connection address such as
-   `ABCDEFGH.login.example.com`.
+   `ABCDEFGH.craftlogin.com`.
 3. The player joins that address with Minecraft Java Edition. The online-mode login sequence asks
    the Mojang/Microsoft session service to authenticate the client.
 4. The ghost server records the authenticated UUID and username, then immediately disconnects the
@@ -27,7 +27,7 @@ not written to application logs.
 - Node.js 24 (the active LTS line selected by `.nvmrc`)
 - PostgreSQL 18 and Redis 8, or Docker with the Compose plugin
 - A public HTTPS origin for production
-- Wildcard DNS such as `*.login.example.com` pointing to the Minecraft listener
+- Wildcard DNS `*.craftlogin.com` pointing to the Minecraft listener
 - TCP port 25565 reachable by Minecraft clients
 
 ## Local development
@@ -54,6 +54,46 @@ development they can instead be run separately with `npm run start:api` and `npm
 project overview is available at <http://localhost:3000/>. Swagger UI is available at
 <http://localhost:3000/docs> outside production. The generated OpenAPI 3.1 reference is committed as
 [`openapi.yaml`](openapi.yaml).
+
+OAuth interactions and the Developer Console use `Secure` cookies and therefore require HTTPS even
+in local development. A local reverse proxy such as Caddy can terminate a trusted development
+certificate while CraftLogin remains bound to loopback:
+
+```sh
+export OIDC_ISSUER='https://localhost:3443'
+export HTTP_HOST='127.0.0.1'
+export HTTP_TRUST_PROXY='true'
+export MC_BASE_DOMAIN='127.0.0.1.nip.io'
+npm start
+
+# Run separately after trusting Caddy's local CA.
+caddy reverse-proxy --from https://localhost:3443 --to http://127.0.0.1:3000
+```
+
+The `nip.io` development domain makes addresses such as `ABCDEFGH.127.0.0.1.nip.io` resolve to the
+local machine, so the Minecraft client can use the exact address shown by CraftLogin without editing
+`/etc/hosts`. Use your own wildcard DNS domain outside local, same-machine development.
+
+### Developer Console
+
+OAuth client registration is never anonymous. Bootstrap the first administrator from a trusted shell
+after applying migrations, using the canonical UUID of their Minecraft Java Edition account:
+
+```sh
+npm run admin:grant -- 123e4567-e89b-42d3-a456-426614174000
+```
+
+Then open <https://localhost:3443/developers>. The administrator proves ownership of that UUID by
+joining the displayed online-mode Minecraft address. Administrators can grant or revoke developer
+UUIDs and roles; registered developers can create and remove their own public or confidential OAuth
+clients. Confidential secrets are displayed once. Role changes are checked on every request and
+rotate or revoke active console sessions.
+
+For a built production image, run the compiled bootstrap command inside the application container:
+
+```sh
+docker compose exec app node dist/admin/grant-admin.js 123e4567-e89b-42d3-a456-426614174000
+```
 
 ## Container deployment
 
@@ -126,6 +166,12 @@ Durable user data is limited to Minecraft UUID, current username, and first/last
 Registered client metadata and hashed refresh-token identifiers are stored in PostgreSQL. Redis
 holds short-lived verification and ephemeral OIDC state. IP address and user agent are anomaly
 signals only and an IP change does not invalidate a session by itself.
+
+Developer access is an explicit PostgreSQL allowlist keyed only by Minecraft UUID. OAuth clients
+record their owning developer; legacy or deliberately unassigned clients remain visible only to an
+administrator. Developer Console sessions are opaque Redis records with signed `Secure`, `HttpOnly`,
+`SameSite=Lax` cookies, sliding expiration, an absolute lifetime, CSRF protection, and rotation
+after role changes.
 
 ## License
 

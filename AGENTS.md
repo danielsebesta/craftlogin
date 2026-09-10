@@ -35,6 +35,8 @@ Keep modules small and organized by responsibility:
   metadata, and provider adapters. Never implement authorization or token protocols by hand.
 - `src/api/` owns Fastify setup, schemas, HTTP routes, the verification page/status endpoint, API
   authentication, centralized errors, OpenAPI generation, and development-only Swagger UI.
+- `src/developers/` owns the UUID allowlist, developer/admin roles, OAuth-client ownership, the
+  first-party Minecraft login handoff, and opaque Redis-backed console sessions.
 - Shared infrastructure modules own PostgreSQL/Prisma and Redis clients and their lifecycle. Domain
   modules receive those dependencies rather than constructing extra clients.
 - Translation resources own every user-facing string. English is the default and fallback locale.
@@ -107,6 +109,10 @@ values, or password-equivalent material.
 - Persist only refresh-token hashes, never plaintext refresh tokens. Revocation and rotation must be
   transactional.
 - Rate-limit `/oauth2/token`, `/api/apps`, and verification-status requests.
+- OAuth client registration is never anonymous. `/api/apps` and the Developer Console require a
+  current allowlisted developer session plus CSRF protection for state-changing requests.
+- The final administrator cannot be removed or demoted. Preserve this invariant with a serializable
+  database transaction; a read followed by a separate write is insufficient.
 - Session cookies are signed, `HttpOnly`, `Secure`, and `SameSite=Lax`. Rotate session identifiers
   after authentication or another privilege change. Enforce sliding expiry and a separate absolute
   lifetime.
@@ -122,7 +128,10 @@ The core Prisma models are:
 - `User`: Minecraft UUID primary key, current username, first verification time, and last
   verification time. Do not add email, password, or unrelated PII.
 - `App`: internal ID, public client ID, nullable secret hash for public-client support, display
-  name, exact-match redirect URI array, and creation time.
+  name, exact-match redirect URI array, creation time, and nullable developer ownership for legacy
+  or deliberately unassigned clients.
+- `Developer`: allowlisted Minecraft UUID, developer/admin role, and creation time. It is an access
+  record, not a second identity profile, and must not gain email, password, or unrelated PII.
 - `RefreshToken`: token hash, client ID, user UUID, expiry, optional revocation time, and the
   minimum provider-managed payload/index data required to implement the `oidc-provider` adapter
   contract. The raw token identifier must never be persisted.
@@ -200,6 +209,16 @@ The listeners can still be isolated during focused development:
 npm run start:api
 npm run start:mc
 ```
+
+Bootstrap the first Developer Console administrator only from a trusted shell after migrations:
+
+```sh
+npm run admin:grant -- <canonical-minecraft-uuid>
+```
+
+The Developer Console and OIDC interactions require HTTPS because their cookies are always `Secure`.
+Do not weaken this for local development; use a trusted local TLS reverse proxy and set
+`HTTP_TRUST_PROXY=true` only while the HTTP listener is bound behind that controlled proxy.
 
 The local development connection values in `prisma.config.ts` match the command above. They are
 development-only credentials, not production secrets. Native PostgreSQL installations may use a
