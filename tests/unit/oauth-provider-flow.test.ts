@@ -37,6 +37,7 @@ const tokenResponseSchema = z.object({
   token_type: z.string(),
 });
 const identityClaimsSchema = z.object({
+  picture: z.literal('https://craftlogin.test/avatar/player'),
   preferred_username: z.literal('VerifiedPlayer'),
   sub: z.literal(accountId),
 });
@@ -183,9 +184,14 @@ describe('CraftLogin OIDC provider', (): void => {
           subject === accountId
             ? {
                 accountId,
-                claims: (): { sub: string; preferred_username: string } => ({
-                  sub: accountId,
+                claims: (): {
+                  picture: string;
+                  preferred_username: string;
+                  sub: string;
+                } => ({
+                  picture: 'https://craftlogin.test/avatar/player',
                   preferred_username: 'VerifiedPlayer',
+                  sub: accountId,
                 }),
               }
             : undefined,
@@ -420,6 +426,7 @@ describe('CraftLogin OIDC provider', (): void => {
     });
     expect(userInfoResponse.status).toBe(200);
     expect(identityClaimsSchema.parse(await userInfoResponse.json())).toEqual({
+      picture: 'https://craftlogin.test/avatar/player',
       preferred_username: 'VerifiedPlayer',
       sub: accountId,
     });
