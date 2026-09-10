@@ -7,7 +7,9 @@ import type { DeveloperAuthentication } from '../../src/api/developer-authentica
 import { ApiError } from '../../src/api/errors.js';
 import { createApiServer } from '../../src/api/server.js';
 import type { ManagedApp } from '../../src/developers/app-management.js';
+import type { DeveloperRole } from '../../src/developers/developer-repository.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
+import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
 
 const developerSession: AuthenticatedDeveloperSession = {
   csrfToken: 'developer-csrf-token',
@@ -136,9 +138,39 @@ describe('Developer Console', (): void => {
     });
   });
 
+  it('resolves a Minecraft username when granting developer access', async (): Promise<void> => {
+    const grantCalls: { role: DeveloperRole; uuid: string }[] = [];
+    const server = await buildServer({
+      authenticated: true,
+      grantCalls,
+      players: {
+        findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
+        findProfileByName: (name) =>
+          Promise.resolve(
+            name === 'Notch'
+              ? { username: 'Notch', uuid: '069a79f4-44e9-4726-a5be-fca90e38aaf5' }
+              : undefined,
+          ),
+      },
+    });
+    const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'csrfToken=developer-csrf-token&role=developer&uuid=Notch',
+      url: '/developers/admin/developers',
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(grantCalls).toEqual([
+      { role: 'developer', uuid: '069a79f4-44e9-4726-a5be-fca90e38aaf5' },
+    ]);
+  });
+
   async function buildServer(options: {
     readonly authenticated: boolean;
     readonly denyLogin?: boolean;
+    readonly grantCalls?: { role: DeveloperRole; uuid: string }[];
+    readonly players?: MinecraftPlayerLookup;
   }): Promise<FastifyInstance> {
     const unavailable = (): never => {
       throw new Error('Unexpected developer console test dependency call');
@@ -180,7 +212,10 @@ describe('Developer Console', (): void => {
       },
       developers: {
         find: (): Promise<undefined> => Promise.resolve(undefined),
-        grant: unavailable,
+        grant: (uuid, role) => {
+          options.grantCalls?.push({ role, uuid });
+          return Promise.resolve({ createdAt: '2026-09-07T12:00:00.000Z', role, uuid });
+        },
         list: () =>
           Promise.resolve([
             {
@@ -194,6 +229,14 @@ describe('Developer Console', (): void => {
       interactions: { complete: unavailable, start: unavailable, status: unavailable },
       issuer: 'https://craftlogin.com',
       minecraftBaseDomain: 'craftlogin.com',
+      ...(options.players === undefined
+        ? {}
+        : {
+            minecraft: {
+              players: options.players,
+              skins: { fetchSkin: (): Promise<undefined> => Promise.resolve(undefined) },
+            },
+          }),
       nodeEnvironment: 'test',
       oidcHandler: (_request: IncomingMessage, response: ServerResponse): void => {
         response.statusCode = 404;

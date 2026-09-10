@@ -29,8 +29,15 @@ export interface CraftLoginProviderOptions {
   readonly findAccount: FindAccount;
   readonly issuer: string;
   readonly jwks: JWKS;
+  readonly logoutSource?: LogoutSourceRenderer;
+  readonly postLogoutSuccessSource?: PostLogoutSuccessRenderer;
   readonly renderError: NonNullable<Configuration['renderError']>;
 }
+
+type ProviderContext = Parameters<NonNullable<Configuration['renderError']>>[0];
+
+export type LogoutSourceRenderer = (context: ProviderContext, form: string) => void;
+export type PostLogoutSuccessRenderer = (context: ProviderContext) => void;
 
 interface HashedSecretClient {
   readonly clientSecret?: string;
@@ -49,7 +56,7 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
     allowOmittingSingleRegisteredRedirectUri: false,
     claims: {
       openid: ['sub'],
-      profile: ['preferred_username'],
+      profile: ['preferred_username', 'picture'],
     },
     clientAuthMethods: ['none', 'client_secret_basic'],
     clientBasedCORS: (_context, origin, client): boolean =>
@@ -99,10 +106,20 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
     features: {
       dPoP: { enabled: false },
       devInteractions: { enabled: false },
+      introspection: {
+        allowedPolicy: (_context, client, token): boolean => client.clientId === token.clientId,
+        enabled: true,
+      },
       pushedAuthorizationRequests: { enabled: false },
       registration: { enabled: false },
       revocation: { enabled: true },
-      rpInitiatedLogout: { enabled: false },
+      rpInitiatedLogout: {
+        enabled: true,
+        ...(options.logoutSource === undefined ? {} : { logoutSource: options.logoutSource }),
+        ...(options.postLogoutSuccessSource === undefined
+          ? {}
+          : { postLogoutSuccessSource: options.postLogoutSuccessSource }),
+      },
       userinfo: { enabled: true },
     },
     findAccount: options.findAccount,
@@ -120,6 +137,7 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
     routes: {
       authorization: '/oauth2/authorize',
       end_session: '/oauth2/logout',
+      introspection: '/oauth2/introspect',
       jwks: '/oauth2/jwks',
       revocation: '/oauth2/revoke',
       token: '/oauth2/token',

@@ -378,8 +378,8 @@ function renderAdministratorPanel(
         <form class="admin-grant" action="/developers/admin/developers" method="post">
           ${csrfField(csrfToken)}
           <div class="field">
-            <label for="admin-uuid">${escapeHtml(admin.uuidLabel)}</label>
-            <input id="admin-uuid" name="uuid" required autocomplete="off" spellcheck="false" pattern="[0-9a-fA-F-]{36}" placeholder="${escapeHtml(admin.uuidPlaceholder)}">
+            <label for="admin-identifier">${escapeHtml(admin.identifierLabel)}</label>
+            <input id="admin-identifier" name="uuid" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(admin.identifierPlaceholder)}">
           </div>
           <div class="field">
             <label for="admin-role">${escapeHtml(admin.roleLabel)}</label>

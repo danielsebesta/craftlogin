@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { hashClientSecret } from '../../src/oauth/client-secret.js';
 import { ProviderAccessTokenAuthenticator } from '../../src/api/access-token-authenticator.js';
 import { renderAuthorizationError } from '../../src/api/authorization-error-page.js';
+import { renderLogoutPage, renderLogoutSuccessPage } from '../../src/api/logout-page.js';
 import { createApiServer } from '../../src/api/server.js';
 import { ProviderInteractionGateway } from '../../src/oauth/interaction-gateway.js';
 import { OAuthInteractionService } from '../../src/oauth/interaction-service.js';
@@ -191,6 +192,8 @@ describe('CraftLogin OIDC provider', (): void => {
         ),
       issuer,
       jwks: { keys: [createSigningKey()] },
+      logoutSource: renderLogoutPage,
+      postLogoutSuccessSource: renderLogoutSuccessPage,
       renderError: renderAuthorizationError,
     });
     const sessionSignals: SessionSignal[] = [];
@@ -367,6 +370,36 @@ describe('CraftLogin OIDC provider', (): void => {
       clientId: 'public-client',
     });
 
+    const introspectionResponse = await fetch(new URL('/oauth2/introspect', issuer), {
+      body: new URLSearchParams({ client_id: 'public-client', token: tokens.access_token }),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-proto': 'https',
+      },
+      method: 'POST',
+    });
+    expect(introspectionResponse.status).toBe(200);
+    const introspection = z
+      .object({ active: z.boolean(), sub: z.string().optional() })
+      .parse(await introspectionResponse.json());
+    expect(introspection.active).toBe(true);
+    expect(introspection.sub).toBe(accountId);
+
+    const foreignIntrospectionResponse = await fetch(new URL('/oauth2/introspect', issuer), {
+      body: new URLSearchParams({ token: tokens.access_token }),
+      headers: {
+        authorization: `Basic ${Buffer.from('confidential-client:confidential-client-secret').toString('base64')}`,
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-proto': 'https',
+      },
+      method: 'POST',
+    });
+    expect(foreignIntrospectionResponse.status).toBe(200);
+    const foreignIntrospection = z
+      .object({ active: z.boolean() })
+      .parse(await foreignIntrospectionResponse.json());
+    expect(foreignIntrospection.active).toBe(false);
+
     const currentUserResponse = await fetch(new URL('/api/users/@me', issuer), {
       headers: {
         ...proxyHeaders(),
@@ -448,6 +481,20 @@ describe('CraftLogin OIDC provider', (): void => {
       userAgent: 'CraftLogin flow test',
     });
     expect(sessionSignals[1]?.sessionReference).toBe(sessionSignals[0]?.sessionReference);
+
+    const discoveryResponse = await fetch(new URL('/.well-known/openid-configuration', issuer));
+    const discovery = z
+      .object({ end_session_endpoint: z.string(), introspection_endpoint: z.string() })
+      .parse(await discoveryResponse.json());
+    expect(discovery.end_session_endpoint).toBe(`${issuer}/oauth2/logout`);
+    expect(discovery.introspection_endpoint).toBe(`${issuer}/oauth2/introspect`);
+
+    const logoutPage = await fetch(new URL('/oauth2/logout', issuer), {
+      headers: proxyHeaders(responseCookies(secondResume)),
+      redirect: 'manual',
+    });
+    expect(logoutPage.status).toBe(200);
+    expect(await logoutPage.text()).toContain('Sign out of CraftLogin?');
   }, 20_000);
 });
 

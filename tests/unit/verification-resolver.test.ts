@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
 import type { VerifiedUserRepository } from '../../src/users/verified-user-repository.js';
 import type { VerificationClaim } from '../../src/verification/redis-verification-store.js';
 import type { AuthenticatedMinecraftPlayer } from '../../src/verification/types.js';
@@ -66,6 +67,19 @@ class FailingUsers implements VerifiedUserRepository {
   }
 }
 
+class RecordingProfiles implements MinecraftPlayerLookup {
+  public readonly lookups: string[] = [];
+
+  public findProfileById(uuid: string): Promise<{ username: string; uuid: string }> {
+    this.lookups.push(uuid);
+    return Promise.resolve({ username: 'VerifiedPlayer', uuid });
+  }
+
+  public findProfileByName(): Promise<undefined> {
+    return Promise.resolve(undefined);
+  }
+}
+
 describe('VerificationResolver', (): void => {
   it('allows only one concurrent resolver to persist and complete a code', async (): Promise<void> => {
     const store = new SingleWinnerStore();
@@ -92,5 +106,14 @@ describe('VerificationResolver', (): void => {
     );
     expect(store.completed).toBe(0);
     expect(store.released).toBe(1);
+  });
+
+  it('warms the Minecraft profile cache after a successful resolve', async (): Promise<void> => {
+    const store = new SingleWinnerStore();
+    const profiles = new RecordingProfiles();
+    const resolver = new VerificationResolver(store, new RecordingUsers(), profiles);
+
+    await expect(resolver.resolve('ABCDEFGH', player, verifiedAt)).resolves.toBe('resolved');
+    expect(profiles.lookups).toEqual([player.uuid]);
   });
 });

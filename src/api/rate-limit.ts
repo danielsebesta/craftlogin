@@ -29,6 +29,12 @@ export const verificationStatusRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
+export const avatarRateLimit = {
+  groupId: 'avatar',
+  max: 120,
+  timeWindow: 60 * 1_000,
+};
+
 export async function registerRateLimiting(
   server: FastifyInstance,
   redis?: Redis,

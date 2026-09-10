@@ -44,6 +44,10 @@ export const english = {
           description: 'Read verification state for the active signed OIDC interaction.',
           summary: 'Check Minecraft verification',
         },
+        introspection: {
+          description: 'Inspect an access or refresh token issued to the authenticated client.',
+          summary: 'Introspect a token',
+        },
         jwks: { summary: 'Get signing keys' },
         revoke: { summary: 'Revoke a token' },
         token: {
@@ -58,7 +62,7 @@ export const english = {
       },
       scopes: {
         openid: 'Authenticate the Minecraft account.',
-        profile: 'Read the current Minecraft username.',
+        profile: 'Read the current Minecraft username and avatar.',
       },
       tags: {
         applications: 'Manage public and confidential OAuth clients as an authenticated developer.',
@@ -103,6 +107,8 @@ export const english = {
       developerRole: 'Developer',
       empty: 'No developer accounts have been registered yet.',
       heading: 'Access registry',
+      identifierLabel: 'Minecraft name or UUID',
+      identifierPlaceholder: 'Notch or 069a79f4-44e9-4726-a5be-fca90e38aaf5',
       intro:
         'Grant console access by Minecraft UUID. Role changes take effect on the next request.',
       invalidFormNotice: 'Check the Minecraft UUID and access level, then try again.',
@@ -113,7 +119,6 @@ export const english = {
       saveRoleAction: 'Save role',
       summary: 'Administration',
       uuidLabel: 'Minecraft UUID',
-      uuidPlaceholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
     },
     app: {
       clientIdLabel: 'Client ID',
@@ -177,8 +182,8 @@ export const english = {
     },
     cli: {
       adminGranted: 'Administrator access granted to',
-      invalidUuid: 'Provide one canonical Minecraft UUID.',
-      usage: 'Usage: npm run admin:grant -- <minecraft-uuid>',
+      invalidUuid: 'Provide one Minecraft name or canonical UUID.',
+      usage: 'Usage: npm run admin:grant -- <minecraft-name-or-uuid>',
     },
   },
   landing: {
@@ -196,6 +201,11 @@ export const english = {
           detail: 'Current Minecraft username at verification time.',
           value: 'Player',
         },
+        {
+          claim: 'picture',
+          detail: 'Avatar head rendered from the current Mojang skin.',
+          value: 'https://craftlogin.com/avatar/123e4567-e89b-42d3-a456-426614174000',
+        },
       ],
       scopesHeading: 'Scopes',
       scopes: [
@@ -212,6 +222,11 @@ export const english = {
         { detail: 'Authorization code flow with S256 PKCE.', path: '/oauth2/authorize' },
         { detail: 'Code exchange and refresh token rotation.', path: '/oauth2/token' },
         { detail: 'OpenID Connect UserInfo.', path: '/oauth2/userinfo' },
+        {
+          detail: 'Validate opaque access tokens for resource servers.',
+          path: '/oauth2/introspect',
+        },
+        { detail: 'RP-initiated logout.', path: '/oauth2/logout' },
         { detail: 'Signing keys.', path: '/oauth2/jwks' },
         { detail: 'Token revocation.', path: '/oauth2/revoke' },
       ],
@@ -298,6 +313,19 @@ export const english = {
     ],
     stepsHeading: 'How to connect',
     title: 'Verify with Minecraft',
+  },
+  logout: {
+    body: 'You will be signed out of this browser session.',
+    confirm: 'Sign out',
+    decline: 'Stay signed in',
+    heading: 'Sign out of CraftLogin?',
+    title: 'Sign out',
+  },
+  logoutSuccess: {
+    body: 'You can close this page or return to the application.',
+    heading: 'You are signed out.',
+    returnAction: 'Return to CraftLogin',
+    title: 'Signed out',
   },
   minecraft: {
     motd: 'CraftLogin Minecraft verification',

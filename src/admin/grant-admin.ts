@@ -1,4 +1,5 @@
 import { loadEnvironment } from '../config/environment.js';
+import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
 import {
   PrismaDeveloperAccessRepository,
   developerUuidSchema,
@@ -7,17 +8,21 @@ import { createDatabaseClient } from '../infrastructure/database.js';
 import { english } from '../locales/en.js';
 import { getErrorKind } from '../logging/error-kind.js';
 import { createLogger } from '../logging/logger.js';
+import { MemoryMinecraftCache } from '../mojang/cache.js';
+import { HttpMojangClient } from '../mojang/client.js';
 
 const logger = createLogger(process.env['LOG_LEVEL'] ?? 'info');
 
 async function main(): Promise<void> {
-  const parsedUuid = developerUuidSchema.safeParse(process.argv[2]?.toLowerCase());
-  if (!parsedUuid.success) {
+  const players = new HttpMojangClient({ cache: new MemoryMinecraftCache() });
+  const resolved = await resolveDeveloperIdentifier(process.argv[2] ?? '', players);
+  if (resolved === undefined) {
     process.stderr.write(`${english.developer.cli.invalidUuid}\n${english.developer.cli.usage}\n`);
     process.exitCode = 1;
     return;
   }
-  const uuid = parsedUuid.data;
+  const uuid = developerUuidSchema.parse(resolved);
+
   const environment = loadEnvironment();
   const database = createDatabaseClient(environment.databaseUrl);
 

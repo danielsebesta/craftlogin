@@ -1,3 +1,4 @@
+import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { VerifiedUserRepository } from '../users/verified-user-repository.js';
 import type { RedisVerificationStore } from './redis-verification-store.js';
 import type { AuthenticatedMinecraftPlayer } from './types.js';
@@ -15,6 +16,7 @@ export class VerificationResolver {
       'claim' | 'complete' | 'release'
     >,
     private readonly users: VerifiedUserRepository,
+    private readonly profiles?: MinecraftPlayerLookup,
   ) {}
 
   public async resolve(
@@ -47,6 +49,12 @@ export class VerificationResolver {
 
     if (!completed) {
       throw new VerificationResolutionError('The verification claim could not be completed');
+    }
+
+    if (this.profiles !== undefined) {
+      // Warm the profile cache while the player is still in the verification flow. A lookup
+      // failure must never fail verification, so the result is intentionally discarded.
+      await this.profiles.findProfileById(player.uuid).catch((): undefined => undefined);
     }
 
     return 'resolved';

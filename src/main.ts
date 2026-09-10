@@ -8,6 +8,7 @@ import { renderAuthorizationError } from './api/authorization-error-page.js';
 import { PrismaClientDirectory } from './api/client-directory.js';
 import { PrismaCurrentUserLookup } from './api/current-user.js';
 import { DeveloperRequestAuthenticator } from './api/developer-authentication.js';
+import { renderLogoutPage, renderLogoutSuccessPage } from './api/logout-page.js';
 import { createApiServer } from './api/server.js';
 import { loadEnvironment } from './config/environment.js';
 import { loadOAuthCredentials } from './config/oauth-credentials.js';
@@ -22,10 +23,14 @@ import { InfrastructureReadinessCheck } from './infrastructure/readiness.js';
 import { createRedisClient } from './infrastructure/redis.js';
 import { getErrorKind } from './logging/error-kind.js';
 import { createLogger } from './logging/logger.js';
+import { RedisMinecraftCache } from './mojang/cache.js';
+import { HttpMojangClient, type MojangLogger } from './mojang/client.js';
+import { HttpSkinStore } from './mojang/skin-store.js';
 import { startGhostServer, type MinecraftGhostServer } from './mc-server/ghost-server.js';
 import { createOAuthRuntime } from './oauth/runtime.js';
 import { installSessionSignalLogging } from './oauth/session-security.js';
 import { PrismaVerifiedUserRepository } from './users/verified-user-repository.js';
+import { MojangUsernameResolver, PrismaUsernameStore } from './users/username-resolver.js';
 import { RedisVerificationStore } from './verification/redis-verification-store.js';
 import { VerificationResolver } from './verification/verification-resolver.js';
 
@@ -48,6 +53,15 @@ async function main(): Promise<void> {
 
     const verification = new RedisVerificationStore(redis);
     const verifiedUsers = new PrismaVerifiedUserRepository(database);
+    const mojangLogger: MojangLogger = {
+      warn: (details: Record<string, unknown>, message: string): void => {
+        logger.warn(details, message);
+      },
+    };
+    const mojangCache = new RedisMinecraftCache(redis);
+    const players = new HttpMojangClient({ cache: mojangCache, logger: mojangLogger });
+    const skins = new HttpSkinStore({ cache: mojangCache });
+    const usernames = new MojangUsernameResolver(players, new PrismaUsernameStore(database));
     minecraft = await startGhostServer(
       {
         baseDomain: environment.minecraftBaseDomain,
@@ -57,7 +71,7 @@ async function main(): Promise<void> {
       {
         logger,
         pendingCodes: verification,
-        resolver: new VerificationResolver(verification, verifiedUsers),
+        resolver: new VerificationResolver(verification, verifiedUsers, players),
       },
     );
 
@@ -67,7 +81,10 @@ async function main(): Promise<void> {
         issuer: environment.oidcIssuer,
         jwks: credentials.jwks,
         logger,
+        logoutSource: renderLogoutPage,
+        postLogoutSuccessSource: renderLogoutSuccessPage,
         renderError: renderAuthorizationError,
+        usernames,
       },
       database,
       redis,
@@ -99,13 +116,14 @@ async function main(): Promise<void> {
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,
       logger,
+      minecraft: { players, skins },
       minecraftBaseDomain: environment.minecraftBaseDomain,
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),
       rateLimitRedis: redis,
       readiness: new InfrastructureReadinessCheck(database, redis),
       trustProxy: environment.httpTrustProxy,
-      users: new PrismaCurrentUserLookup(database),
+      users: new PrismaCurrentUserLookup(database, usernames),
     });
     await api.listen({ host: environment.httpHost, port: environment.httpPort });
     logger.info(

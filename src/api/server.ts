@@ -8,9 +8,12 @@ import type { Redis } from 'ioredis';
 import type { AppManager } from '../developers/app-management.js';
 import type { DeveloperAccessRepository } from '../developers/developer-repository.js';
 import type { DeveloperLoginService } from '../developers/login-service.js';
+import type { MinecraftPlayerLookup } from '../mojang/client.js';
+import type { SkinStore } from '../mojang/skin-store.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
+import { registerAvatarRoutes } from './avatar-routes.js';
 import { registerBackgroundAssetRoute } from './background-asset.js';
 import type { RegisteredOriginLookup } from './client-directory.js';
 import type { CurrentUserLookup } from './current-user.js';
@@ -43,6 +46,10 @@ export interface ApiServerOptions {
   readonly interactions: ApiInteractionService;
   readonly issuer: string;
   readonly logger?: FastifyBaseLogger;
+  readonly minecraft?: {
+    readonly players: MinecraftPlayerLookup;
+    readonly skins: SkinStore;
+  };
   readonly minecraftBaseDomain: string;
   readonly nodeEnvironment: 'development' | 'production' | 'test';
   readonly oidcHandler: OidcHttpHandler;
@@ -78,6 +85,9 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerErrorHandling(server);
   registerFontAssetRoutes(server);
   registerBackgroundAssetRoute(server);
+  if (options.minecraft !== undefined) {
+    registerAvatarRoutes(server, options.minecraft);
+  }
   registerLandingRoutes(server, { showDocumentation: options.nodeEnvironment !== 'production' });
   registerHealthRoute(server, options.readiness);
   registerOidcHttpRoutes(server, options.oidcHandler);
@@ -95,6 +105,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     logins: options.developerLogins,
     logger: server.log,
     minecraftBaseDomain: options.minecraftBaseDomain,
+    ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });
   registerAppRoutes(server, options.apps, options.appManager, options.developerAuthentication);
 

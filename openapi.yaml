@@ -21,7 +21,7 @@ components:
           authorizationUrl: https://craftlogin.com/oauth2/authorize
           scopes:
             openid: Authenticate the Minecraft account.
-            profile: Read the current Minecraft username.
+            profile: Read the current Minecraft username and avatar.
           tokenUrl: https://craftlogin.com/oauth2/token
       type: oauth2
   schemas:
@@ -306,6 +306,57 @@ paths:
                     type: string
                 required:
                   - error
+                type: object
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /oauth2/introspect:
+    post:
+      summary: Introspect a token
+      tags:
+        - OAuth
+      description: Inspect an access or refresh token issued to the authenticated client.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                token_type_hint:
+                  enum:
+                    - access_token
+                    - refresh_token
+                  type: string
+              required:
+                - token
+              type: object
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
                 type: object
         "401":
           description: Default Response

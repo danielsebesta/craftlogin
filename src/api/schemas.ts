@@ -467,7 +467,7 @@ export const developerGrantRouteSchema: FastifySchema = {
     properties: {
       csrfToken: csrfFormProperty,
       role: developerRoleProperty,
-      uuid: minecraftUuidProperty,
+      uuid: { maxLength: 64, minLength: 1, type: 'string' },
     },
     required: ['csrfToken', 'role', 'uuid'],
     type: 'object',
@@ -532,6 +532,40 @@ export const backgroundAssetRouteSchema: FastifySchema = {
   hide: true,
   response: {
     200: { type: 'string' },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const avatarRouteSchema: FastifySchema = {
+  hide: true,
+  params: {
+    additionalProperties: false,
+    properties: { uuid: { maxLength: 64, minLength: 1, type: 'string' } },
+    required: ['uuid'],
+    type: 'object',
+  },
+  response: {
+    200: { type: 'string' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const skinRouteSchema: FastifySchema = {
+  hide: true,
+  params: {
+    additionalProperties: false,
+    properties: { hash: { pattern: '^[0-9a-f]{64}$', type: 'string' } },
+    required: ['hash'],
+    type: 'object',
+  },
+  response: {
+    200: { type: 'string' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
@@ -606,6 +640,60 @@ export const oauthTokenRouteSchema: FastifySchema = {
   },
   summary: operations.token.summary,
   tags: ['OAuth'],
+};
+
+export const oauthIntrospectionRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      token: { type: 'string' },
+      token_type_hint: { enum: ['access_token', 'refresh_token'], type: 'string' },
+    },
+    required: ['token'],
+    type: 'object',
+  },
+  consumes: ['application/x-www-form-urlencoded'],
+  description: operations.introspection.description,
+  response: {
+    200: { additionalProperties: true, type: 'object' },
+    401: oauthErrorSchema,
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.introspection.summary,
+  tags: ['OAuth'],
+};
+
+export const oauthEndSessionRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+    303: { type: 'null' },
+    400: oauthErrorSchema,
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const oauthEndSessionConfirmRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: true,
+    properties: { logout: { type: 'string' }, xsrf: { type: 'string' } },
+    type: 'object',
+  },
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    400: oauthErrorSchema,
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const oauthEndSessionSuccessRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
 };
 
 export const oauthRevocationRouteSchema: FastifySchema = {

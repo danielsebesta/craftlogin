@@ -87,7 +87,7 @@ describe('page accessibility contract', (): void => {
 
     expect(html).toContain('<label for="app-name">');
     expect(html).toContain('<label for="app-redirects">');
-    expect(html).toContain('<label for="admin-uuid">');
+    expect(html).toContain('<label for="admin-identifier">');
     expect(html).toContain('<label for="admin-role">');
     expect(html).toContain('<h1>Developer Console</h1>');
   });

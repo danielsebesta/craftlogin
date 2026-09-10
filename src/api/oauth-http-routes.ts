@@ -8,6 +8,10 @@ import { tokenRateLimit } from './rate-limit.js';
 import {
   oauthAuthorizationRouteSchema,
   oauthDiscoveryRouteSchema,
+  oauthEndSessionConfirmRouteSchema,
+  oauthEndSessionRouteSchema,
+  oauthEndSessionSuccessRouteSchema,
+  oauthIntrospectionRouteSchema,
   oauthJwksRouteSchema,
   oauthResumeRouteSchema,
   oauthRevocationRouteSchema,
@@ -46,6 +50,34 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
     onRequest: [limitTokenRequests, forward],
     schema: oauthTokenRouteSchema,
     url: '/oauth2/token',
+  });
+  server.route({
+    handler: unreachableOidcHandler,
+    method: 'POST',
+    onRequest: [limitTokenRequests, forward],
+    schema: oauthIntrospectionRouteSchema,
+    url: '/oauth2/introspect',
+  });
+  server.route({
+    handler: unreachableOidcHandler,
+    method: ['GET', 'POST'],
+    onRequest: forward,
+    schema: oauthEndSessionRouteSchema,
+    url: '/oauth2/logout',
+  });
+  server.route({
+    handler: unreachableOidcHandler,
+    method: 'POST',
+    onRequest: forward,
+    schema: oauthEndSessionConfirmRouteSchema,
+    url: '/oauth2/logout/confirm',
+  });
+  server.route({
+    handler: unreachableOidcHandler,
+    method: 'GET',
+    onRequest: forward,
+    schema: oauthEndSessionSuccessRouteSchema,
+    url: '/oauth2/logout/success',
   });
   server.route({
     handler: unreachableOidcHandler,

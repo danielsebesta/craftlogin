@@ -22,6 +22,19 @@ Verification, authorization-code consumption, and refresh-token rotation use ato
 PostgreSQL operations so concurrent redemption has one winner. Raw secrets, codes, and tokens are
 not written to application logs.
 
+## Identity and client integration
+
+The `profile` scope returns the current Minecraft username as `preferred_username` and a `picture`
+URL that serves a head rendered from the account's current Mojang skin. CraftLogin resolves the skin
+through the Mojang session profile endpoint, verifies the signed texture property against Mojang's
+published keys, and caches the result in Redis for an hour. When Mojang is unavailable, the last
+known profile is served instead of failing.
+
+Opaque access tokens are validated for resource servers at `POST /oauth2/introspect`, and clients
+can end a session at `/oauth2/logout`. A client may only introspect its own tokens. The committed
+[`openapi.yaml`](openapi.yaml) documents the introspection endpoint; the logout pages stay out of
+the API reference.
+
 ## Requirements
 
 - Node.js 24 (the active LTS line selected by `.nvmrc`)
@@ -77,17 +90,19 @@ local machine, so the Minecraft client can use the exact address shown by CraftL
 ### Developer Console
 
 OAuth client registration is never anonymous. Bootstrap the first administrator from a trusted shell
-after applying migrations, using the canonical UUID of their Minecraft Java Edition account:
+after applying migrations, using the Minecraft name or canonical UUID of their Java Edition account:
 
 ```sh
+npm run admin:grant -- Notch
 npm run admin:grant -- 123e4567-e89b-42d3-a456-426614174000
 ```
 
 Then open <https://localhost:3443/developers>. The administrator proves ownership of that UUID by
 joining the displayed online-mode Minecraft address. Administrators can grant or revoke developer
-UUIDs and roles; registered developers can create and remove their own public or confidential OAuth
-clients. Confidential secrets are displayed once. Role changes are checked on every request and
-rotate or revoke active console sessions.
+UUIDs and roles; the access registry accepts a Minecraft name or a canonical UUID. Registered
+developers can create and remove their own public or confidential OAuth clients. Confidential
+secrets are displayed once. Role changes are checked on every request and rotate or revoke active
+console sessions.
 
 For a built production image, run the compiled bootstrap command inside the application container:
 

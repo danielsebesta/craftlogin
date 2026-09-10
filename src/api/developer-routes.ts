@@ -8,6 +8,8 @@ import type {
 } from '../developers/developer-repository.js';
 import { LastAdministratorError } from '../developers/developer-repository.js';
 import type { DeveloperLoginService } from '../developers/login-service.js';
+import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
+import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import { english } from '../locales/en.js';
 import type { AppRegistrar, AppRegistrationInput } from './app-registration.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
@@ -87,6 +89,7 @@ export interface DeveloperRoutesOptions {
   readonly logins: Pick<DeveloperLoginService, 'complete' | 'start' | 'status'>;
   readonly logger: FastifyBaseLogger;
   readonly minecraftBaseDomain: string;
+  readonly players?: MinecraftPlayerLookup;
 }
 
 export function registerDeveloperRoutes(
@@ -300,11 +303,13 @@ export function registerDeveloperRoutes(
         await reply.redirect('/developers?notice=invalid-form', 303);
         return;
       }
+      const uuid = await resolveDeveloperIdentifier(request.body.uuid.trim(), options.players);
+      if (uuid === undefined) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
       try {
-        const access = await options.developers.grant(
-          request.body.uuid.toLowerCase(),
-          request.body.role,
-        );
+        const access = await options.developers.grant(uuid, request.body.role);
         options.logger.info(
           { actorUuid: session.userUuid, developerRole: access.role, developerUuid: access.uuid },
           'Administrator changed developer access',
