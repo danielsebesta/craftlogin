@@ -10,7 +10,7 @@ export const renderAuthorizationError: AuthorizationErrorRenderer = (context, ou
   context.set('cache-control', 'no-store');
   context.set(
     'content-security-policy',
-    "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; style-src 'self'",
+    "default-src 'none'; base-uri 'none'; font-src 'self'; frame-ancestors 'none'; style-src 'self'",
   );
   context.set('referrer-policy', 'no-referrer');
   context.set('x-content-type-options', 'nosniff');
@@ -21,22 +21,24 @@ export const renderAuthorizationError: AuthorizationErrorRenderer = (context, ou
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#111814">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#131714">
     <title>${escapeHtml(strings.title)}</title>
     <link rel="stylesheet" href="/assets/interaction.css">
   </head>
-  <body>
-    <header class="site-header">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>${escapeHtml(english.interaction.brand)}</div>
+  <body class="surface-grid">
+    <a class="skip-link" href="#main">${escapeHtml(english.common.skipToContent)}</a>
+    <header class="signin-header">
+      <span class="brand"><span class="brand-mark" aria-hidden="true"></span>${escapeHtml(english.interaction.brand)}</span>
     </header>
-    <main class="error-shell">
-      <article class="error-card" aria-labelledby="error-heading">
-        <p class="eyebrow">${escapeHtml(strings.codeLabel)} · ${escapeHtml(output.error)}</p>
+    <main id="main" class="signin">
+      <div class="signin-intro">
         <h1 id="error-heading">${escapeHtml(strings.heading)}</h1>
         <p class="lead">${escapeHtml(strings.message)}</p>
-      </article>
+        <p class="field-hint">${escapeHtml(strings.codeLabel)}: <code>${escapeHtml(output.error)}</code></p>
+      </div>
     </main>
-    <footer class="site-footer">${escapeHtml(strings.footer)}</footer>
+    <footer class="signin-footer">${escapeHtml(strings.footer)}</footer>
   </body>
 </html>`;
 };

@@ -80,11 +80,15 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-security-policy']).toContain("default-src 'none'");
     expect(response.headers['content-security-policy']).toContain("font-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
-    expect(response.body).toContain('<main>');
-    expect(response.body).toContain('<h1 id="hero-heading">Sign in with Minecraft.</h1>');
+    expect(response.body).toContain('<main id="main">');
+    expect(response.body).toContain(
+      '<h1 id="hero-heading">OIDC identity for Minecraft Java accounts</h1>',
+    );
     expect(response.body).toContain('K7MPQ4RX.craftlogin.com');
     expect(response.body).toContain('href="/docs/"');
     expect(response.body).toContain('/assets/landing.css');
+    expect(response.body).toContain('class="skip-link"');
+    expect(response.body).toContain('name="color-scheme" content="dark"');
     expect(response.body).not.toContain('<script');
 
     const stylesheet = await server.inject({ method: 'GET', url: '/assets/landing.css' });

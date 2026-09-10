@@ -66,12 +66,51 @@ describe('Developer Console', (): void => {
     const response = await server.inject({ method: 'GET', url: '/developers' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('Build with Minecraft identity.');
+    expect(response.body).toContain('<h1>Developer Console</h1>');
     expect(response.body).toContain('Local map client');
     expect(response.body).toContain('Access registry');
     expect(response.body).toContain(`value="${developerSession.csrfToken}"`);
     expect(response.body).not.toContain('<script');
     expect(response.headers['set-cookie']).toContain('__Host-craftlogin_developer_session=');
+  });
+
+  it('confirms application deletion before the destructive request', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true });
+    const response = await server.inject({
+      method: 'GET',
+      url: '/developers/apps/123e4567-e89b-42d3-a456-426614174001/delete',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('Delete this application?');
+    expect(response.body).toContain('value="developer-csrf-token"');
+    expect(response.body).toContain(
+      'action="/developers/apps/123e4567-e89b-42d3-a456-426614174001/delete"',
+    );
+
+    const missing = await server.inject({
+      method: 'GET',
+      url: '/developers/apps/123e4567-e89b-42d3-a456-426614174099/delete',
+    });
+    expect(missing.statusCode).toBe(303);
+    expect(missing.headers.location).toBe('/developers?notice=not-found');
+  });
+
+  it('renders inline HTML errors for invalid form input instead of JSON', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true });
+    const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'csrfToken=developer-csrf-token&clientType=public&redirectUris=',
+      url: '/developers/apps',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.body).toContain(
+      'Check the application name and redirect URIs, then try again.',
+    );
+    expect(response.body).toContain('<h1>Developer Console</h1>');
   });
 
   it('rejects anonymous client registration before application persistence', async (): Promise<void> => {

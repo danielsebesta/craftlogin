@@ -373,7 +373,12 @@ export const developerDashboardRouteSchema: FastifySchema = {
   hide: true,
   querystring: {
     additionalProperties: false,
-    properties: { notice: { enum: ['last-admin'], type: 'string' } },
+    properties: {
+      notice: {
+        enum: ['invalid-form', 'last-admin', 'not-found'],
+        type: 'string',
+      },
+    },
     type: 'object',
   },
   response: {
@@ -421,6 +426,18 @@ export const developerAppDeleteRouteSchema: FastifySchema = {
     303: { type: 'null' },
     401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppDeleteConfirmRouteSchema: FastifySchema = {
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
     404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
@@ -479,6 +496,18 @@ export const developerRevokeRouteSchema: FastifySchema = {
     303: { type: 'null' },
     401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerRevokeConfirmRouteSchema: FastifySchema = {
+  hide: true,
+  params: developerUuidParamsSchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
     404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },

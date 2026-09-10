@@ -4,14 +4,21 @@ import type { DeveloperLoginAttempt } from '../developers/login-service.js';
 import { english } from '../locales/en.js';
 import type { RegisteredApp } from './app-registration.js';
 import { escapeHtml } from './html.js';
+import { renderSignInPage } from './ui/sign-in-page.js';
 
-const MAXIMUM_POLL_ATTEMPTS = 48;
+export type DashboardNotice = 'invalid-form' | 'last-admin' | 'not-found';
 
 export interface DeveloperDashboardInput {
   readonly apps: readonly ManagedApp[];
   readonly csrfToken: string;
   readonly developers?: readonly DeveloperAccess[];
-  readonly notice?: 'last-admin';
+  readonly formError?: string;
+  readonly formValues?: {
+    readonly clientType: 'confidential' | 'public';
+    readonly name: string;
+    readonly redirectUris: string;
+  };
+  readonly notice?: DashboardNotice;
   readonly role: DeveloperRole;
   readonly userUuid: string;
 }
@@ -28,60 +35,46 @@ export function renderDeveloperLoginPage(
         ? strings.login.verifiedAddress
         : strings.login.addressPending
       : `${attempt.code}.${minecraftBaseDomain}`;
-  const initialStatus =
-    attempt.status === 'verified' ? interaction.status.verified : interaction.status.pending;
+  const verified = attempt.status === 'verified';
 
-  return pageShell(
-    `${strings.navigation.console} · ${interaction.title}`,
-    `<main
-      class="developer-login"
-      data-verification
-      data-status-url="/developers/login/status"
-      data-maximum-attempts="${MAXIMUM_POLL_ATTEMPTS.toString()}"
-      data-pending-message="${escapeHtml(interaction.status.pending)}"
-      data-verified-message="${escapeHtml(interaction.status.verified)}"
-      data-expired-message="${escapeHtml(interaction.status.expired)}"
-      data-network-message="${escapeHtml(interaction.status.networkError)}"
-      data-stopped-message="${escapeHtml(interaction.status.stopped)}"
-    >
-      <section class="login-manifest" aria-labelledby="developer-login-heading">
-        <p class="kicker">${escapeHtml(strings.login.eyebrow)}</p>
-        <h1 id="developer-login-heading">${escapeHtml(strings.login.heading)}</h1>
-        <p class="intro">${escapeHtml(strings.login.intro)}</p>
-        <ol class="login-steps">
-          ${interaction.steps.map((step): string => `<li>${escapeHtml(step)}</li>`).join('\n          ')}
-        </ol>
-      </section>
-      <section class="login-terminal" aria-labelledby="developer-address-heading">
-        <p class="terminal-label" id="developer-address-heading">${escapeHtml(interaction.addressLabel)}</p>
-        <code class="login-address">${escapeHtml(address)}</code>
-        <div class="login-status">
-          <span>${escapeHtml(interaction.statusLabel)}</span>
-          <p data-status-message data-state="${escapeHtml(attempt.status)}" role="status" aria-live="polite">${escapeHtml(initialStatus)}</p>
-        </div>
-        <form action="/developers/login/complete" method="post">
-          <button class="primary-action" type="submit">${escapeHtml(interaction.continueButton)}</button>
-        </form>
-        <noscript><p class="noscript-note">${escapeHtml(interaction.noJavaScript)}</p></noscript>
-      </section>
-    </main>`,
-    true,
-  );
+  return renderSignInPage({
+    action: '/developers/login/complete',
+    address,
+    addressLabel: interaction.addressLabel,
+    brand: strings.navigation.brand,
+    continueLabel: interaction.continueButton,
+    copiedLabel: interaction.copied,
+    copyLabel: interaction.copyAddress,
+    documentTitle: `${strings.login.documentTitle} · ${strings.navigation.brand}`,
+    footer: strings.footer,
+    heading: strings.login.heading,
+    headingId: 'developer-login-heading',
+    initialStatus: verified ? interaction.status.verified : interaction.status.pending,
+    initialStatusState: verified ? 'verified' : 'pending',
+    lead: strings.login.lead,
+    messages: interaction.status,
+    noJavaScript: interaction.noJavaScript,
+    securityNote: interaction.securityNote,
+    skipLabel: english.common.skipToContent,
+    statusUrl: '/developers/login/status',
+    steps: interaction.steps,
+    stepsHeading: interaction.stepsHeading,
+  });
 }
 
 export function renderDeveloperAccessDeniedPage(): string {
   const strings = english.developer;
   return pageShell(
     strings.accessDenied.title,
-    `<main class="message-layout">
-      <section class="message-card message-card-denied" aria-labelledby="denied-heading">
-        <p class="kicker">403 · ${escapeHtml(strings.navigation.console)}</p>
+    `<main id="main" class="message-layout">
+      <section class="message-card card" aria-labelledby="denied-heading">
         <h1 id="denied-heading">${escapeHtml(strings.accessDenied.heading)}</h1>
-        <p class="intro">${escapeHtml(strings.accessDenied.detail)}</p>
-        <a class="primary-action inline-action" href="/developers/login">${escapeHtml(strings.accessDenied.retry)}</a>
+        <p class="lead">${escapeHtml(strings.accessDenied.detail)}</p>
+        <div class="button-row">
+          <a class="button" href="/developers/login">${escapeHtml(strings.accessDenied.retry)}</a>
+        </div>
       </section>
     </main>`,
-    false,
   );
 }
 
@@ -93,213 +86,351 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
     input.role === 'admin' && input.developers !== undefined
       ? renderAdministratorPanel(input.developers, input.csrfToken, input.notice)
       : '';
+  const formOpen = input.apps.length === 0 || input.formError !== undefined;
+  const formErrorNotice =
+    input.formError === undefined
+      ? ''
+      : `<p class="notice notice-error" role="alert">${escapeHtml(input.formError)}</p>`;
+  const dashboardNotice = renderDashboardNotice(input.notice);
+  const identity = `<span class="console-identity"><code>${escapeHtml(input.userUuid)}</code><span>${escapeHtml(roleLabel)}</span><form action="/developers/logout" method="post">${csrfField(input.csrfToken)}<button class="button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button></form></span>`;
 
   return pageShell(
-    strings.navigation.console,
-    `<main class="console-main">
-      <header class="console-hero">
-        <div>
-          <p class="kicker">${escapeHtml(strings.dashboard.eyebrow)}</p>
-          <h1>${escapeHtml(strings.dashboard.heading)}</h1>
-          <p class="intro">${escapeHtml(strings.dashboard.intro)}</p>
+    strings.dashboard.heading,
+    `<main id="main" class="container console-main">
+      <h1>${escapeHtml(strings.dashboard.heading)}</h1>
+      <p class="lead">${escapeHtml(strings.dashboard.lead)}</p>
+      ${dashboardNotice}
+      <section class="console-section" aria-labelledby="apps-heading">
+        <div class="console-section-head">
+          <h2 id="apps-heading">${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
+          <a href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>
         </div>
-        <aside class="identity-ticket" aria-label="${escapeHtml(strings.dashboard.uuidLabel)}">
-          <span class="role-stamp">${escapeHtml(roleLabel)}</span>
-          <span>${escapeHtml(strings.dashboard.uuidLabel)}</span>
-          <code>${escapeHtml(input.userUuid)}</code>
-          <form action="/developers/logout" method="post">
-            ${csrfField(input.csrfToken)}
-            <button class="text-action" type="submit">${escapeHtml(strings.dashboard.logout)}</button>
-          </form>
-        </aside>
-      </header>
+        ${renderAppTable(input.apps, input.role)}
+      </section>
 
-      <div class="console-grid">
-        <section class="panel app-register" aria-labelledby="register-heading">
-          <p class="panel-index">${escapeHtml(strings.app.registerSectionLabel)}</p>
-          <h2 id="register-heading">${escapeHtml(strings.app.newHeading)}</h2>
-          ${renderRegistrationForm(input.csrfToken)}
-        </section>
-
-        <section class="panel app-directory" aria-labelledby="apps-heading">
-          <p class="panel-index">${escapeHtml(strings.app.clientsSectionLabel)}</p>
-          <h2 id="apps-heading">${escapeHtml(strings.app.heading)}</h2>
-          ${renderAppList(input.apps, input.csrfToken, input.role)}
-        </section>
-      </div>
+      <details class="disclosure"${formOpen ? ' open' : ''}>
+        <summary>${escapeHtml(strings.app.newHeading)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
+        <div class="disclosure-body">
+          ${formErrorNotice}
+          ${renderRegistrationForm(input.csrfToken, input.formValues)}
+        </div>
+      </details>
       ${adminPanel}
     </main>`,
-    false,
+    { identity },
   );
 }
 
 export function renderCreatedAppPage(app: RegisteredApp): string {
   const strings = english.developer;
+  const interaction = english.interaction;
+  const redirects = app.redirectUris
+    .map((uri): string => `<li><code>${escapeHtml(uri)}</code></li>`)
+    .join('');
   const secret =
     app.clientSecret === undefined
       ? ''
-      : `<div class="credential credential-secret">
-          <span>${escapeHtml(strings.app.secretLabel)}</span>
-          <code>${escapeHtml(app.clientSecret)}</code>
+      : `<div class="credential">
+          <p class="field-label">${escapeHtml(strings.app.secretLabel)}</p>
+          <code id="client-secret">${escapeHtml(app.clientSecret)}</code>
+          <div class="button-row">
+            <button type="button" class="button button-secondary" data-copy-target="#client-secret" data-copied-label="${escapeHtml(interaction.copied)}" hidden>${escapeHtml(strings.app.copyLabel)}</button>
+          </div>
         </div>`;
 
   return pageShell(
     strings.app.createdTitle,
-    `<main class="message-layout">
-      <section class="message-card credential-card" aria-labelledby="created-heading">
-        <p class="kicker">201 · ${escapeHtml(app.clientType === 'public' ? strings.app.publicLabel : strings.app.confidentialLabel)}</p>
+    `<main id="main" class="message-layout">
+      <section class="message-card card" aria-labelledby="created-heading">
         <h1 id="created-heading">${escapeHtml(strings.app.createdHeading)}</h1>
-        <p class="intro">${escapeHtml(strings.app.createdIntro)}</p>
-        <div class="credential">
-          <span>${escapeHtml(strings.app.clientIdLabel)}</span>
-          <code>${escapeHtml(app.clientId)}</code>
-        </div>
+        <p class="lead">${escapeHtml(strings.app.createdIntro)}</p>
+        <dl class="summary-list">
+          <div>
+            <dt>${escapeHtml(strings.app.nameLabel)}</dt>
+            <dd>${escapeHtml(app.name)}</dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(strings.app.clientIdLabel)}</dt>
+            <dd><code>${escapeHtml(app.clientId)}</code></dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(strings.app.redirectLabel)}</dt>
+            <dd><ul class="redirect-list">${redirects}</ul></dd>
+          </div>
+        </dl>
         ${secret}
-        <form action="/developers" method="get">
-          <button class="primary-action" type="submit">${escapeHtml(strings.navigation.console)}</button>
-        </form>
+        <div class="button-row">
+          <a class="button" href="/developers">${escapeHtml(strings.navigation.console)}</a>
+        </div>
       </section>
     </main>`,
-    false,
+    { includeScript: true },
   );
 }
 
-function renderRegistrationForm(csrfToken: string): string {
-  const strings = english.developer.app;
-  return `<form class="stack-form" action="/developers/apps" method="post">
-    ${csrfField(csrfToken)}
-    <label>
-      <span>${escapeHtml(strings.nameLabel)}</span>
-      <input name="name" required maxlength="100" autocomplete="off" placeholder="${escapeHtml(strings.namePlaceholder)}">
-    </label>
-    <fieldset>
-      <legend>${escapeHtml(strings.typeLabel)}</legend>
-      <label class="choice-row">
-        <input type="radio" name="clientType" value="public" checked>
-        <span><strong>${escapeHtml(strings.publicLabel)}</strong><small>${escapeHtml(strings.publicHelp)}</small></span>
-      </label>
-      <label class="choice-row">
-        <input type="radio" name="clientType" value="confidential">
-        <span><strong>${escapeHtml(strings.confidentialLabel)}</strong><small>${escapeHtml(strings.confidentialHelp)}</small></span>
-      </label>
-    </fieldset>
-    <label>
-      <span>${escapeHtml(strings.redirectLabel)}</span>
-      <textarea name="redirectUris" required rows="4" spellcheck="false" placeholder="${escapeHtml(strings.redirectPlaceholder)}"></textarea>
-      <small>${escapeHtml(strings.redirectHelp)}</small>
-    </label>
-    <button class="primary-action" type="submit">${escapeHtml(strings.createAction)}</button>
-  </form>`;
+export function renderDeleteAppPage(app: ManagedApp, csrfToken: string): string {
+  const strings = english.developer;
+  return pageShell(
+    strings.confirm.appTitle,
+    `<main id="main" class="message-layout">
+      <section class="message-card card" aria-labelledby="confirm-heading">
+        <h1 id="confirm-heading">${escapeHtml(strings.confirm.appHeading)}</h1>
+        <p class="lead">${escapeHtml(strings.confirm.appBody)}</p>
+        <dl class="summary-list">
+          <div>
+            <dt>${escapeHtml(strings.app.nameLabel)}</dt>
+            <dd>${escapeHtml(app.name)}</dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(strings.app.clientIdLabel)}</dt>
+            <dd><code>${escapeHtml(app.clientId)}</code></dd>
+          </div>
+        </dl>
+        <form action="/developers/apps/${encodeURIComponent(app.id)}/delete" method="post">
+          ${csrfField(csrfToken)}
+          <div class="button-row">
+            <button class="button button-danger" type="submit">${escapeHtml(strings.confirm.appAction)}</button>
+            <a class="button button-secondary" href="/developers">${escapeHtml(strings.confirm.cancel)}</a>
+          </div>
+        </form>
+      </section>
+    </main>`,
+  );
 }
 
-function renderAppList(
-  apps: readonly ManagedApp[],
-  csrfToken: string,
-  role: DeveloperRole,
-): string {
+export function renderRemoveDeveloperPage(developer: DeveloperAccess, csrfToken: string): string {
+  const strings = english.developer;
+  const roleLabel =
+    developer.role === 'admin' ? strings.admin.adminRole : strings.admin.developerRole;
+  return pageShell(
+    strings.confirm.developerTitle,
+    `<main id="main" class="message-layout">
+      <section class="message-card card" aria-labelledby="confirm-heading">
+        <h1 id="confirm-heading">${escapeHtml(strings.confirm.developerHeading)}</h1>
+        <p class="lead">${escapeHtml(strings.confirm.developerBody)}</p>
+        <dl class="summary-list">
+          <div>
+            <dt>${escapeHtml(strings.admin.uuidLabel)}</dt>
+            <dd><code>${escapeHtml(developer.uuid)}</code></dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(strings.admin.roleLabel)}</dt>
+            <dd>${escapeHtml(roleLabel)}</dd>
+          </div>
+        </dl>
+        <form action="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete" method="post">
+          ${csrfField(csrfToken)}
+          <div class="button-row">
+            <button class="button button-danger" type="submit">${escapeHtml(strings.confirm.removeAction)}</button>
+            <a class="button button-secondary" href="/developers">${escapeHtml(strings.confirm.cancel)}</a>
+          </div>
+        </form>
+      </section>
+    </main>`,
+  );
+}
+
+function renderDashboardNotice(notice: DashboardNotice | undefined): string {
+  const strings = english.developer;
+  if (notice === undefined) {
+    return '';
+  }
+  if (notice === 'last-admin') {
+    return `<p class="notice" role="status">${escapeHtml(strings.admin.lastAdminNotice)}</p>`;
+  }
+  if (notice === 'invalid-form') {
+    return `<p class="notice notice-error" role="alert">${escapeHtml(strings.admin.invalidFormNotice)}</p>`;
+  }
+  return `<p class="notice notice-error" role="alert">${escapeHtml(strings.admin.notFoundNotice)}</p>`;
+}
+
+function renderAppTable(apps: readonly ManagedApp[], role: DeveloperRole): string {
   const strings = english.developer.app;
   if (apps.length === 0) {
     return `<p class="empty-state">${escapeHtml(strings.empty)}</p>`;
   }
 
-  return `<div class="app-list">${apps
-    .map(
-      (app): string => `<article class="app-row">
-        <div class="app-heading">
-          <div><span class="client-type">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</span><h3>${escapeHtml(app.name)}</h3></div>
-          <form action="/developers/apps/${encodeURIComponent(app.id)}/delete" method="post">
-            ${csrfField(csrfToken)}
-            <button class="danger-action" type="submit">${escapeHtml(strings.deleteAction)}</button>
-          </form>
-        </div>
-        <dl>
-          <div><dt>${escapeHtml(strings.clientIdLabel)}</dt><dd><code>${escapeHtml(app.clientId)}</code></dd></div>
-          ${
-            role === 'admin'
-              ? `<div><dt>${escapeHtml(strings.ownerLabel)}</dt><dd><code>${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</code></dd></div>`
-              : ''
-          }
-          <div><dt>${escapeHtml(strings.redirectLabel)}</dt><dd>${app.redirectUris
-            .map((uri): string => `<code>${escapeHtml(uri)}</code>`)
-            .join('')}</dd></div>
-        </dl>
-      </article>`,
-    )
-    .join('')}</div>`;
+  const rows = apps
+    .map((app): string => {
+      const redirects = app.redirectUris
+        .map((uri): string => `<li><code>${escapeHtml(uri)}</code></li>`)
+        .join('');
+      const owner =
+        role === 'admin'
+          ? `<span class="app-type">${escapeHtml(strings.ownerLabel)}: ${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</span>`
+          : '';
+      return `<tr>
+        <th scope="row"><span class="app-name">${escapeHtml(app.name)}</span><span class="app-type">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</span>${owner}</th>
+        <td><code>${escapeHtml(app.clientId)}</code></td>
+        <td><ul class="redirect-list">${redirects}</ul></td>
+        <td class="table-actions"><a class="button button-danger" href="/developers/apps/${encodeURIComponent(app.id)}/delete">${escapeHtml(strings.deleteAction)}</a></td>
+      </tr>`;
+    })
+    .join('\n        ');
+
+  return `<div class="table-wrap">
+      <table class="table">
+        <caption class="visually-hidden">${escapeHtml(english.developer.dashboard.applicationsHeading)}</caption>
+        <thead>
+          <tr>
+            <th scope="col">${escapeHtml(strings.nameLabel)}</th>
+            <th scope="col">${escapeHtml(strings.clientIdLabel)}</th>
+            <th scope="col">${escapeHtml(strings.redirectLabel)}</th>
+            <th scope="col"><span class="visually-hidden">${escapeHtml(strings.deleteAction)}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+        ${rows}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderRegistrationForm(
+  csrfToken: string,
+  values: DeveloperDashboardInput['formValues'],
+): string {
+  const strings = english.developer.app;
+  const clientType = values?.clientType ?? 'public';
+  return `<form class="stack" action="/developers/apps" method="post">
+    ${csrfField(csrfToken)}
+    <div class="field">
+      <label for="app-name">${escapeHtml(strings.nameLabel)}</label>
+      <input id="app-name" name="name" required maxlength="100" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(strings.namePlaceholder)}…" value="${escapeHtml(values?.name ?? '')}">
+    </div>
+    <fieldset class="field">
+      <legend class="field-label">${escapeHtml(strings.typeLabel)}</legend>
+      <div class="choice-group">
+        <label class="choice">
+          <input type="radio" name="clientType" value="public"${clientType === 'public' ? ' checked' : ''}>
+          <span><span class="choice-title">${escapeHtml(strings.publicLabel)}</span><span class="choice-hint">${escapeHtml(strings.publicHelp)}</span></span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="clientType" value="confidential"${clientType === 'confidential' ? ' checked' : ''}>
+          <span><span class="choice-title">${escapeHtml(strings.confidentialLabel)}</span><span class="choice-hint">${escapeHtml(strings.confidentialHelp)}</span></span>
+        </label>
+      </div>
+    </fieldset>
+    <div class="field">
+      <label for="app-redirects">${escapeHtml(strings.redirectLabel)}</label>
+      <textarea id="app-redirects" name="redirectUris" required rows="4" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(strings.redirectPlaceholder)}">${escapeHtml(values?.redirectUris ?? '')}</textarea>
+      <small class="field-hint">${escapeHtml(strings.redirectHelp)}</small>
+    </div>
+    <div class="button-row">
+      <button class="button" type="submit">${escapeHtml(strings.createAction)}</button>
+    </div>
+  </form>`;
 }
 
 function renderAdministratorPanel(
   developers: readonly DeveloperAccess[],
   csrfToken: string,
-  notice: 'last-admin' | undefined,
+  notice: DashboardNotice | undefined,
 ): string {
-  const strings = english.developer.admin;
-  const noticeMarkup =
-    notice === 'last-admin'
-      ? `<p class="notice" role="status">${escapeHtml(strings.lastAdminNotice)}</p>`
-      : '';
+  const strings = english.developer;
+  const admin = strings.admin;
+  const open = notice === 'last-admin' || notice === 'invalid-form' || notice === 'not-found';
   const entries =
     developers.length === 0
-      ? `<p class="empty-state">${escapeHtml(strings.empty)}</p>`
-      : `<div class="access-list">${developers
-          .map((developer): string => renderDeveloperEntry(developer, csrfToken))
-          .join('')}</div>`;
+      ? `<p class="empty-state">${escapeHtml(admin.empty)}</p>`
+      : `<div class="table-wrap">
+      <table class="table">
+        <caption class="visually-hidden">${escapeHtml(admin.heading)}</caption>
+        <thead>
+          <tr>
+            <th scope="col">${escapeHtml(admin.uuidLabel)}</th>
+            <th scope="col">${escapeHtml(admin.roleLabel)}</th>
+            <th scope="col">${escapeHtml(admin.createdLabel)}</th>
+            <th scope="col"><span class="visually-hidden">${escapeHtml(admin.removeAction)}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+        ${developers
+          .map(
+            (developer): string => `<tr>
+          <th scope="row"><code>${escapeHtml(developer.uuid)}</code></th>
+          <td>
+            <form class="role-form" action="/developers/admin/developers" method="post">
+              ${csrfField(csrfToken)}
+              <input type="hidden" name="uuid" value="${escapeHtml(developer.uuid)}">
+              <label class="visually-hidden" for="role-${escapeHtml(developer.uuid)}">${escapeHtml(admin.roleLabel)}</label>
+              <select id="role-${escapeHtml(developer.uuid)}" name="role">
+                <option value="developer"${developer.role === 'developer' ? ' selected' : ''}>${escapeHtml(admin.developerRole)}</option>
+                <option value="admin"${developer.role === 'admin' ? ' selected' : ''}>${escapeHtml(admin.adminRole)}</option>
+              </select>
+              <button class="button button-secondary" type="submit">${escapeHtml(admin.saveRoleAction)}</button>
+            </form>
+          </td>
+          <td><time datetime="${escapeHtml(developer.createdAt)}">${escapeHtml(developer.createdAt.slice(0, 10))}</time></td>
+          <td class="table-actions"><a class="button button-danger" href="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete">${escapeHtml(admin.removeAction)}</a></td>
+        </tr>`,
+          )
+          .join('\n        ')}
+        </tbody>
+      </table>
+    </div>`;
 
-  return `<section class="panel admin-panel" aria-labelledby="admin-heading">
-    <p class="panel-index">${escapeHtml(strings.sectionLabel)}</p>
-    <div class="admin-heading"><div><h2 id="admin-heading">${escapeHtml(strings.heading)}</h2><p>${escapeHtml(strings.intro)}</p></div></div>
-    ${noticeMarkup}
-    <form class="admin-grant-form" action="/developers/admin/developers" method="post">
-      ${csrfField(csrfToken)}
-      <label><span>${escapeHtml(strings.uuidLabel)}</span><input name="uuid" required autocomplete="off" pattern="[0-9a-fA-F-]{36}" placeholder="${escapeHtml(strings.uuidPlaceholder)}"></label>
-      <label><span>${escapeHtml(strings.roleLabel)}</span><select name="role"><option value="developer">${escapeHtml(strings.developerRole)}</option><option value="admin">${escapeHtml(strings.adminRole)}</option></select></label>
-      <button class="primary-action" type="submit">${escapeHtml(strings.addAction)}</button>
-    </form>
-    ${entries}
-  </section>`;
-}
-
-function renderDeveloperEntry(developer: DeveloperAccess, csrfToken: string): string {
-  const strings = english.developer.admin;
-  return `<article class="access-row">
-    <div><code>${escapeHtml(developer.uuid)}</code><small>${escapeHtml(strings.createdLabel)} <time datetime="${escapeHtml(developer.createdAt)}">${escapeHtml(developer.createdAt.slice(0, 10))}</time></small></div>
-    <form action="/developers/admin/developers" method="post">
-      ${csrfField(csrfToken)}
-      <input type="hidden" name="uuid" value="${escapeHtml(developer.uuid)}">
-      <label class="compact-label"><span>${escapeHtml(strings.roleLabel)}</span><select name="role"><option value="developer"${developer.role === 'developer' ? ' selected' : ''}>${escapeHtml(strings.developerRole)}</option><option value="admin"${developer.role === 'admin' ? ' selected' : ''}>${escapeHtml(strings.adminRole)}</option></select></label>
-      <button class="secondary-action" type="submit">${escapeHtml(strings.saveRoleAction)}</button>
-    </form>
-    <form action="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete" method="post">
-      ${csrfField(csrfToken)}
-      <button class="danger-action" type="submit">${escapeHtml(strings.removeAction)}</button>
-    </form>
-  </article>`;
+  return `<details class="disclosure"${open ? ' open' : ''}>
+      <summary>${escapeHtml(admin.summary)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
+      <div class="disclosure-body">
+        <h2>${escapeHtml(admin.heading)}</h2>
+        <p class="lead">${escapeHtml(admin.intro)}</p>
+        <form class="admin-grant" action="/developers/admin/developers" method="post">
+          ${csrfField(csrfToken)}
+          <div class="field">
+            <label for="admin-uuid">${escapeHtml(admin.uuidLabel)}</label>
+            <input id="admin-uuid" name="uuid" required autocomplete="off" spellcheck="false" pattern="[0-9a-fA-F-]{36}" placeholder="${escapeHtml(admin.uuidPlaceholder)}">
+          </div>
+          <div class="field">
+            <label for="admin-role">${escapeHtml(admin.roleLabel)}</label>
+            <select id="admin-role" name="role">
+              <option value="developer">${escapeHtml(admin.developerRole)}</option>
+              <option value="admin">${escapeHtml(admin.adminRole)}</option>
+            </select>
+          </div>
+          <button class="button" type="submit">${escapeHtml(admin.addAction)}</button>
+        </form>
+        ${entries}
+      </div>
+    </details>`;
 }
 
 function csrfField(token: string): string {
   return `<input type="hidden" name="csrfToken" value="${escapeHtml(token)}">`;
 }
 
-function pageShell(title: string, content: string, includePollingScript: boolean): string {
+function pageShell(
+  title: string,
+  content: string,
+  options: { readonly identity?: string; readonly includeScript?: boolean } = {},
+): string {
   const strings = english.developer;
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="dark light">
-    <meta name="theme-color" content="#122019">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0b0e0b">
     <title>${escapeHtml(title)} · ${escapeHtml(strings.navigation.brand)}</title>
     <link rel="stylesheet" href="/assets/developer.css">
-    ${includePollingScript ? '<script src="/assets/interaction.js" defer></script>' : ''}
+    ${options.includeScript === true ? '<script src="/assets/interaction.js" defer></script>' : ''}
   </head>
   <body>
-    <header class="developer-nav">
-      <a class="developer-brand" href="/"><span aria-hidden="true"></span>${escapeHtml(strings.navigation.brand)}</a>
-      <nav aria-label="${escapeHtml(strings.navigation.ariaLabel)}"><a href="/">${escapeHtml(strings.navigation.home)}</a><strong>${escapeHtml(strings.navigation.console)}</strong></nav>
+    <a class="skip-link" href="#main">${escapeHtml(english.common.skipToContent)}</a>
+    <header class="site-header">
+      <div class="container site-header-inner">
+        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>${escapeHtml(strings.navigation.brand)}</a>
+        <nav class="site-nav" aria-label="${escapeHtml(strings.navigation.ariaLabel)}">
+          <a href="/developers">${escapeHtml(strings.navigation.console)}</a>
+          ${options.identity ?? ''}
+        </nav>
+      </div>
     </header>
     ${content}
-    <footer class="developer-footer">${escapeHtml(strings.footer)}</footer>
+    <footer class="site-footer">
+      <div class="container">${escapeHtml(strings.footer)}</div>
+    </footer>
   </body>
 </html>`;
 }

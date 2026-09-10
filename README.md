@@ -51,7 +51,7 @@ npm start
 
 `npm start` runs the HTTP/OIDC service and the Minecraft ghost server in one process. During focused
 development they can instead be run separately with `npm run start:api` and `npm run start:mc`. The
-project overview is available at <http://localhost:3000/>. Swagger UI is available at
+developer landing page is available at <http://localhost:3000/>. Swagger UI is available at
 <http://localhost:3000/docs> outside production. The generated OpenAPI 3.1 reference is committed as
 [`openapi.yaml`](openapi.yaml).
 
@@ -172,6 +172,18 @@ record their owning developer; legacy or deliberately unassigned clients remain 
 administrator. Developer Console sessions are opaque Redis records with signed `Secure`, `HttpOnly`,
 `SameSite=Lax` cookies, sliding expiration, an absolute lifetime, CSRF protection, and rotation
 after role changes.
+
+## Interface
+
+The web interface is dark only, uses one accent color, and shares a single component vocabulary
+across the developer landing page, the Developer Console, and the end-user Minecraft sign-in
+surface. It has no CSS framework and no asset build step: the styles live in `src/api/ui/` and are
+served as generated stylesheets. Every interactive element has a visible keyboard focus ring, every
+input has a visible label, and status messages are announced with a live region.
+
+[`PRODUCT.md`](PRODUCT.md) records audiences and interface principles. [`DESIGN.md`](DESIGN.md)
+records the color, typography, spacing, and component rules. A unit test enforces the flat, dark,
+shadow-free, rounded-free contract.
 
 ## Typography
 
