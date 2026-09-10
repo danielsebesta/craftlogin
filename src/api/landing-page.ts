@@ -38,6 +38,7 @@ export function renderLandingPage(input: LandingPageInput): string {
           ${escapeHtml(strings.navigation.brand)}
         </a>
         <nav class="navigation" aria-label="${escapeHtml(strings.navigation.ariaLabel)}">
+          <a href="/developers">${escapeHtml(strings.navigation.developers)}</a>
           ${documentationLink}
           <a href="${SOURCE_URL}">${escapeHtml(strings.navigation.github)}</a>
         </nav>
