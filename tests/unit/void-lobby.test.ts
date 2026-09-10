@@ -31,7 +31,7 @@ describe('Minecraft void lobby', (): void => {
         markLoggedIn(client);
       });
       server.on('playerJoin', (client): void => {
-        presentVoidWorld(client, { entityId: client.id, maxPlayers: 4 });
+        presentVoidWorld(client, { entityId: client.id, maxPlayers: 4, sendChunks: true });
         markWorldReady(client);
         lobby.enter(client);
       });

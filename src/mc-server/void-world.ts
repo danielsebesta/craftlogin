@@ -42,9 +42,13 @@ const NUMBER_FIELD_TYPES = new Set([
   'f64',
 ]);
 
-export interface VoidWorldOptions {
+export interface JoinGameOptions {
   readonly entityId: number;
   readonly maxPlayers: number;
+}
+
+export interface VoidWorldOptions extends JoinGameOptions {
+  readonly sendChunks: boolean;
 }
 
 export interface VoidChatPacket {
@@ -60,10 +64,12 @@ export function presentVoidWorld(client: ServerClient, options: VoidWorldOptions
 
   client.write('login', createJoinGamePacket(mcData, options));
 
-  const chunkConstructor = getChunkConstructor(mcData);
-  if (chunkConstructor !== null) {
-    const chunk = new chunkConstructor();
-    writeChunks(client, mcData, chunk);
+  if (options.sendChunks) {
+    const chunkConstructor = getChunkConstructor(mcData);
+    if (chunkConstructor !== null) {
+      const chunk = new chunkConstructor();
+      writeChunks(client, mcData, chunk);
+    }
   }
 
   client.write('position', createPositionPacket(mcData));
@@ -81,7 +87,7 @@ export function sendVoidMessage(client: ServerClient, message: string): void {
 
 export function createJoinGamePacket(
   mcData: MinecraftData,
-  options: VoidWorldOptions,
+  options: JoinGameOptions,
 ): Record<string, unknown> {
   const fields = getPacketFields(mcData, 'packet_login');
   const packet: Record<string, unknown> = { ...mcData.loginPacket };

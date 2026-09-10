@@ -22,7 +22,7 @@ describe('Minecraft ghost server rejection', (): void => {
     const port = await findAvailablePort();
     let resolutionAttempts = 0;
     ghostServer = await startGhostServer(
-      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port },
+      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port, protocolTrace: false },
       {
         logger: createLogger('silent'),
         pendingCodes: {

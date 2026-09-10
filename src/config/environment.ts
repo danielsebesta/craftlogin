@@ -55,6 +55,7 @@ const environmentSchema = z
     minecraftHost: z.string().min(1),
     minecraftPort: portSchema,
     minecraftBaseDomain: baseDomainSchema,
+    minecraftProtocolTrace: booleanSchema,
   })
   .superRefine((environment, context): void => {
     if (
@@ -89,5 +90,6 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     minecraftHost: source['MC_HOST'] ?? '0.0.0.0',
     minecraftPort: source['MC_PORT'] ?? '25565',
     minecraftBaseDomain: source['MC_BASE_DOMAIN'] ?? 'craftlogin.com',
+    minecraftProtocolTrace: source['MC_PROTOCOL_TRACE'] ?? 'false',
   });
 }

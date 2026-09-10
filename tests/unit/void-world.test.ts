@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { getChunkConstructor, getMinecraftData } from '../../src/mc-server/minecraft-data.js';
 import { disconnect, markLoggedIn, markWorldReady } from '../../src/mc-server/disconnect.js';
+import { installVersionedRegistryCodec } from '../../src/mc-server/registry-codec.js';
 import {
   createChunkPacket,
   createJoinGamePacket,
@@ -117,6 +118,18 @@ describe('void world delivery', (): void => {
     },
     10_000,
   );
+
+  it('delivers the friendly kick on 26.1 without sending chunk data first', async (): Promise<void> => {
+    const delivery = await runVoidSession('26.1', false);
+
+    expect(delivery).toEqual({
+      login: true,
+      chunks: 0,
+      chunkSequence: [],
+      position: true,
+      kick: kickMessage,
+    });
+  });
 });
 
 interface VoidDelivery {
@@ -127,7 +140,7 @@ interface VoidDelivery {
   readonly kick?: string;
 }
 
-async function runVoidSession(version: string): Promise<VoidDelivery> {
+async function runVoidSession(version: string, sendChunks = true): Promise<VoidDelivery> {
   const port = await findAvailablePort();
   const server = minecraftProtocol.createServer({
     host: '127.0.0.1',
@@ -140,11 +153,12 @@ async function runVoidSession(version: string): Promise<VoidDelivery> {
     maxPlayers: 100,
   });
 
+  server.on('connection', installVersionedRegistryCodec);
   server.on('login', (client): void => {
     markLoggedIn(client);
   });
   server.on('playerJoin', (client): void => {
-    presentVoidWorld(client, { entityId: client.id, maxPlayers: 100 });
+    presentVoidWorld(client, { entityId: client.id, maxPlayers: 100, sendChunks });
     markWorldReady(client);
     setTimeout((): void => {
       void disconnect(client, kickMessage);

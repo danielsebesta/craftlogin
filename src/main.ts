@@ -67,6 +67,7 @@ async function main(): Promise<void> {
         baseDomain: environment.minecraftBaseDomain,
         host: environment.minecraftHost,
         port: environment.minecraftPort,
+        protocolTrace: environment.minecraftProtocolTrace,
       },
       {
         logger,

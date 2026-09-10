@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 describe('Minecraft ghost server lifecycle', (): void => {
   it('listens with multi-version online-mode configuration and closes cleanly', async (): Promise<void> => {
     const server = await startGhostServer(
-      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port: 0 },
+      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port: 0, protocolTrace: false },
       {
         logger: createLogger('silent'),
         pendingCodes: {

@@ -72,6 +72,11 @@ developer landing page is available at <http://localhost:3000/>. Swagger UI is a
 <http://localhost:3000/docs> outside production. The generated OpenAPI 3.1 reference is committed as
 [`openapi.yaml`](openapi.yaml).
 
+For Minecraft protocol diagnostics, run `npm run start:trace` (or `npm run start:mc:trace` for the
+isolated listener). The trace logs connection states, negotiated versions, packet names, directions,
+and sanitized protocol errors. Packet payloads are deliberately omitted so verification codes and
+other credentials cannot enter logs.
+
 OAuth interactions and the Developer Console use `Secure` cookies and therefore require HTTPS even
 in local development. A local reverse proxy such as Caddy can terminate a trusted development
 certificate while CraftLogin remains bound to loopback:

@@ -22,6 +22,8 @@ import type {
 import { disconnect, isLoggedIn, markLoggedIn, markWorldReady } from './disconnect.js';
 import { extractVerificationCode, isLobbyHost } from './hostname.js';
 import { MinecraftLobby } from './lobby.js';
+import { getProtocolErrorDetails, installProtocolTrace } from './protocol-trace.js';
+import { installVersionedRegistryCodec } from './registry-codec.js';
 import { presentVoidWorld, sendVoidMessage } from './void-world.js';
 
 // Shutdown must not stall on a client that never completes configuration; the reason is best effort.
@@ -30,8 +32,6 @@ const MAX_PLAYERS = 10_000;
 const LOBBY_MAX_PLAYERS = 64;
 const LOBBY_LIFETIME_MS = 10 * 60 * 1000;
 const LOBBY_PROMPT_COOLDOWN_MS = 3_000;
-// Keep the player in the void long enough for the final chat message to render before the kick.
-const VERIFICATION_LINGER_MS = 1_500;
 
 const loginHandshakeSchema = z.object({
   nextState: z.literal(2),
@@ -68,6 +68,7 @@ export interface GhostServerConfig {
   readonly baseDomain: string;
   readonly host: string;
   readonly port: number;
+  readonly protocolTrace: boolean;
 }
 
 interface PendingCodeLookup {
@@ -158,7 +159,10 @@ export async function startGhostServer(
       : { favicon: serverIcon, beforePing: createPingIconHook(serverIcon) }),
     errorHandler: (client, error): void => {
       dependencies.logger.warn(
-        { errorKind: getErrorKind(error) },
+        {
+          errorKind: getErrorKind(error),
+          ...(config.protocolTrace ? getProtocolErrorDetails(error) : {}),
+        },
         'Minecraft client connection failed',
       );
       void disconnect(client, english.minecraft.temporaryFailure);
@@ -167,6 +171,12 @@ export async function startGhostServer(
   const server = minecraftProtocol.createServer(options);
 
   server.on('connection', (client): void => {
+    if (config.protocolTrace) {
+      installProtocolTrace(client, dependencies.logger);
+    }
+    // Install after tracing so only the version-correct replacement packets appear in diagnostics.
+    installVersionedRegistryCodec(client);
+
     client.once('set_protocol', (packet: unknown): void => {
       const parsedHandshake = loginHandshakeSchema.safeParse(packet);
 
@@ -216,17 +226,24 @@ export async function startGhostServer(
 
   // The play state exists here, so the Join Game packet can be written and a later kick is rendered.
   server.on('playerJoin', (client): void => {
+    const pending = pendingClients.get(client);
     try {
-      presentVoidWorld(client, { entityId: client.id, maxPlayers: MAX_PLAYERS });
+      presentVoidWorld(client, {
+        entityId: client.id,
+        maxPlayers: MAX_PLAYERS,
+        sendChunks: pending?.kind === 'lobby',
+      });
     } catch (error: unknown) {
       dependencies.logger.warn(
-        { errorKind: getErrorKind(error) },
+        {
+          errorKind: getErrorKind(error),
+          ...(config.protocolTrace ? getProtocolErrorDetails(error) : {}),
+        },
         'Minecraft void world could not be presented',
       );
     }
     markWorldReady(client);
 
-    const pending = pendingClients.get(client);
     if (pending?.kind === 'lobby') {
       if (!lobby.enter(client)) {
         sendVoidMessage(client, english.minecraft.lobbyFull);
@@ -317,15 +334,7 @@ async function finalizeVerification(
     logger.error({ errorKind: result.errorKind }, 'Authenticated Minecraft verification failed');
   }
 
-  sendVoidMessage(client, message);
-  await linger(VERIFICATION_LINGER_MS);
   await disconnect(client, message);
-}
-
-async function linger(durationMs: number): Promise<void> {
-  await new Promise<void>((resolve): void => {
-    setTimeout(resolve, durationMs);
-  });
 }
 
 async function lookupCodeAvailability(
