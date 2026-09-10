@@ -10,6 +10,7 @@ const LANDING_CSP = [
   "font-src 'self'",
   "form-action 'none'",
   "frame-ancestors 'none'",
+  "img-src 'self'",
   "style-src 'self'",
 ].join('; ');
 

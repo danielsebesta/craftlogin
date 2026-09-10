@@ -79,6 +79,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.headers['content-security-policy']).toContain("default-src 'none'");
     expect(response.headers['content-security-policy']).toContain("font-src 'self'");
+    expect(response.headers['content-security-policy']).toContain("img-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
     expect(response.body).toContain('<main id="main">');
     expect(response.body).toContain(
@@ -111,6 +112,12 @@ describe('CraftLogin API server', (): void => {
     const fontLicense = await server.inject({ method: 'GET', url: '/assets/fonts/OFL.txt' });
     expect(fontLicense.statusCode).toBe(200);
     expect(fontLicense.body).toContain('SIL OPEN FONT LICENSE Version 1.1');
+
+    const background = await server.inject({ method: 'GET', url: '/assets/background.svg' });
+    expect(background.statusCode).toBe(200);
+    expect(background.headers['content-type']).toContain('image/svg+xml');
+    expect(background.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect(background.body).toContain('<svg');
   });
 
   it('renders a secure semantic interaction page with a no-JavaScript fallback', async (): Promise<void> => {

@@ -6,6 +6,7 @@ import { swaggerTypographyStyles } from '../../src/api/font-assets.js';
 import { interactionStyles } from '../../src/api/interaction-assets.js';
 import { renderInteractionPage } from '../../src/api/interaction-page.js';
 import { landingStyles } from '../../src/api/landing-assets.js';
+import { uiBaseStyles } from '../../src/api/ui/base.js';
 import { uiControlStyles } from '../../src/api/ui/controls.js';
 import { signInSurfaceStyles } from '../../src/api/ui/surface.js';
 import { uiTokenStyles } from '../../src/api/ui/tokens.js';
@@ -33,6 +34,13 @@ describe('shared UI styles', (): void => {
   it('keeps the OpenAPI documentation typography on the same family', (): void => {
     expect(swaggerTypographyStyles).toContain('font-family: "Pixeloid Sans"');
     expect(swaggerTypographyStyles).not.toContain('box-shadow');
+  });
+
+  it('keeps the ambient background a quiet token-based mask', (): void => {
+    expect(uiBaseStyles).toContain('body::before');
+    expect(uiBaseStyles).toContain('var(--pattern)');
+    expect(uiBaseStyles).toContain('url("/assets/background.svg")');
+    expect(uiBaseStyles).toContain('prefers-contrast: more');
   });
 
   it('keeps green a signal instead of decoration', (): void => {

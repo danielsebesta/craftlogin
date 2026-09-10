@@ -10,7 +10,7 @@ export const renderAuthorizationError: AuthorizationErrorRenderer = (context, ou
   context.set('cache-control', 'no-store');
   context.set(
     'content-security-policy',
-    "default-src 'none'; base-uri 'none'; font-src 'self'; frame-ancestors 'none'; style-src 'self'",
+    "default-src 'none'; base-uri 'none'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; style-src 'self'",
   );
   context.set('referrer-policy', 'no-referrer');
   context.set('x-content-type-options', 'nosniff');
@@ -26,7 +26,7 @@ export const renderAuthorizationError: AuthorizationErrorRenderer = (context, ou
     <title>${escapeHtml(strings.title)}</title>
     <link rel="stylesheet" href="/assets/interaction.css">
   </head>
-  <body class="surface-grid">
+  <body class="page-surface">
     <a class="skip-link" href="#main">${escapeHtml(english.common.skipToContent)}</a>
     <header class="signin-header">
       <span class="brand"><span class="brand-mark" aria-hidden="true"></span>${escapeHtml(english.interaction.brand)}</span>

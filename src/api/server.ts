@@ -11,6 +11,7 @@ import type { DeveloperLoginService } from '../developers/login-service.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
+import { registerBackgroundAssetRoute } from './background-asset.js';
 import type { RegisteredOriginLookup } from './client-directory.js';
 import type { CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
@@ -76,6 +77,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerSharedSchemas(server);
   registerErrorHandling(server);
   registerFontAssetRoutes(server);
+  registerBackgroundAssetRoute(server);
   registerLandingRoutes(server, { showDocumentation: options.nodeEnvironment !== 'production' });
   registerHealthRoute(server, options.readiness);
   registerOidcHttpRoutes(server, options.oidcHandler);

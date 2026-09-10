@@ -13,6 +13,7 @@ html {
 }
 
 body {
+  position: relative;
   min-height: 100vh;
   margin: 0;
   color: var(--text);
@@ -20,6 +21,26 @@ body {
   font-family: var(--font-sans);
   font-size: var(--t-base);
   line-height: 1.6;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  content: "";
+  background-color: var(--pattern);
+  pointer-events: none;
+  -webkit-mask-image: url("/assets/background.svg");
+  mask-image: url("/assets/background.svg");
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  -webkit-mask-size: 2.7rem auto;
+  mask-size: 2.7rem auto;
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
 }
 
 h1,
@@ -109,12 +130,8 @@ textarea {
   margin-inline: auto;
 }
 
-.surface-grid {
+.page-surface {
   background-color: var(--surface);
-  background-image:
-    linear-gradient(to right, var(--grid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
-  background-size: 3rem 3rem;
 }
 
 .skip-link {
@@ -154,6 +171,12 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  body::before {
+    display: none;
   }
 }
 

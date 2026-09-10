@@ -4,7 +4,7 @@ export const uiTokenStyles = `
   --bg: oklch(0.16 0.008 150);
   --surface: oklch(0.2 0.01 150);
   --surface-raised: oklch(0.24 0.012 150);
-  --grid: oklch(0.25 0.014 150);
+  --pattern: oklch(0.26 0.014 150);
   --line: oklch(0.32 0.012 150);
   --line-strong: oklch(0.55 0.014 150);
   --text: oklch(0.94 0.005 150);

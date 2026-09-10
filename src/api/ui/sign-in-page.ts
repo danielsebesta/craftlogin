@@ -55,7 +55,7 @@ export function renderSignInPage(input: SignInPageInput): string {
     <link rel="stylesheet" href="/assets/interaction.css">
     <script src="/assets/interaction.js" defer></script>
   </head>
-  <body class="surface-grid">
+  <body class="page-surface">
     <a class="skip-link" href="#main">${escapeHtml(input.skipLabel)}</a>
     <header class="signin-header">
       <span class="brand"><span class="brand-mark" aria-hidden="true"></span>${escapeHtml(input.brand)}</span>
