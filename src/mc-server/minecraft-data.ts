@@ -109,6 +109,10 @@ export function getPacketFields(mcData: MinecraftData, packetType: string): read
   return parsed.success ? parsed.data : [];
 }
 
+export function hasPacket(mcData: MinecraftData, packetType: string): boolean {
+  return Object.hasOwn(mcData.protocol.play.toClient.types, packetType);
+}
+
 export function getFieldType(fields: readonly PacketField[], fieldName: string): unknown {
   return fields.find((field): boolean => field.name === fieldName)?.type;
 }

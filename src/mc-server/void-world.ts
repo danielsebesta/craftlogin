@@ -5,6 +5,7 @@ import {
   getFieldType,
   getMinecraftData,
   getPacketFields,
+  hasPacket,
   type ChunkLike,
   type MinecraftData,
   type PacketField,
@@ -87,8 +88,10 @@ export function createJoinGamePacket(
   fillPrimitiveDefaults(packet, fields);
 
   packet['entityId'] = options.entityId;
-  packet['gameMode'] =
-    mcData.version.version >= SPECTATOR_MIN_PROTOCOL ? SPECTATOR_GAME_MODE : CREATIVE_GAME_MODE;
+  if (getFieldType(fields, 'gameMode') !== undefined) {
+    packet['gameMode'] =
+      mcData.version.version >= SPECTATOR_MIN_PROTOCOL ? SPECTATOR_GAME_MODE : CREATIVE_GAME_MODE;
+  }
   packet['isHardcore'] = false;
   packet['isDebug'] = false;
   packet['isFlat'] = true;
@@ -101,6 +104,22 @@ export function createJoinGamePacket(
   packet['levelType'] = 'flat';
   packet['hashedSeed'] = [0, 0];
   packet['portalCooldown'] = 0;
+
+  if (getFieldType(fields, 'worldState') !== undefined) {
+    const worldState = packet['worldState'];
+    if (!isRecord(worldState)) {
+      throw new Error('The Minecraft Join Game template has no world state');
+    }
+    packet['worldState'] = {
+      ...worldState,
+      gamemode: 'spectator',
+      previousGamemode: 255,
+      hashedSeed: [0, 0],
+      isDebug: false,
+      isFlat: true,
+      portalCooldown: 0,
+    };
+  }
 
   const previousGameModeType = getFieldType(fields, 'previousGameMode');
   if (previousGameModeType === 'u8') {
@@ -218,8 +237,9 @@ export function createVoidChatPacket(mcData: MinecraftData, message: string): Vo
 }
 
 function writeChunks(client: ServerClient, mcData: MinecraftData, chunk: ChunkLike): void {
-  const batchStartFields = getPacketFields(mcData, 'packet_chunk_batch_start');
-  if (batchStartFields.length > 0) {
+  // Chunk Batch Start deliberately has no fields. Packet existence must therefore be checked
+  // independently from its field list or modern clients receive an unmatched batch finish.
+  if (hasPacket(mcData, 'packet_chunk_batch_start')) {
     client.write('chunk_batch_start', {});
   }
 
@@ -231,10 +251,13 @@ function writeChunks(client: ServerClient, mcData: MinecraftData, chunk: ChunkLi
     }
   }
 
-  const batchFinishedFields = getPacketFields(mcData, 'packet_chunk_batch_finished');
-  if (batchFinishedFields.length > 0) {
+  if (hasPacket(mcData, 'packet_chunk_batch_finished')) {
     client.write('chunk_batch_finished', { batchSize });
   }
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function fillPrimitiveDefaults(

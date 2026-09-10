@@ -47,11 +47,15 @@ interface ServerPingResponse {
 
 type CodeAvailability = 'available' | 'error' | 'unavailable';
 
+type VerificationOutcome =
+  | { readonly kind: 'resolution'; readonly value: VerificationResolution }
+  | { readonly kind: 'failure'; readonly errorKind: string };
+
 interface PendingVerification {
   readonly kind: 'verification';
   readonly code: string;
   readonly availability: Promise<CodeAvailability>;
-  outcome: Promise<VerificationResolution> | null;
+  outcome: Promise<VerificationOutcome> | null;
 }
 
 interface PendingLobby {
@@ -206,7 +210,7 @@ export async function startGhostServer(
 
     const pending = pendingClients.get(client);
     if (pending?.kind === 'verification') {
-      pending.outcome = resolveVerification(client, pending, dependencies);
+      pending.outcome = settleVerification(client, pending, dependencies);
     }
   });
 
@@ -279,18 +283,38 @@ async function resolveVerification(
   return await dependencies.resolver.resolve(pending.code, parsedPlayer.data, new Date());
 }
 
+async function settleVerification(
+  client: ServerClient,
+  pending: PendingVerification,
+  dependencies: GhostServerDependencies,
+): Promise<VerificationOutcome> {
+  try {
+    return {
+      kind: 'resolution',
+      value: await resolveVerification(client, pending, dependencies),
+    };
+  } catch (error: unknown) {
+    // The resolver starts before modern clients finish configuration. Settle failures immediately
+    // so a fast persistence rejection cannot become unhandled while playerJoin is still pending.
+    return { kind: 'failure', errorKind: getErrorKind(error) };
+  }
+}
+
 async function finalizeVerification(
   client: ServerClient,
-  outcome: Promise<VerificationResolution>,
+  outcome: Promise<VerificationOutcome>,
   logger: Logger,
 ): Promise<void> {
-  let message: string;
-  try {
-    const resolution = await outcome;
-    message = resolution === 'resolved' ? english.minecraft.success : english.minecraft.unavailable;
-  } catch (error: unknown) {
-    logger.error({ errorKind: getErrorKind(error) }, 'Authenticated Minecraft verification failed');
-    message = english.minecraft.temporaryFailure;
+  const result = await outcome;
+  const message =
+    result.kind === 'failure'
+      ? english.minecraft.temporaryFailure
+      : result.value === 'resolved'
+        ? english.minecraft.success
+        : english.minecraft.unavailable;
+
+  if (result.kind === 'failure') {
+    logger.error({ errorKind: result.errorKind }, 'Authenticated Minecraft verification failed');
   }
 
   sendVoidMessage(client, message);

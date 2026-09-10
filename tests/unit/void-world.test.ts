@@ -1,4 +1,4 @@
-import minecraftProtocol from 'minecraft-protocol';
+import minecraftProtocol, { type PacketMeta } from 'minecraft-protocol';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -14,6 +14,14 @@ import {
 import { findAvailablePort } from './support/tcp-port.js';
 
 const kickMessage = 'Verification complete. You can return to your browser.';
+const modernWorldStateSchema = z.object({
+  gamemode: z.literal('spectator'),
+  previousGamemode: z.literal(255),
+  hashedSeed: z.tuple([z.literal(0), z.literal(0)]),
+  isDebug: z.literal(false),
+  isFlat: z.literal(true),
+  portalCooldown: z.literal(0),
+});
 
 interface PacketSerializer {
   createPacketBuffer(packet: { name: string; params: Record<string, unknown> }): unknown;
@@ -70,6 +78,22 @@ describe('void world packet encoding', (): void => {
       }
     },
   );
+
+  it.each(['1.20.6', '1.21.4', '1.21.11', '26.1'])(
+    'places modern clients in the spectator void on %s',
+    (version): void => {
+      const mcData = getMinecraftData(version);
+      expect(mcData).not.toBeNull();
+      if (mcData === null) {
+        return;
+      }
+
+      const packet = createJoinGamePacket(mcData, { entityId: 1, maxPlayers: 100 });
+
+      expect(modernWorldStateSchema.safeParse(packet['worldState']).success).toBe(true);
+      expect(packet['gameMode']).toBeUndefined();
+    },
+  );
 });
 
 describe('void world delivery', (): void => {
@@ -83,6 +107,13 @@ describe('void world delivery', (): void => {
       expect(delivery.chunks).toBe(9);
       expect(delivery.position).toBe(true);
       expect(delivery.kick).toBe(kickMessage);
+
+      const expectedChunks = Array.from({ length: 9 }, (): string => 'map_chunk');
+      expect(delivery.chunkSequence).toEqual(
+        version === '1.20.2' || version === '1.21.4'
+          ? ['chunk_batch_start', ...expectedChunks, 'chunk_batch_finished']
+          : expectedChunks,
+      );
     },
     10_000,
   );
@@ -91,6 +122,7 @@ describe('void world delivery', (): void => {
 interface VoidDelivery {
   readonly login: boolean;
   readonly chunks: number;
+  readonly chunkSequence: readonly string[];
   readonly position: boolean;
   readonly kick?: string;
 }
@@ -140,9 +172,11 @@ async function collectVoidDelivery(port: number, version: string): Promise<VoidD
     version,
   });
 
+  const chunkSequence: string[] = [];
   const result = {
     login: false,
     chunks: 0,
+    chunkSequence,
     position: false,
   };
 
@@ -152,9 +186,20 @@ async function collectVoidDelivery(port: number, version: string): Promise<VoidD
       resolve({
         login: result.login,
         chunks: result.chunks,
+        chunkSequence: result.chunkSequence,
         position: result.position,
       });
     }, 4_000);
+
+    client.on('packet', (_packet: unknown, metadata: PacketMeta): void => {
+      if (
+        metadata.name === 'chunk_batch_start' ||
+        metadata.name === 'map_chunk' ||
+        metadata.name === 'chunk_batch_finished'
+      ) {
+        result.chunkSequence.push(metadata.name);
+      }
+    });
 
     client.on('login', (): void => {
       result.login = true;
@@ -173,6 +218,7 @@ async function collectVoidDelivery(port: number, version: string): Promise<VoidD
       resolve({
         login: result.login,
         chunks: result.chunks,
+        chunkSequence: result.chunkSequence,
         position: result.position,
         ...(message === null ? {} : { kick: message }),
       });
