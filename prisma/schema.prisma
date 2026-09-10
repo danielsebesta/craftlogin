@@ -22,7 +22,23 @@ model App {
   name             String         @db.VarChar(100)
   redirectUris     String[]
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  ownerUuid        String?        @db.Uuid
+  owner            Developer?     @relation(fields: [ownerUuid], references: [uuid], onDelete: SetNull)
   refreshTokens    RefreshToken[]
+
+  @@index([ownerUuid, createdAt])
+}
+
+enum DeveloperRole {
+  DEVELOPER
+  ADMIN
+}
+
+model Developer {
+  uuid      String        @id @db.Uuid
+  role      DeveloperRole @default(DEVELOPER)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  apps      App[]
 }
 
 model RefreshToken {
