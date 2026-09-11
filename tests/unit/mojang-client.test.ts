@@ -203,6 +203,37 @@ describe('HttpMojangClient', (): void => {
     });
   });
 
+  it('accepts Mojang signed historical HTTP texture URLs', async (): Promise<void> => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
+    const textures = signedTextures(privateKey, {
+      url: `http://textures.minecraft.net/texture/${textureHash}`,
+    });
+    const { fetch } = stubFetch((url) =>
+      url.includes('/publickeys')
+        ? { body: { profilePropertyKeys: [{ publicKey: profilePublicKey(publicKey) }] } }
+        : {
+            body: {
+              id: playerUuid.replaceAll('-', ''),
+              name: 'jeb_',
+              properties: [
+                { name: 'textures', signature: textures.signature, value: textures.value },
+              ],
+            },
+          },
+    );
+    const client = new HttpMojangClient({
+      cache: new MemoryMinecraftCache(),
+      fetch,
+      logger: silentLogger(),
+    });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toEqual({
+      texture: { hash: textureHash, model: 'classic' },
+      username: 'jeb_',
+      uuid: playerUuid,
+    });
+  });
+
   it('ignores signed texture URLs outside the exact fixed Minecraft texture path', async (): Promise<void> => {
     const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
     const invalidUrls = [

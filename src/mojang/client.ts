@@ -388,7 +388,9 @@ function textureFromValue(value: string): MinecraftSkinTexture | undefined {
     return undefined;
   }
   if (
-    url.protocol !== 'https:' ||
+    // Mojang's signed texture payloads still use the historical HTTP URL. We
+    // retain only its identifier; HttpSkinStore always fetches it over HTTPS.
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
     url.hostname !== 'textures.minecraft.net' ||
     url.username !== '' ||
     url.password !== '' ||
