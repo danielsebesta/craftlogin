@@ -5,11 +5,12 @@ import helmet from '@fastify/helmet';
 import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 
+import type { AvatarService } from '../avatars/service.js';
 import type { AppManager } from '../developers/app-management.js';
 import type { DeveloperAccessRepository } from '../developers/developer-repository.js';
 import type { DeveloperLoginService } from '../developers/login-service.js';
-import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { SkinStore } from '../mojang/skin-store.js';
+import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
@@ -47,6 +48,7 @@ export interface ApiServerOptions {
   readonly issuer: string;
   readonly logger?: FastifyBaseLogger;
   readonly minecraft?: {
+    readonly avatars: AvatarService;
     readonly players: MinecraftPlayerLookup;
     readonly skins: SkinStore;
   };
@@ -67,19 +69,19 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     issuer: options.issuer,
     nodeEnvironment: options.nodeEnvironment,
   });
-  await registerRateLimiting(server, options.rateLimitRedis, options.rateLimitNamespace);
-  await server.register(cookie, { secret: [...options.cookieKeys] });
-  await server.register(formBody);
-  await server.register(helmet, { contentSecurityPolicy: false });
   await server.register(cors, {
-    allowedHeaders: ['authorization', 'content-type', 'x-csrf-token'],
+    allowedHeaders: ['authorization', 'content-type', 'if-none-match', 'x-csrf-token'],
     credentials: false,
-    hook: 'preHandler',
+    hook: 'onRequest',
     maxAge: 600,
     methods: ['GET', 'POST'],
     origin: async (origin: string | undefined): Promise<boolean> =>
       origin !== undefined && (await options.clients.isAllowedOrigin(origin)),
   });
+  await registerRateLimiting(server, options.rateLimitRedis, options.rateLimitNamespace);
+  await server.register(cookie, { secret: [...options.cookieKeys] });
+  await server.register(formBody);
+  await server.register(helmet, { contentSecurityPolicy: false });
 
   registerSharedSchemas(server);
   registerErrorHandling(server);

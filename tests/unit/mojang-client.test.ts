@@ -37,10 +37,18 @@ function stubFetch(routes: (url: string) => StubResponse): {
   return { calls, fetch: fetchImplementation };
 }
 
-function signedTextures(privateKey: KeyObject): { signature: string; value: string } {
+function signedTextures(
+  privateKey: KeyObject,
+  options: { readonly model?: 'slim'; readonly url?: string } = {},
+): { signature: string; value: string } {
   const value = Buffer.from(
     JSON.stringify({
-      textures: { SKIN: { url: `http://textures.minecraft.net/texture/${textureHash}` } },
+      textures: {
+        SKIN: {
+          ...(options.model === undefined ? {} : { metadata: { model: options.model } }),
+          url: options.url ?? `https://textures.minecraft.net/texture/${textureHash}`,
+        },
+      },
     }),
     'utf8',
   ).toString('base64');
@@ -81,7 +89,11 @@ describe('HttpMojangClient', (): void => {
     });
 
     const profile = await client.findProfileById(playerUuid);
-    expect(profile).toEqual({ textureHash, username: 'jeb_', uuid: playerUuid });
+    expect(profile).toEqual({
+      texture: { hash: textureHash, model: 'classic' },
+      username: 'jeb_',
+      uuid: playerUuid,
+    });
 
     const callCount = calls.length;
     const cachedProfile = await client.findProfileById(playerUuid);
@@ -149,17 +161,100 @@ describe('HttpMojangClient', (): void => {
     });
 
     await expect(client.findProfileById(playerUuid)).resolves.toEqual({
-      textureHash,
+      texture: { hash: textureHash, model: 'classic' },
       username: 'jeb_',
       uuid: playerUuid,
     });
 
     rateLimited = true;
     await expect(client.findProfileById(playerUuid)).resolves.toEqual({
-      textureHash,
+      texture: { hash: textureHash, model: 'classic' },
       username: 'jeb_',
       uuid: playerUuid,
     });
+  });
+
+  it('reads the slim model only from a signed Minecraft texture URL', async (): Promise<void> => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
+    const textures = signedTextures(privateKey, { model: 'slim' });
+    const { fetch } = stubFetch((url) =>
+      url.includes('/publickeys')
+        ? { body: { profilePropertyKeys: [{ publicKey: profilePublicKey(publicKey) }] } }
+        : {
+            body: {
+              id: playerUuid.replaceAll('-', ''),
+              name: 'jeb_',
+              properties: [
+                { name: 'textures', signature: textures.signature, value: textures.value },
+              ],
+            },
+          },
+    );
+    const client = new HttpMojangClient({
+      cache: new MemoryMinecraftCache(),
+      fetch,
+      logger: silentLogger(),
+    });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toEqual({
+      texture: { hash: textureHash, model: 'slim' },
+      username: 'jeb_',
+      uuid: playerUuid,
+    });
+  });
+
+  it('ignores signed texture URLs outside the exact fixed Minecraft texture path', async (): Promise<void> => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
+    const invalidUrls = [
+      `https://example.com/texture/${textureHash}`,
+      `https://textures.minecraft.net/other/${textureHash}`,
+      `https://textures.minecraft.net/texture/${textureHash}?download=true`,
+    ];
+
+    for (const url of invalidUrls) {
+      const textures = signedTextures(privateKey, { url });
+      const { fetch } = stubFetch((requestUrl) =>
+        requestUrl.includes('/publickeys')
+          ? { body: { profilePropertyKeys: [{ publicKey: profilePublicKey(publicKey) }] } }
+          : {
+              body: {
+                id: playerUuid.replaceAll('-', ''),
+                name: 'jeb_',
+                properties: [
+                  { name: 'textures', signature: textures.signature, value: textures.value },
+                ],
+              },
+            },
+      );
+      const client = new HttpMojangClient({
+        cache: new MemoryMinecraftCache(),
+        fetch,
+        logger: silentLogger(),
+      });
+
+      await expect(client.findProfileById(playerUuid)).resolves.toEqual({
+        username: 'jeb_',
+        uuid: playerUuid,
+      });
+    }
+  });
+
+  it('reads a legacy cached texture hash as a classic skin', async (): Promise<void> => {
+    const cache = new MemoryMinecraftCache();
+    await cache.write(
+      `profile-by-id:${playerUuid}`,
+      { textureHash, username: 'jeb_', uuid: playerUuid },
+      60,
+    );
+    const { calls, fetch } = stubFetch(() => ({ body: {} }));
+    const client = new HttpMojangClient({ cache, fetch, logger: silentLogger() });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toEqual({
+      texture: { hash: textureHash, model: 'classic' },
+      username: 'jeb_',
+      uuid: playerUuid,
+    });
+    expect(calls).toHaveLength(0);
   });
 
   it('canonicalizes a name lookup response into a dashed UUID', async (): Promise<void> => {

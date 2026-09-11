@@ -28,7 +28,16 @@ const profileKeysSchema = z.object({
   profilePropertyKeys: z.array(z.object({ publicKey: z.string() })),
 });
 const texturesPayloadSchema = z.object({
-  textures: z.object({ SKIN: z.object({ url: z.string() }).optional() }).optional(),
+  textures: z
+    .object({
+      SKIN: z
+        .object({
+          metadata: z.object({ model: z.literal('slim') }).optional(),
+          url: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export interface MinecraftPlayerProfile {
@@ -37,7 +46,12 @@ export interface MinecraftPlayerProfile {
 }
 
 export interface MinecraftPlayerProfileWithSkin extends MinecraftPlayerProfile {
-  readonly textureHash?: string;
+  readonly texture?: MinecraftSkinTexture;
+}
+
+export interface MinecraftSkinTexture {
+  readonly hash: string;
+  readonly model: 'classic' | 'slim';
 }
 
 export interface MinecraftPlayerLookup {
@@ -168,15 +182,15 @@ export class HttpMojangClient implements MinecraftPlayerLookup {
       throw new MinecraftUnavailableError('Minecraft returned an unexpected session payload');
     }
     const uuid = canonicalMinecraftUuid(parsed.data.id) ?? fallbackUuid;
-    const textureHash = await this.readTextureHash(parsed.data.properties ?? []);
-    return textureHash === undefined
+    const texture = await this.readTexture(parsed.data.properties ?? []);
+    return texture === undefined
       ? { uuid, username: parsed.data.name }
-      : { textureHash, uuid, username: parsed.data.name };
+      : { texture, uuid, username: parsed.data.name };
   }
 
-  private async readTextureHash(
+  private async readTexture(
     properties: readonly z.infer<typeof texturePropertySchema>[],
-  ): Promise<string | undefined> {
+  ): Promise<MinecraftSkinTexture | undefined> {
     const textures = properties.find(
       (property): boolean => property.name === 'textures' && property.signature !== undefined,
     );
@@ -198,7 +212,7 @@ export class HttpMojangClient implements MinecraftPlayerLookup {
       throw new MinecraftSignatureError('Minecraft texture signature could not be verified');
     }
 
-    return textureHashFromValue(textures.value);
+    return textureFromValue(textures.value);
   }
 
   private async readProfileKeys(): Promise<readonly KeyObject[]> {
@@ -321,6 +335,7 @@ export class HttpMojangClient implements MinecraftPlayerLookup {
 }
 
 const cachedProfileSchema = z.object({
+  texture: z.object({ hash: z.string(), model: z.enum(['classic', 'slim']) }).optional(),
   textureHash: z.string().optional(),
   username: z.string(),
   uuid: z.string(),
@@ -329,10 +344,15 @@ const cachedProfileSchema = z.object({
 type CachedProfile = z.infer<typeof cachedProfileSchema>;
 
 function toProfileWithSkin(profile: CachedProfile): MinecraftPlayerProfileWithSkin {
+  const texture: MinecraftSkinTexture | undefined =
+    profile.texture ??
+    (profile.textureHash === undefined
+      ? undefined
+      : { hash: profile.textureHash, model: 'classic' });
   return {
     username: profile.username,
     uuid: profile.uuid,
-    ...(profile.textureHash === undefined ? {} : { textureHash: profile.textureHash }),
+    ...(texture === undefined ? {} : { texture }),
   };
 }
 
@@ -345,7 +365,7 @@ function profileFromNamePayload(payload: unknown): MinecraftPlayerProfile | unde
   return uuid === undefined ? undefined : { uuid, username: parsed.data.name };
 }
 
-function textureHashFromValue(value: string): string | undefined {
+function textureFromValue(value: string): MinecraftSkinTexture | undefined {
   let decoded: unknown;
   try {
     decoded = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
@@ -356,12 +376,34 @@ function textureHashFromValue(value: string): string | undefined {
   if (!parsed.success) {
     return undefined;
   }
-  const url = parsed.data.textures?.SKIN?.url;
-  if (url === undefined) {
+  const skin = parsed.data.textures?.SKIN;
+  if (skin === undefined) {
     return undefined;
   }
-  const hash = url.split('/').at(-1);
-  return hash !== undefined && TEXTURE_HASH_PATTERN.test(hash) ? hash : undefined;
+
+  let url: URL;
+  try {
+    url = new URL(skin.url);
+  } catch {
+    return undefined;
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.hostname !== 'textures.minecraft.net' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.port !== '' ||
+    url.search !== '' ||
+    url.hash !== ''
+  ) {
+    return undefined;
+  }
+
+  const pathMatch = /^\/texture\/([0-9a-f]{64})$/u.exec(url.pathname);
+  const hash = pathMatch?.[1];
+  return hash === undefined || !TEXTURE_HASH_PATTERN.test(hash)
+    ? undefined
+    : { hash, model: skin.metadata?.model === 'slim' ? 'slim' : 'classic' };
 }
 
 function errorKind(error: unknown): string {

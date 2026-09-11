@@ -138,6 +138,330 @@ components:
         - createdAt
       type: object
 paths:
+  /api/avatars/{uuid}/skin:
+    get:
+      summary: Get a Minecraft skin
+      tags:
+        - Avatars
+      description: Return the current signed Mojang skin for a Minecraft UUID.
+      parameters:
+        - schema:
+            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            type: string
+          in: path
+          name: uuid
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{uuid}/head:
+    get:
+      summary: Render a Minecraft head
+      tags:
+        - Avatars
+      description: Render a three-dimensional Minecraft head from its current signed skin.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            type: string
+          in: path
+          name: uuid
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{uuid}/bust:
+    get:
+      summary: Render a Minecraft bust
+      tags:
+        - Avatars
+      description: Render the Minecraft head, torso, and arms from its current signed skin.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            type: string
+          in: path
+          name: uuid
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{uuid}/body:
+    get:
+      summary: Render a Minecraft body
+      tags:
+        - Avatars
+      description: Render the full Minecraft player model from its current signed skin.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            type: string
+          in: path
+          name: uuid
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
   /health:
     get:
       responses:
@@ -962,5 +1286,7 @@ tags:
     name: Interactions
   - description: Read the Minecraft identity represented by an access token.
     name: Identity
+  - description: Fetch and render signed Minecraft skins without authentication.
+    name: Avatars
   - description: Manage public and confidential OAuth clients as an authenticated developer.
     name: Applications

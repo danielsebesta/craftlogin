@@ -12,6 +12,8 @@ import type { AuthenticatedDeveloperSession } from '../../src/developers/session
 import type { ApiInteractionService } from '../../src/api/interaction-routes.js';
 import {
   appRegistrationRateLimit,
+  avatarRawRateLimit,
+  avatarRenderRateLimit,
   tokenRateLimit,
   verificationStatusRateLimit,
 } from '../../src/api/rate-limit.js';
@@ -22,6 +24,7 @@ import type { VerificationStatus } from '../../src/verification/types.js';
 const errorResponseSchema = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
 });
+const avatarUuid = '853c80ef-3c37-49fd-aa49-938b674adae6';
 
 class InteractionStub implements ApiInteractionService {
   public completion: OAuthInteractionCompletion = { status: 'pending' };
@@ -212,6 +215,31 @@ describe('CraftLogin API server', (): void => {
     });
     expect(rejectedCors.headers['access-control-allow-origin']).toBeUndefined();
 
+    const publicAvatarCors = await server.inject({
+      headers: { origin: 'https://attacker.example' },
+      method: 'GET',
+      url: `/api/avatars/${avatarUuid}/head`,
+    });
+    expect(publicAvatarCors.statusCode).toBe(200);
+    expect(publicAvatarCors.headers['access-control-allow-origin']).toBe('*');
+    expect(publicAvatarCors.headers['access-control-expose-headers']).toContain('etag');
+
+    const publicAvatarPreflight = await server.inject({
+      headers: {
+        'access-control-request-headers': 'if-none-match',
+        'access-control-request-method': 'GET',
+        origin: 'https://attacker.example',
+      },
+      method: 'OPTIONS',
+      url: `/api/avatars/${avatarUuid}/head`,
+    });
+    expect(publicAvatarPreflight.statusCode).toBe(204);
+    expect(publicAvatarPreflight.headers['access-control-allow-origin']).toBe('*');
+    expect(publicAvatarPreflight.headers['access-control-allow-methods']).toBe('GET');
+    expect(publicAvatarPreflight.headers['access-control-allow-headers']).toContain(
+      'if-none-match',
+    );
+
     const missingRoute = await server.inject({ method: 'GET', url: '/not-a-route' });
     expect(missingRoute.statusCode).toBe(404);
     expect(errorResponseSchema.parse(missingRoute.json()).error.code).toBe('not_found');
@@ -295,6 +323,12 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).toHaveProperty('/api/users/@me');
     expect(parsed.paths).toHaveProperty('/api/apps');
     expect(parsed.paths).toHaveProperty('/oauth2/token');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/skin');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/head');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/bust');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/body');
+    expect(parsed.paths).not.toHaveProperty('/avatar/{uuid}');
+    expect(parsed.paths).not.toHaveProperty('/skin/{hash}');
     const documentation = await development.inject({ method: 'GET', url: '/docs/' });
     expect(documentation.statusCode).toBe(200);
     expect(documentation.body).toContain('pixeloid.css');
@@ -377,6 +411,35 @@ describe('CraftLogin API server', (): void => {
     const limitedToken = await exchangeTestToken(server);
     expectRateLimited(limitedToken);
     expect(oidcCalls).toBe(tokenRateLimit.max);
+
+    for (let index = 0; index < avatarRenderRateLimit.max; index += 1) {
+      const response = await server.inject({
+        headers: { origin: 'https://attacker.example' },
+        method: 'GET',
+        url: `/api/avatars/${avatarUuid}/head`,
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    const limitedRender = await server.inject({
+      headers: { origin: 'https://attacker.example' },
+      method: 'GET',
+      url: `/api/avatars/${avatarUuid}/head`,
+    });
+    expectRateLimited(limitedRender);
+    expect(limitedRender.headers['access-control-allow-origin']).toBe('*');
+
+    for (let index = 0; index < avatarRawRateLimit.max; index += 1) {
+      const response = await server.inject({
+        method: 'GET',
+        url: `/api/avatars/${avatarUuid}/skin`,
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    const limitedRaw = await server.inject({
+      method: 'GET',
+      url: `/api/avatars/${avatarUuid}/skin`,
+    });
+    expectRateLimited(limitedRaw);
   });
 
   async function buildServer(
@@ -465,6 +528,39 @@ describe('CraftLogin API server', (): void => {
       },
       interactions,
       issuer: 'https://craftlogin.com',
+      minecraft: {
+        avatars: {
+          findRawSkin: (): Promise<{
+            image: { body: Buffer; contentType: 'image/png'; etag: string };
+            status: 'found';
+          }> =>
+            Promise.resolve({
+              image: {
+                body: Buffer.from('PNGDATA'),
+                contentType: 'image/png',
+                etag: '"test-avatar"',
+              },
+              status: 'found',
+            }),
+          render: (): Promise<{
+            image: { body: Buffer; contentType: 'image/png'; etag: string };
+            status: 'found';
+          }> =>
+            Promise.resolve({
+              image: {
+                body: Buffer.from('PNGDATA'),
+                contentType: 'image/png',
+                etag: '"test-avatar"',
+              },
+              status: 'found',
+            }),
+        },
+        players: {
+          findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
+          findProfileByName: (): Promise<undefined> => Promise.resolve(undefined),
+        },
+        skins: { fetchSkin: (): Promise<undefined> => Promise.resolve(undefined) },
+      },
       minecraftBaseDomain: 'craftlogin.com',
       nodeEnvironment,
       oidcHandler,

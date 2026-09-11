@@ -36,6 +36,11 @@ async function generate(): Promise<void> {
     },
     issuer: 'https://craftlogin.com',
     minecraftBaseDomain: 'craftlogin.com',
+    minecraft: {
+      avatars: { findRawSkin: unavailable, render: unavailable },
+      players: { findProfileById: unavailable, findProfileByName: unavailable },
+      skins: { fetchSkin: unavailable },
+    },
     nodeEnvironment: 'production',
     oidcHandler: unavailable,
     readiness: { check: unavailable },

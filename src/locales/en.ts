@@ -20,6 +20,22 @@ export const english = {
         },
         appDelete: { summary: 'Delete an owned OAuth client' },
         appList: { summary: 'List manageable OAuth clients' },
+        avatarBody: {
+          description: 'Render the full Minecraft player model from its current signed skin.',
+          summary: 'Render a Minecraft body',
+        },
+        avatarBust: {
+          description: 'Render the Minecraft head, torso, and arms from its current signed skin.',
+          summary: 'Render a Minecraft bust',
+        },
+        avatarHead: {
+          description: 'Render a three-dimensional Minecraft head from its current signed skin.',
+          summary: 'Render a Minecraft head',
+        },
+        avatarSkin: {
+          description: 'Return the current signed Mojang skin for a Minecraft UUID.',
+          summary: 'Get a Minecraft skin',
+        },
         authorize: {
           description: 'Begin or resume an OAuth 2.0 authorization-code flow.',
           summary: 'Authorize',
@@ -66,6 +82,7 @@ export const english = {
       },
       tags: {
         applications: 'Manage public and confidential OAuth clients as an authenticated developer.',
+        avatars: 'Fetch and render signed Minecraft skins without authentication.',
         identity: 'Read the Minecraft identity represented by an access token.',
         interactions: 'Complete Minecraft account verification.',
         oauth: 'Standards-based OAuth 2.0 and OpenID Connect endpoints.',
@@ -75,6 +92,8 @@ export const english = {
     errors: {
       administratorRequired: 'Administrator access is required.',
       appNotFound: 'The OAuth application was not found.',
+      avatarNotFound: 'The Minecraft skin was not found.',
+      avatarUnavailable: 'The Minecraft skin service is temporarily unavailable.',
       badRequest: 'The request is invalid.',
       csrfInvalid: 'This form expired or came from an untrusted page. Refresh and try again.',
       developerAuthenticationRequired: 'Sign in as a registered developer to continue.',

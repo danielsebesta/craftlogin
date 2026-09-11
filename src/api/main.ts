@@ -1,6 +1,8 @@
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 
+import { CanvasAvatarRenderer } from '../avatars/renderer.js';
+import { CachedAvatarService } from '../avatars/service.js';
 import { loadEnvironment } from '../config/environment.js';
 import { loadOAuthCredentials } from '../config/oauth-credentials.js';
 import { PrismaAppManager } from '../developers/app-management.js';
@@ -14,6 +16,9 @@ import { createRedisClient } from '../infrastructure/redis.js';
 import { InfrastructureReadinessCheck } from '../infrastructure/readiness.js';
 import { getErrorKind } from '../logging/error-kind.js';
 import { createLogger } from '../logging/logger.js';
+import { RedisMinecraftCache } from '../mojang/cache.js';
+import { HttpMojangClient } from '../mojang/client.js';
+import { HttpSkinStore } from '../mojang/skin-store.js';
 import { createOAuthRuntime } from '../oauth/runtime.js';
 import { installSessionSignalLogging } from '../oauth/session-security.js';
 import { RedisVerificationStore } from '../verification/redis-verification-store.js';
@@ -68,6 +73,16 @@ async function main(): Promise<void> {
     );
     const developerAuthentication = new DeveloperRequestAuthenticator(developerSessions);
     const clients = new PrismaClientDirectory(database);
+    const mojangCache = new RedisMinecraftCache(redis);
+    const players = new HttpMojangClient({ cache: mojangCache });
+    const skins = new HttpSkinStore({ cache: mojangCache, logger });
+    const avatars = new CachedAvatarService({
+      cache: mojangCache,
+      logger,
+      players,
+      renderer: new CanvasAvatarRenderer(),
+      skins,
+    });
     server = await createApiServer({
       accessTokens: new ProviderAccessTokenAuthenticator(oauth.provider),
       appManager: new PrismaAppManager(database),
@@ -80,6 +95,7 @@ async function main(): Promise<void> {
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,
       logger,
+      minecraft: { avatars, players, skins },
       minecraftBaseDomain: environment.minecraftBaseDomain,
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),

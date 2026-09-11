@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { MemoryMinecraftCache } from '../../src/mojang/cache.js';
-import { HttpSkinStore } from '../../src/mojang/skin-store.js';
+import { MemoryMinecraftCache, type MinecraftCache } from '../../src/mojang/cache.js';
+import { HttpSkinStore, MinecraftSkinUnavailableError } from '../../src/mojang/skin-store.js';
 
 const hash = 'a'.repeat(64);
 
@@ -64,6 +64,42 @@ describe('HttpSkinStore', (): void => {
     const { fetch } = stubFetch(() => ({ body: new Uint8Array([1]), contentType: 'text/html' }));
     const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
 
-    await expect(store.fetchSkin(hash)).resolves.toBeUndefined();
+    await expect(store.fetchSkin(hash)).rejects.toBeInstanceOf(MinecraftSkinUnavailableError);
+  });
+
+  it('reports an upstream server failure separately from a missing skin', async (): Promise<void> => {
+    const { fetch } = stubFetch(() => ({ status: 503 }));
+    const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
+
+    await expect(store.fetchSkin(hash)).rejects.toBeInstanceOf(MinecraftSkinUnavailableError);
+  });
+
+  it('reports a network failure when no cached image is available', async (): Promise<void> => {
+    const fetch: typeof globalThis.fetch = (): Promise<Response> =>
+      Promise.reject(new Error('network unavailable'));
+    const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
+
+    await expect(store.fetchSkin(hash)).rejects.toBeInstanceOf(MinecraftSkinUnavailableError);
+  });
+
+  it('bounds streamed response bytes before retaining the image', async (): Promise<void> => {
+    const { fetch } = stubFetch(() => ({ body: new Uint8Array([1, 2, 3]) }));
+    const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch, maxBytes: 2 });
+
+    await expect(store.fetchSkin(hash)).rejects.toBeInstanceOf(MinecraftSkinUnavailableError);
+  });
+
+  it('uses a stale valid image when the texture service is unavailable', async (): Promise<void> => {
+    const body = Buffer.from([1, 2, 3]);
+    const cache: MinecraftCache = {
+      read: (): Promise<{ fetchedAt: number; value: string }> =>
+        Promise.resolve({ fetchedAt: 0, value: body.toString('base64') }),
+      write: (): Promise<void> => Promise.resolve(),
+    };
+    const fetch: typeof globalThis.fetch = (): Promise<Response> =>
+      Promise.reject(new Error('network unavailable'));
+    const store = new HttpSkinStore({ cache, fetch, ttlSeconds: 1 });
+
+    await expect(store.fetchSkin(hash)).resolves.toEqual({ body, contentType: 'image/png' });
   });
 });

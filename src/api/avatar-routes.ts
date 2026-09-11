@@ -1,12 +1,37 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import type { MinecraftPlayerLookup } from '../mojang/client.js';
-import type { SkinStore } from '../mojang/skin-store.js';
-import { avatarRateLimit } from './rate-limit.js';
-import { avatarRouteSchema, skinRouteSchema } from './schemas.js';
+import type { AvatarLookupResult, AvatarService } from '../avatars/service.js';
+import type { AvatarLayers, AvatarSize, AvatarView } from '../avatars/types.js';
+import { english } from '../locales/en.js';
+import type { SkinImage, SkinStore } from '../mojang/skin-store.js';
+import { canonicalMinecraftUuid } from '../mojang/uuid.js';
+import { ApiError } from './errors.js';
+import { avatarRawRateLimit, avatarRenderRateLimit } from './rate-limit.js';
+import {
+  avatarPreflightRouteSchema,
+  avatarRouteSchema,
+  rawAvatarRouteSchema,
+  renderedAvatarRouteSchema,
+  skinRouteSchema,
+} from './schemas.js';
+
+const UUID_IMAGE_CACHE = 'public, max-age=3600, stale-while-revalidate=86400';
+const HASH_IMAGE_CACHE = 'public, max-age=31536000, immutable';
+const PUBLIC_IMAGE_CORS = {
+  allowedHeaders: ['if-none-match'],
+  credentials: false,
+  exposedHeaders: ['etag'],
+  methods: ['GET'],
+  origin: '*',
+};
 
 interface AvatarParams {
   readonly uuid: string;
+}
+
+interface AvatarQuery {
+  readonly layers?: AvatarLayers;
+  readonly size?: '128' | '256' | '32' | '64';
 }
 
 interface SkinParams {
@@ -14,43 +39,180 @@ interface SkinParams {
 }
 
 export interface AvatarRoutesOptions {
-  readonly players: MinecraftPlayerLookup;
+  readonly avatars: AvatarService;
   readonly skins: SkinStore;
 }
 
-const PLACEHOLDER_HEAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 8 8" shape-rendering="crispEdges"><rect width="8" height="8" fill="#39413b"/><rect width="8" height="3" fill="#2a312c"/><rect x="1.5" y="4" width="1.5" height="1.5" fill="#202622"/><rect x="5" y="4" width="1.5" height="1.5" fill="#202622"/></svg>`;
-
 export function registerAvatarRoutes(server: FastifyInstance, options: AvatarRoutesOptions): void {
+  registerPublicPreflight(server, '/api/avatars/:uuid/skin');
+  registerPublicPreflight(server, '/api/avatars/:uuid/head');
+  registerPublicPreflight(server, '/api/avatars/:uuid/bust');
+  registerPublicPreflight(server, '/api/avatars/:uuid/body');
+
   server.get<{ Params: AvatarParams }>(
     '/avatar/:uuid',
-    { config: { rateLimit: avatarRateLimit }, schema: avatarRouteSchema },
+    {
+      config: { rateLimit: avatarRenderRateLimit },
+      schema: avatarRouteSchema,
+    },
     async (request, reply): Promise<void> => {
-      const profile = await options.players
-        .findProfileById(request.params.uuid)
-        .catch((): undefined => undefined);
-      void reply.header('cache-control', 'public, max-age=3600');
-      await reply.type('image/svg+xml; charset=utf-8').send(renderHeadSvg(profile?.textureHash));
+      const uuid = requireCanonicalUuid(request.params.uuid);
+      await sendAvatarResult(
+        request,
+        reply,
+        await options.avatars.render(uuid, { layers: 'all', size: 128, view: 'head' }),
+      );
     },
   );
 
-  server.get<{ Params: SkinParams }>(
-    '/skin/:hash',
-    { config: { rateLimit: avatarRateLimit }, schema: skinRouteSchema },
+  server.get<{ Params: AvatarParams }>(
+    '/api/avatars/:uuid/skin',
+    {
+      config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRawRateLimit },
+      schema: rawAvatarRouteSchema,
+    },
     async (request, reply): Promise<void> => {
-      const image = await options.skins.fetchSkin(request.params.hash);
+      const uuid = requireCanonicalUuid(request.params.uuid);
+      await sendAvatarResult(request, reply, await options.avatars.findRawSkin(uuid));
+    },
+  );
+
+  registerRenderedRoute(server, options.avatars, 'head', 'avatarHead');
+  registerRenderedRoute(server, options.avatars, 'bust', 'avatarBust');
+  registerRenderedRoute(server, options.avatars, 'body', 'avatarBody');
+
+  registerHashSkinRoute(server, options.skins, '/skin/:hash');
+  registerHashSkinRoute(server, options.skins, '/skin/:hash.png');
+}
+
+function registerPublicPreflight(server: FastifyInstance, path: string): void {
+  server.options<{ Params: AvatarParams }>(
+    path,
+    { config: { cors: PUBLIC_IMAGE_CORS }, schema: avatarPreflightRouteSchema },
+    async (_request, reply): Promise<void> => {
+      await reply.status(204).send();
+    },
+  );
+}
+
+function registerRenderedRoute(
+  server: FastifyInstance,
+  avatars: AvatarService,
+  view: AvatarView,
+  operation: 'avatarBody' | 'avatarBust' | 'avatarHead',
+): void {
+  server.get<{ Params: AvatarParams; Querystring: AvatarQuery }>(
+    `/api/avatars/:uuid/${view}`,
+    {
+      config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRenderRateLimit },
+      schema: renderedAvatarRouteSchema(operation),
+    },
+    async (request, reply): Promise<void> => {
+      const uuid = requireCanonicalUuid(request.params.uuid);
+      const size = parseAvatarSize(request.query.size);
+      await sendAvatarResult(
+        request,
+        reply,
+        await avatars.render(uuid, {
+          layers: request.query.layers ?? 'all',
+          size,
+          view,
+        }),
+      );
+    },
+  );
+}
+
+function registerHashSkinRoute(
+  server: FastifyInstance,
+  skins: SkinStore,
+  path: '/skin/:hash' | '/skin/:hash.png',
+): void {
+  server.get<{ Params: SkinParams }>(
+    path,
+    {
+      config: { rateLimit: avatarRawRateLimit },
+      schema: skinRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      let image: SkinImage | undefined;
+      try {
+        image = await skins.fetchSkin(request.params.hash);
+      } catch (error: unknown) {
+        throw new ApiError(503, 'service_unavailable', english.api.errors.avatarUnavailable, {
+          cause: error,
+        });
+      }
       if (image === undefined) {
-        await reply.status(404).send();
+        throw new ApiError(404, 'not_found', english.api.errors.avatarNotFound);
+      }
+
+      const etag = `"skin-${request.params.hash}"`;
+      void reply.header('cache-control', HASH_IMAGE_CACHE);
+      void reply.header('etag', etag);
+      if (matchesEntityTag(request.headers['if-none-match'], etag)) {
+        await reply.status(304).send();
         return;
       }
-      void reply.header('cache-control', 'public, max-age=31536000, immutable');
       await reply.type(image.contentType).send(image.body);
     },
   );
 }
 
-function renderHeadSvg(textureHash: string | undefined): string {
-  if (textureHash === undefined) {
-    return PLACEHOLDER_HEAD_SVG;
+async function sendAvatarResult(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  result: AvatarLookupResult,
+): Promise<void> {
+  if (result.status === 'not-found') {
+    throw new ApiError(404, 'not_found', english.api.errors.avatarNotFound);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 8 8" shape-rendering="crispEdges"><defs><clipPath id="head"><rect width="8" height="8"/></clipPath></defs><g clip-path="url(#head)"><image href="/skin/${textureHash}.png" x="-8" y="-8" width="64" height="64" image-rendering="pixelated"/></g><g clip-path="url(#head)"><image href="/skin/${textureHash}.png" x="-40" y="-8" width="64" height="64" image-rendering="pixelated"/></g></svg>`;
+  if (result.status === 'unavailable') {
+    throw new ApiError(503, 'service_unavailable', english.api.errors.avatarUnavailable);
+  }
+  void reply.header('cache-control', UUID_IMAGE_CACHE);
+  void reply.header('etag', result.image.etag);
+  if (matchesEntityTag(request.headers['if-none-match'], result.image.etag)) {
+    await reply.status(304).send();
+    return;
+  }
+
+  await reply.type(result.image.contentType).send(result.image.body);
+}
+
+function requireCanonicalUuid(value: string): string {
+  const uuid = canonicalMinecraftUuid(value);
+  if (uuid === undefined) {
+    throw new ApiError(400, 'bad_request', english.api.errors.badRequest);
+  }
+  return uuid;
+}
+
+function parseAvatarSize(value: AvatarQuery['size']): AvatarSize {
+  switch (value) {
+    case undefined:
+    case '128':
+      return 128;
+    case '32':
+      return 32;
+    case '64':
+      return 64;
+    case '256':
+      return 256;
+  }
+}
+
+function matchesEntityTag(header: string | readonly string[] | undefined, etag: string): boolean {
+  let values: readonly string[];
+  if (header === undefined) {
+    values = [];
+  } else if (typeof header === 'string') {
+    values = header.split(',');
+  } else {
+    values = header;
+  }
+  return values.some((value): boolean => {
+    const candidate = value.trim();
+    return candidate === '*' || candidate === etag || candidate === `W/${etag}`;
+  });
 }

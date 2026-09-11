@@ -29,8 +29,14 @@ export const verificationStatusRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
-export const avatarRateLimit = {
-  groupId: 'avatar',
+export const avatarRenderRateLimit = {
+  groupId: 'avatar-render',
+  max: 60,
+  timeWindow: 60 * 1_000,
+};
+
+export const avatarRawRateLimit = {
+  groupId: 'avatar-raw',
   max: 120,
   timeWindow: 60 * 1_000,
 };

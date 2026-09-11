@@ -56,6 +56,7 @@ export async function registerOpenApi(
         { description: documentation.tags.oauth, name: 'OAuth' },
         { description: documentation.tags.interactions, name: 'Interactions' },
         { description: documentation.tags.identity, name: 'Identity' },
+        { description: documentation.tags.avatars, name: 'Avatars' },
         { description: documentation.tags.applications, name: 'Applications' },
       ],
     },

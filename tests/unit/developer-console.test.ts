@@ -233,6 +233,7 @@ describe('Developer Console', (): void => {
         ? {}
         : {
             minecraft: {
+              avatars: { findRawSkin: unavailable, render: unavailable },
               players: options.players,
               skins: { fetchSkin: (): Promise<undefined> => Promise.resolve(undefined) },
             },

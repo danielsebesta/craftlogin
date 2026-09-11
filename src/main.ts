@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 
+import { CanvasAvatarRenderer } from './avatars/renderer.js';
+import { CachedAvatarService } from './avatars/service.js';
 import { ProviderAccessTokenAuthenticator } from './api/access-token-authenticator.js';
 import { PrismaAppRegistrar } from './api/app-registration.js';
 import { renderAuthorizationError } from './api/authorization-error-page.js';
@@ -60,7 +62,14 @@ async function main(): Promise<void> {
     };
     const mojangCache = new RedisMinecraftCache(redis);
     const players = new HttpMojangClient({ cache: mojangCache, logger: mojangLogger });
-    const skins = new HttpSkinStore({ cache: mojangCache });
+    const skins = new HttpSkinStore({ cache: mojangCache, logger });
+    const avatars = new CachedAvatarService({
+      cache: mojangCache,
+      logger,
+      players,
+      renderer: new CanvasAvatarRenderer(),
+      skins,
+    });
     const usernames = new MojangUsernameResolver(players, new PrismaUsernameStore(database));
     minecraft = await startGhostServer(
       {
@@ -117,7 +126,7 @@ async function main(): Promise<void> {
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,
       logger,
-      minecraft: { players, skins },
+      minecraft: { avatars, players, skins },
       minecraftBaseDomain: environment.minecraftBaseDomain,
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),

@@ -134,6 +134,32 @@ const minecraftUuidProperty = {
   pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   type: 'string',
 };
+const avatarUuidProperty = {
+  pattern: '^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$',
+  type: 'string',
+};
+const avatarParamsSchema = {
+  additionalProperties: false,
+  properties: { uuid: avatarUuidProperty },
+  required: ['uuid'],
+  type: 'object',
+};
+const avatarRenderQuerySchema = {
+  additionalProperties: false,
+  properties: {
+    layers: { default: 'all', enum: ['base', 'all'], type: 'string' },
+    size: { default: '128', enum: ['32', '64', '128', '256'], type: 'string' },
+  },
+  type: 'object',
+};
+const emptyQuerySchema = { additionalProperties: false, properties: {}, type: 'object' };
+const pngResponseSchema = {
+  content: { 'image/png': { schema: { format: 'binary', type: 'string' } } },
+  headers: {
+    'cache-control': { type: 'string' },
+    etag: { type: 'string' },
+  },
+};
 const appIdParamsSchema = {
   additionalProperties: false,
   properties: { id: { format: 'uuid', type: 'string' } },
@@ -539,17 +565,25 @@ export const backgroundAssetRouteSchema: FastifySchema = {
 
 export const avatarRouteSchema: FastifySchema = {
   hide: true,
-  params: {
-    additionalProperties: false,
-    properties: { uuid: { maxLength: 64, minLength: 1, type: 'string' } },
-    required: ['uuid'],
-    type: 'object',
-  },
+  params: avatarParamsSchema,
   response: {
-    200: { type: 'string' },
+    200: pngResponseSchema,
+    304: { type: 'null' },
     400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const avatarPreflightRouteSchema: FastifySchema = {
+  hide: true,
+  params: avatarParamsSchema,
+  response: {
+    204: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
 };
@@ -563,13 +597,56 @@ export const skinRouteSchema: FastifySchema = {
     type: 'object',
   },
   response: {
-    200: { type: 'string' },
+    200: pngResponseSchema,
+    304: { type: 'null' },
     400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
 };
+
+export const rawAvatarRouteSchema: FastifySchema = {
+  description: operations.avatarSkin.description,
+  params: avatarParamsSchema,
+  querystring: emptyQuerySchema,
+  response: {
+    200: pngResponseSchema,
+    304: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.avatarSkin.summary,
+  tags: ['Avatars'],
+};
+
+export function renderedAvatarRouteSchema(
+  operation: 'avatarBody' | 'avatarBust' | 'avatarHead',
+): FastifySchema {
+  return {
+    description: operations[operation].description,
+    params: avatarParamsSchema,
+    querystring: avatarRenderQuerySchema,
+    response: {
+      200: pngResponseSchema,
+      304: { type: 'null' },
+      400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    },
+    summary: operations[operation].summary,
+    tags: ['Avatars'],
+  };
+}
 
 export const oauthAuthorizationRouteSchema: FastifySchema = {
   description: operations.authorize.description,

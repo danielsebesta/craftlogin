@@ -16,6 +16,7 @@ export type ApiErrorCode =
   | 'forbidden'
   | 'not_found'
   | 'rate_limited'
+  | 'service_unavailable'
   | 'unauthorized';
 
 export class ApiError extends Error {
