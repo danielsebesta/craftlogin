@@ -23,9 +23,12 @@ export const developerLoginRateLimit = {
   timeWindow: 60 * 60 * 1_000,
 };
 
+// The status check needs an unguessable interaction id plus the signed session
+// cookie, so guessing is infeasible and this limit is volumetric protection.
+// It must tolerate several polling tabs and reload bursts behind one shared IP.
 export const verificationStatusRateLimit = {
   groupId: 'verification-status',
-  max: 60,
+  max: 120,
   timeWindow: 60 * 1_000,
 };
 

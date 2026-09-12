@@ -93,7 +93,7 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
     },
     developerLogins: { complete: unavailable, start: unavailable, status: unavailable },
     developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
-    interactions: { complete: unavailable, start: unavailable, status: unavailable },
+    interactions: { abort: unavailable, complete: unavailable, start: unavailable, status: unavailable },
     issuer: 'https://craftlogin.com',
     minecraftBaseDomain: 'craftlogin.com',
     nodeEnvironment: 'test',

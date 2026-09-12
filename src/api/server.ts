@@ -12,6 +12,7 @@ import type { DeveloperLoginService } from '../developers/login-service.js';
 import type { SkinStore } from '../mojang/skin-store.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
+import { registerAppAvatarAssetRoute } from './app-avatar-asset.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
 import { registerAvatarRoutes } from './avatar-routes.js';
@@ -86,6 +87,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerSharedSchemas(server);
   registerErrorHandling(server);
   registerFontAssetRoutes(server);
+  registerAppAvatarAssetRoute(server);
   registerBackgroundAssetRoute(server);
   if (options.minecraft !== undefined) {
     registerAvatarRoutes(server, options.minecraft);

@@ -40,6 +40,11 @@ export const english = {
           description: 'Begin or resume an OAuth 2.0 authorization-code flow.',
           summary: 'Authorize',
         },
+        abortInteraction: {
+          description:
+            'Deny the pending request and return a standard access_denied error to the client.',
+          summary: 'Deny Minecraft verification',
+        },
         completeInteraction: {
           description:
             'Claim a verified Minecraft identity and resume the OIDC authorization flow.',
@@ -140,6 +145,7 @@ export const english = {
       uuidLabel: 'Minecraft UUID',
     },
     app: {
+      avatarLabel: 'Avatar',
       clientIdLabel: 'Client ID',
       confidentialHelp: 'For server-side applications that can protect a secret.',
       confidentialLabel: 'Confidential client',
@@ -191,6 +197,7 @@ export const english = {
     login: {
       addressPending: 'Preparing secure address…',
       appName: 'Developer Console',
+      permission: 'Access the Developer Console and manage your applications.',
       verifiedAddress: 'Minecraft verification complete',
     },
     navigation: {
@@ -306,14 +313,19 @@ export const english = {
   },
   interaction: {
     addressLabel: 'Minecraft server address',
+    allowsHeading: 'This app will receive:',
     brand: 'CraftLogin',
-    continueButton: 'I connected, continue',
+    cancelButton: 'Cancel',
+    continueButton: 'Allow',
     copied: 'Copied',
     copyAddress: 'Copy address',
     footer: 'CraftLogin verifies only the Minecraft UUID and username.',
     heading: 'Sign in to',
+    scopeIdentity: 'Your Minecraft identity (stable UUID)',
+    scopeOffline: 'Stay signed in between visits',
+    scopeProfile: 'Your current username and avatar',
     interactionRequired: 'Minecraft account verification is required',
-    lead: 'Join this temporary Minecraft server to confirm your account. This page updates automatically.',
+    lead: 'Confirm your Minecraft account below to continue.',
     noJavaScript:
       'Automatic status checks need JavaScript. You can still connect in Minecraft, then use the continue button.',
     securityNote:

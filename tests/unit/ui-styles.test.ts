@@ -4,7 +4,10 @@ import { developerStyles } from '../../src/api/developer-assets.js';
 import { renderDeveloperDashboard } from '../../src/api/developer-pages.js';
 import { swaggerTypographyStyles } from '../../src/api/font-assets.js';
 import { interactionStyles } from '../../src/api/interaction-assets.js';
-import { renderInteractionPage } from '../../src/api/interaction-page.js';
+import {
+  permissionsForScope,
+  renderInteractionPage,
+} from '../../src/api/interaction-page.js';
 import { landingStyles } from '../../src/api/landing-assets.js';
 import { uiBaseStyles } from '../../src/api/ui/base.js';
 import { uiControlStyles } from '../../src/api/ui/controls.js';
@@ -62,6 +65,7 @@ describe('page accessibility contract', (): void => {
       code: 'ABCDEFGH',
       interactionId: 'interaction-id',
       minecraftBaseDomain: 'craftlogin.com',
+      scope: 'openid profile offline_access',
     });
 
     expect(html).toContain('class="skip-link"');
@@ -73,6 +77,10 @@ describe('page accessibility contract', (): void => {
     expect(html).toContain('data-continue-form');
     expect(html).toContain('Maps &amp; More');
     expect(html).not.toContain('<strong>');
+    expect(html).toContain('consent-avatar');
+    expect(html).toContain('This app will receive:');
+    expect(html).toContain('Stay signed in between visits');
+    expect(html).toContain('action="/interaction/interaction-id/abort"');
     expect(html).toContain('name="color-scheme" content="dark"');
   });
 
@@ -90,6 +98,23 @@ describe('page accessibility contract', (): void => {
     expect(html).toContain('<label for="admin-identifier">');
     expect(html).toContain('<label for="admin-role">');
     expect(html).toContain('<h1>Developer Console</h1>');
+  });
+});
+
+describe('interaction consent permissions', (): void => {
+  it('describes known scopes and falls back to code for unknown scopes', (): void => {
+    expect(permissionsForScope('openid profile custom_scope')).toEqual([
+      { kind: 'text', text: 'Your Minecraft identity (stable UUID)' },
+      { kind: 'text', text: 'Your current username and avatar' },
+      { code: 'custom_scope', kind: 'code' },
+    ]);
+  });
+
+  it('ignores blank entries and repeated scopes', (): void => {
+    expect(permissionsForScope('  openid openid  ')).toEqual([
+      { kind: 'text', text: 'Your Minecraft identity (stable UUID)' },
+    ]);
+    expect(permissionsForScope('')).toEqual([]);
   });
 });
 

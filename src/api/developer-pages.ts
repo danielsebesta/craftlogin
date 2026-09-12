@@ -41,9 +41,11 @@ export function renderDeveloperLoginPage(
     action: '/developers/login/complete',
     address,
     addressLabel: interaction.addressLabel,
+    allowsHeading: interaction.allowsHeading,
     appName: developer.login.appName,
     brand: developer.navigation.brand,
     continueLabel: interaction.continueButton,
+    permissions: [{ kind: 'text', text: developer.login.permission }],
     copiedLabel: interaction.copied,
     copyLabel: interaction.copyAddress,
     documentTitle: `${developer.login.appName} · ${interaction.title}`,
@@ -260,6 +262,7 @@ function renderAppTable(apps: readonly ManagedApp[], role: DeveloperRole): strin
           ? `<span class="app-type">${escapeHtml(strings.ownerLabel)}: ${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</span>`
           : '';
       return `<tr>
+        <td><span class="app-avatar" aria-hidden="true"><img src="/assets/app-avatar.jpg" alt="" width="740" height="740"></span></td>
         <th scope="row"><span class="app-name">${escapeHtml(app.name)}</span><span class="app-type">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</span>${owner}</th>
         <td><code>${escapeHtml(app.clientId)}</code></td>
         <td><ul class="redirect-list">${redirects}</ul></td>
@@ -273,6 +276,7 @@ function renderAppTable(apps: readonly ManagedApp[], role: DeveloperRole): strin
         <caption class="visually-hidden">${escapeHtml(english.developer.dashboard.applicationsHeading)}</caption>
         <thead>
           <tr>
+            <th scope="col"><span class="visually-hidden">${escapeHtml(strings.avatarLabel)}</span></th>
             <th scope="col">${escapeHtml(strings.nameLabel)}</th>
             <th scope="col">${escapeHtml(strings.clientIdLabel)}</th>
             <th scope="col">${escapeHtml(strings.redirectLabel)}</th>

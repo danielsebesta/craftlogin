@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import { english } from '../locales/en.js';
 import type {
+  OAuthInteractionAbortion,
   OAuthInteractionCompletion,
   PendingOAuthInteraction,
 } from '../oauth/interaction-service.js';
@@ -14,6 +15,7 @@ import { renderInteractionPage } from './interaction-page.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import { verificationStatusRateLimit } from './rate-limit.js';
 import {
+  interactionAbortRouteSchema,
   interactionAssetRouteSchema,
   interactionCompleteRouteSchema,
   interactionPageRouteSchema,
@@ -25,6 +27,11 @@ interface InteractionParams {
 }
 
 export interface ApiInteractionService {
+  abort(
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<OAuthInteractionAbortion>;
   start(
     request: IncomingMessage,
     response: ServerResponse,
@@ -75,6 +82,7 @@ export function registerInteractionRoutes(
           code: interaction.code,
           interactionId: interaction.interactionId,
           minecraftBaseDomain: options.minecraftBaseDomain,
+          scope: interaction.scope,
         }),
       );
     },
@@ -94,6 +102,19 @@ export function registerInteractionRoutes(
       );
       void reply.header('cache-control', 'no-store');
       await reply.send({ status: verification.status });
+    },
+  );
+
+  server.post<{ Params: InteractionParams }>(
+    '/interaction/:uid/abort',
+    { schema: interactionAbortRouteSchema },
+    async (request, reply): Promise<void> => {
+      const abortion = await options.interactions.abort(
+        request.raw,
+        reply.raw,
+        request.params.uid,
+      );
+      await reply.redirect(abortion.redirectTo, 303);
     },
   );
 

@@ -1010,6 +1010,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/abort:
+    post:
+      summary: Deny Minecraft verification
+      tags:
+        - Interactions
+      description: Deny the pending request and return a standard access_denied error
+        to the client.
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "303":
+          description: Default Response
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
   /interaction/{uid}/complete:
     post:
       summary: Complete Minecraft verification

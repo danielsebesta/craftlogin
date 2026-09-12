@@ -30,6 +30,7 @@ async function generate(): Promise<void> {
     developerLogins: { complete: unavailable, start: unavailable, status: unavailable },
     developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
     interactions: {
+      abort: unavailable,
       complete: unavailable,
       start: unavailable,
       status: unavailable,

@@ -54,6 +54,23 @@ const consoleStyles = `
   margin-bottom: var(--s4);
 }
 
+.app-avatar {
+  display: block;
+  width: 2.5rem;
+  aspect-ratio: 1 / 0.74;
+  overflow: hidden;
+  background: #fff;
+  border: 2px solid var(--line-strong);
+}
+
+.app-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
 .app-name {
   display: block;
   font-weight: 700;

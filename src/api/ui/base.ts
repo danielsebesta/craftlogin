@@ -34,8 +34,22 @@ body::before {
   mask-image: url("/assets/background.svg");
   -webkit-mask-repeat: repeat;
   mask-repeat: repeat;
-  -webkit-mask-size: 2.7rem auto;
-  mask-size: 2.7rem auto;
+  -webkit-mask-size: 8.5rem auto;
+  mask-size: 8.5rem auto;
+}
+
+/* Solid center rail above the cube pattern, so the pattern stays visible
+   only in the side gutters outside the content column. */
+body::after {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: min(calc(var(--container) + (2 * var(--s4))), 100%);
+  margin-inline: auto;
+  content: "";
+  background: var(--bg);
+  border-inline: 1px solid var(--line);
+  pointer-events: none;
 }
 
 body > * {
@@ -131,7 +145,7 @@ textarea {
 }
 
 .page-surface {
-  background-color: var(--surface);
+  background-color: var(--bg);
 }
 
 .skip-link {
@@ -174,8 +188,15 @@ textarea {
   }
 }
 
+@media (max-width: 74rem) {
+  body::after {
+    border-inline: none;
+  }
+}
+
 @media (prefers-contrast: more) {
-  body::before {
+  body::before,
+  body::after {
     display: none;
   }
 }

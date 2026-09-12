@@ -1,6 +1,7 @@
 import { escapeHtml } from '../html.js';
 
-export const MAXIMUM_POLL_ATTEMPTS = 48;
+// Forty gentle polls cover the five-minute verification code lifetime.
+export const MAXIMUM_POLL_ATTEMPTS = 40;
 
 export const SIGN_IN_HEADING_ID = 'verification-heading';
 
@@ -12,12 +13,23 @@ export interface SignInMessages {
   readonly verified: string;
 }
 
+export type ConsentPermission =
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'code'; readonly code: string };
+
+export interface SignInCancel {
+  readonly action: string;
+  readonly label: string;
+}
+
 export interface SignInPageInput {
   readonly action: string;
   readonly address: string;
   readonly addressLabel: string;
+  readonly allowsHeading: string;
   readonly appName?: string;
   readonly brand: string;
+  readonly cancel?: SignInCancel;
   readonly continueLabel: string;
   readonly copiedLabel: string;
   readonly copyLabel: string;
@@ -29,11 +41,19 @@ export interface SignInPageInput {
   readonly lead: string;
   readonly messages: SignInMessages;
   readonly noJavaScript: string;
+  readonly permissions: readonly ConsentPermission[];
   readonly securityNote?: string;
   readonly skipLabel: string;
   readonly statusUrl: string;
   readonly steps: readonly string[];
   readonly stepsHeading: string;
+}
+
+function renderPermission(permission: ConsentPermission): string {
+  if (permission.kind === 'code') {
+    return `<li><span class="consent-check" aria-hidden="true">✓</span><code>${escapeHtml(permission.code)}</code></li>`;
+  }
+  return `<li><span class="consent-check" aria-hidden="true">✓</span><span>${escapeHtml(permission.text)}</span></li>`;
 }
 
 export function renderSignInPage(input: SignInPageInput): string {
@@ -43,6 +63,12 @@ export function renderSignInPage(input: SignInPageInput): string {
     input.securityNote === undefined
       ? ''
       : `<p class="field-hint">${escapeHtml(input.securityNote)}</p>`;
+  const cancelForm =
+    input.cancel === undefined
+      ? ''
+      : `<form action="${escapeHtml(input.cancel.action)}" method="post">
+          <button class="button button-secondary" type="submit">${escapeHtml(input.cancel.label)}</button>
+        </form>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -72,24 +98,38 @@ export function renderSignInPage(input: SignInPageInput): string {
       data-network-message="${escapeHtml(input.messages.networkError)}"
       data-stopped-message="${escapeHtml(input.messages.stopped)}"
     >
-      <div class="signin-intro">
-        <h1 id="${SIGN_IN_HEADING_ID}">${escapeHtml(input.heading)}${headingSuffix}</h1>
-        <p class="lead">${escapeHtml(input.lead)}</p>
-        <h2>${escapeHtml(input.stepsHeading)}</h2>
-        <ol class="steps">
-          ${input.steps.map((step): string => `<li>${escapeHtml(step)}</li>`).join('\n          ')}
-        </ol>
-      </div>
-      <section class="signin-action" aria-labelledby="address-heading">
-        <h2 id="address-heading">${escapeHtml(input.addressLabel)}</h2>
-        <div class="signin-address-row">
-          <code class="signin-address" data-address>${escapeHtml(input.address)}</code>
-          <button type="button" class="button button-secondary" data-copy-target="[data-address]" data-copied-label="${escapeHtml(input.copiedLabel)}" hidden>${escapeHtml(input.copyLabel)}</button>
+      <section class="card consent-card" aria-labelledby="${SIGN_IN_HEADING_ID}">
+        <div class="consent-identity">
+          <span class="consent-avatar" aria-hidden="true"><img src="/assets/app-avatar.jpg" alt="" width="740" height="740"></span>
+          <div class="consent-title">
+            <h1 id="${SIGN_IN_HEADING_ID}">${escapeHtml(input.heading)}${headingSuffix}</h1>
+            <p class="lead">${escapeHtml(input.lead)}</p>
+          </div>
         </div>
-        <p class="signin-status" data-status-message data-state="${escapeHtml(input.initialStatusState)}" role="status" aria-live="polite">${escapeHtml(input.initialStatus)}</p>
-        <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
-          <button class="button" type="submit">${escapeHtml(input.continueLabel)}</button>
-        </form>
+        <div class="consent-scopes">
+          <h2>${escapeHtml(input.allowsHeading)}</h2>
+          <ul>
+            ${input.permissions.map(renderPermission).join('\n            ')}
+          </ul>
+        </div>
+        <div class="consent-verify">
+          <h2>${escapeHtml(input.stepsHeading)}</h2>
+          <ol class="steps">
+            ${input.steps.map((step): string => `<li>${escapeHtml(step)}</li>`).join('\n            ')}
+          </ol>
+          <h2 id="address-heading">${escapeHtml(input.addressLabel)}</h2>
+          <div class="signin-address-row">
+            <code class="signin-address" data-address>${escapeHtml(input.address)}</code>
+            <button type="button" class="button button-secondary" data-copy-target="[data-address]" data-copied-label="${escapeHtml(input.copiedLabel)}" hidden>${escapeHtml(input.copyLabel)}</button>
+          </div>
+          <p class="signin-status" data-status-message data-state="${escapeHtml(input.initialStatusState)}" role="status" aria-live="polite">${escapeHtml(input.initialStatus)}</p>
+        </div>
+        <div class="consent-actions">
+          ${cancelForm}
+          <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
+            <button class="button" type="submit">${escapeHtml(input.continueLabel)}</button>
+          </form>
+        </div>
         <noscript><p class="field-hint">${escapeHtml(input.noJavaScript)}</p></noscript>
         ${securityNote}
       </section>

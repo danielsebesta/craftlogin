@@ -32,6 +32,10 @@ class RecordingGateway implements OAuthInteractionGateway {
     return Promise.resolve(this.context);
   }
 
+  public abort(): Promise<string> {
+    return Promise.resolve('/oauth2/authorize?error=access_denied');
+  }
+
   public persistVerifiedResult(
     _request: IncomingMessage,
     _response: ServerResponse,
@@ -120,6 +124,7 @@ describe('OAuthInteractionService', (): void => {
       clientId: 'test-client',
       code: 'ABCDEFGH',
       interactionId: 'interaction-id',
+      scope: 'openid profile',
     });
     expect(store.allocations).toEqual(['interaction-id']);
   });
@@ -133,6 +138,34 @@ describe('OAuthInteractionService', (): void => {
     const { request, response } = createTransport();
 
     await expect(service.start(request, response, 'different-interaction')).rejects.toThrow(
+      'does not match the active session',
+    );
+  });
+
+  it('denies the pending request without persisting an OIDC login', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const service = new OAuthInteractionService(
+      gateway,
+      new FinalizationStore(),
+      new RecordingLogger(),
+    );
+    const { request, response } = createTransport();
+
+    await expect(service.abort(request, response)).resolves.toEqual({
+      redirectTo: '/oauth2/authorize?error=access_denied',
+    });
+    expect(gateway.persisted).toBe(0);
+  });
+
+  it('rejects an abort URL that is not bound to the active signed session', async (): Promise<void> => {
+    const service = new OAuthInteractionService(
+      new RecordingGateway(),
+      new FinalizationStore(),
+      new RecordingLogger(),
+    );
+    const { request, response } = createTransport();
+
+    await expect(service.abort(request, response, 'different-interaction')).rejects.toThrow(
       'does not match the active session',
     );
   });

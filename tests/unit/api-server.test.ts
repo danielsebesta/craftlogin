@@ -18,7 +18,10 @@ import {
   verificationStatusRateLimit,
 } from '../../src/api/rate-limit.js';
 import { createApiServer } from '../../src/api/server.js';
-import type { OAuthInteractionCompletion } from '../../src/oauth/interaction-service.js';
+import type {
+  OAuthInteractionAbortion,
+  OAuthInteractionCompletion,
+} from '../../src/oauth/interaction-service.js';
 import type { VerificationStatus } from '../../src/verification/types.js';
 
 const errorResponseSchema = z.object({
@@ -27,20 +30,31 @@ const errorResponseSchema = z.object({
 const avatarUuid = '853c80ef-3c37-49fd-aa49-938b674adae6';
 
 class InteractionStub implements ApiInteractionService {
+  public abortion: OAuthInteractionAbortion = { redirectTo: '/oauth2/error?error=access_denied' };
   public completion: OAuthInteractionCompletion = { status: 'pending' };
   public statusValue: VerificationStatus = { status: 'pending', code: 'ABCDEFGH' };
   public expectedIds: (string | undefined)[] = [];
+
+  public abort(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<OAuthInteractionAbortion> {
+    this.expectedIds.push(expectedInteractionId);
+    return Promise.resolve(this.abortion);
+  }
 
   public start(
     _request: IncomingMessage,
     _response: ServerResponse,
     expectedInteractionId?: string,
-  ): Promise<{ clientId: string; code: string; interactionId: string }> {
+  ): Promise<{ clientId: string; code: string; interactionId: string; scope: string }> {
     this.expectedIds.push(expectedInteractionId);
     return Promise.resolve({
       clientId: 'client-id',
       code: 'ABCDEFGH',
       interactionId: 'interaction-id',
+      scope: 'openid profile',
     });
   }
 
@@ -138,6 +152,24 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('ABCDEFGH.craftlogin.com');
     expect(response.body).toContain('Maps &amp; More');
     expect(response.body).not.toContain('Maps & More</strong>');
+    expect(response.body).toContain('This app will receive:');
+    expect(response.body).toContain('Your Minecraft identity (stable UUID)');
+    expect(response.body).toContain('Your current username and avatar');
+    expect(response.body).toContain('action="/interaction/interaction-id/abort"');
+    expect(response.body).toContain('>Allow</button>');
+    expect(interactions.expectedIds).toEqual(['interaction-id']);
+  });
+
+  it('denies the request through the abort endpoint with a client redirect', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    const server = await buildServer('test', interactions);
+
+    const denied = await server.inject({
+      method: 'POST',
+      url: '/interaction/interaction-id/abort',
+    });
+    expect(denied.statusCode).toBe(303);
+    expect(denied.headers.location).toBe('/oauth2/error?error=access_denied');
     expect(interactions.expectedIds).toEqual(['interaction-id']);
   });
 

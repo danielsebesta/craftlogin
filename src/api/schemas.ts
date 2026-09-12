@@ -274,6 +274,19 @@ export const interactionCompleteRouteSchema: FastifySchema = {
   tags: ['Interactions'],
 };
 
+export const interactionAbortRouteSchema: FastifySchema = {
+  description: operations.abortInteraction.description,
+  params: interactionParamsSchema,
+  response: {
+    303: { type: 'null' },
+    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.abortInteraction.summary,
+  tags: ['Interactions'],
+};
+
 export const interactionAssetRouteSchema: FastifySchema = {
   hide: true,
   response: {
@@ -546,6 +559,15 @@ export const developerAssetRouteSchema: FastifySchema = {
 };
 
 export const fontAssetRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const appAvatarAssetRouteSchema: FastifySchema = {
   hide: true,
   response: {
     200: { type: 'string' },

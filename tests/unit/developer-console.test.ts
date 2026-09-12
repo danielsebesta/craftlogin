@@ -226,7 +226,12 @@ describe('Developer Console', (): void => {
           ]),
         revoke: unavailable,
       },
-      interactions: { complete: unavailable, start: unavailable, status: unavailable },
+      interactions: {
+        abort: unavailable,
+        complete: unavailable,
+        start: unavailable,
+        status: unavailable,
+      },
       issuer: 'https://craftlogin.com',
       minecraftBaseDomain: 'craftlogin.com',
       ...(options.players === undefined

@@ -25,10 +25,15 @@ export interface PendingOAuthInteraction {
   readonly clientId: string;
   readonly code: string;
   readonly interactionId: string;
+  readonly scope: string;
 }
 
 export type OAuthInteractionCompletion =
   { status: 'complete'; redirectTo: string } | { status: 'expired' | 'pending' };
+
+export interface OAuthInteractionAbortion {
+  readonly redirectTo: string;
+}
 
 export class OAuthInteractionService {
   public constructor(
@@ -61,7 +66,18 @@ export class OAuthInteractionService {
       clientId: interaction.clientId,
       code,
       interactionId: interaction.interactionId,
+      scope: interaction.scope,
     };
+  }
+
+  public async abort(
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<OAuthInteractionAbortion> {
+    await this.requireLoginInteraction(request, response, expectedInteractionId);
+    const redirectTo = await this.gateway.abort(request, response);
+    return { redirectTo };
   }
 
   public async status(

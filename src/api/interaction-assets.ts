@@ -56,8 +56,10 @@ export const interactionScript = `
   // the visible form stays available as the manual fallback.
   form.hidden = true;
 
+  // Gentle polling: joining in Minecraft takes a while, so start slow and stay
+  // far below the per-minute status budget even across reloads and open tabs.
   let attempts = 0;
-  let delay = 900;
+  let delay = 2000;
 
   const show = (text, state) => {
     message.textContent = text;
@@ -73,7 +75,7 @@ export const interactionScript = `
       return;
     }
     window.setTimeout(poll, delay);
-    delay = Math.min(Math.round(delay * 1.25), 8000);
+    delay = Math.min(Math.round(delay * 1.2), 10_000);
   };
 
   const poll = async () => {

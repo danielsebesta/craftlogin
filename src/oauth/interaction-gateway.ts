@@ -21,6 +21,7 @@ export interface OAuthInteractionContext {
 }
 
 export interface OAuthInteractionGateway {
+  abort(request: IncomingMessage, response: ServerResponse): Promise<string>;
   inspect(request: IncomingMessage, response: ServerResponse): Promise<OAuthInteractionContext>;
   persistVerifiedResult(
     request: IncomingMessage,
@@ -33,6 +34,18 @@ export interface OAuthInteractionGateway {
 
 export class ProviderInteractionGateway implements OAuthInteractionGateway {
   public constructor(private readonly provider: Provider) {}
+
+  public async abort(
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<string> {
+    // A denied request is finished through oidc-provider itself so the client
+    // receives a standard access_denied error redirect. No grant is created.
+    return await this.provider.interactionResult(request, response, {
+      error: 'access_denied',
+      error_description: 'The user denied the authorization request.',
+    });
+  }
 
   public async inspect(
     request: IncomingMessage,
