@@ -790,7 +790,7 @@ export const rawAvatarRouteSchema: FastifySchema = {
 };
 
 export function renderedAvatarRouteSchema(
-  operation: 'avatarBody' | 'avatarBust' | 'avatarHead',
+  operation: 'avatarBody' | 'avatarBust' | 'avatarFace' | 'avatarHead',
 ): FastifySchema {
   return {
     description: operations[operation].description,

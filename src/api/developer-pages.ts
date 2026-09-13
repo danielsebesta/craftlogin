@@ -141,7 +141,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
       ? ''
       : `<p class="notice notice-error" role="alert">${escapeHtml(input.formError)}</p>`;
   const dashboardNotice = renderDashboardNotice(input.notice);
-  const identity = `<span class="console-identity"><span class="console-player"><span class="console-player-head" aria-hidden="true"><img src="/api/avatars/${encodeURIComponent(input.userUuid)}/head?size=64&amp;layers=all" alt="" width="32" height="32" decoding="async"></span><span><span class="visually-hidden">${escapeHtml(strings.dashboard.signedInAs)} </span><strong>${escapeHtml(input.username)}</strong></span></span><span>${escapeHtml(roleLabel)}</span><form action="/developers/logout" method="post">${csrfField(input.csrfToken)}<button class="button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button></form></span>`;
+  const identity = `<span class="console-identity"><span class="console-player"><span class="console-player-head" aria-hidden="true"><img src="/api/avatars/${encodeURIComponent(input.userUuid)}/face?size=32&amp;layers=all" alt="" width="32" height="32" decoding="async"></span><span><span class="visually-hidden">${escapeHtml(strings.dashboard.signedInAs)} </span><strong>${escapeHtml(input.username)}</strong></span></span><span>${escapeHtml(roleLabel)}</span><form action="/developers/logout" method="post">${csrfField(input.csrfToken)}<button class="button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button></form></span>`;
 
   return pageShell(
     strings.dashboard.heading,

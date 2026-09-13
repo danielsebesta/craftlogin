@@ -477,6 +477,7 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).toHaveProperty('/api/apps');
     expect(parsed.paths).toHaveProperty('/oauth2/token');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/skin');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/face');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/head');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/bust');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/body');

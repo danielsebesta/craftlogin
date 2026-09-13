@@ -75,6 +75,7 @@ describe('avatar routes', (): void => {
       method: 'GET',
       url: `/api/avatars/${compactPlayerUuid}/skin`,
     });
+    const face = await server.inject({ method: 'GET', url: `/api/avatars/${playerUuid}/face` });
     const head = await server.inject({ method: 'GET', url: `/api/avatars/${playerUuid}/head` });
     const bust = await server.inject({
       method: 'GET',
@@ -85,7 +86,7 @@ describe('avatar routes', (): void => {
       url: `/api/avatars/${playerUuid}/body?size=32`,
     });
 
-    for (const response of [raw, head, bust, body]) {
+    for (const response of [raw, face, head, bust, body]) {
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-type']).toContain('image/png');
       expect(response.headers.etag).toBe('"avatar-etag"');
@@ -96,6 +97,7 @@ describe('avatar routes', (): void => {
     expect(raw.headers['access-control-allow-origin']).toBe('*');
     expect(avatars.rawUuids).toEqual([playerUuid]);
     expect(avatars.renders).toEqual([
+      { options: { layers: 'all', size: 128, view: 'face' }, uuid: playerUuid },
       { options: { layers: 'all', size: 128, view: 'head' }, uuid: playerUuid },
       { options: { layers: 'base', size: 256, view: 'bust' }, uuid: playerUuid },
       { options: { layers: 'all', size: 32, view: 'body' }, uuid: playerUuid },
@@ -141,6 +143,7 @@ describe('avatar routes', (): void => {
     expect(raw.rawPayload).toEqual(skin);
 
     const requests: readonly { readonly size: AvatarSize; readonly view: AvatarView }[] = [
+      { size: 32, view: 'face' },
       { size: 32, view: 'head' },
       { size: 64, view: 'bust' },
       { size: 128, view: 'body' },

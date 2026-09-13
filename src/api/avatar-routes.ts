@@ -45,6 +45,7 @@ export interface AvatarRoutesOptions {
 
 export function registerAvatarRoutes(server: FastifyInstance, options: AvatarRoutesOptions): void {
   registerPublicPreflight(server, '/api/avatars/:uuid/skin');
+  registerPublicPreflight(server, '/api/avatars/:uuid/face');
   registerPublicPreflight(server, '/api/avatars/:uuid/head');
   registerPublicPreflight(server, '/api/avatars/:uuid/bust');
   registerPublicPreflight(server, '/api/avatars/:uuid/body');
@@ -77,6 +78,7 @@ export function registerAvatarRoutes(server: FastifyInstance, options: AvatarRou
     },
   );
 
+  registerRenderedRoute(server, options.avatars, 'face', 'avatarFace');
   registerRenderedRoute(server, options.avatars, 'head', 'avatarHead');
   registerRenderedRoute(server, options.avatars, 'bust', 'avatarBust');
   registerRenderedRoute(server, options.avatars, 'body', 'avatarBody');
@@ -99,7 +101,7 @@ function registerRenderedRoute(
   server: FastifyInstance,
   avatars: AvatarService,
   view: AvatarView,
-  operation: 'avatarBody' | 'avatarBust' | 'avatarHead',
+  operation: 'avatarBody' | 'avatarBust' | 'avatarFace' | 'avatarHead',
 ): void {
   server.get<{ Params: AvatarParams; Querystring: AvatarQuery }>(
     `/api/avatars/:uuid/${view}`,

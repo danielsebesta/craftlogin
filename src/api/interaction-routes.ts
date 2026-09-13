@@ -129,7 +129,7 @@ export function registerInteractionRoutes(
           ...(interaction.accountId === undefined
             ? {}
             : {
-                accountAvatarUrl: `/api/avatars/${encodeURIComponent(interaction.accountId)}/head?size=64&layers=all`,
+                accountAvatarUrl: `/api/avatars/${encodeURIComponent(interaction.accountId)}/face?size=64&layers=all`,
               }),
           scope: interaction.scope,
           ...(interaction.skinChallenge === undefined

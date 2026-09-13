@@ -73,16 +73,19 @@ only the signed Mojang skin descriptor and returns transparent PNGs:
 
 ```text
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/skin
+GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/face?size=32&layers=all
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/head?size=128&layers=all
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/bust?size=128&layers=all
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/body?size=256&layers=all
 ```
 
 Rendered views accept only `size=32|64|128|256` and `layers=base|all`; omitted values default to
-`128` and `all`. The `all` mode renders the hat, jacket, sleeves, and trousers as independently
-inflated Minecraft cuboids, including their transparent pixels, rather than flattening them onto the
-base texture. These four routes allow cross-origin image reads and publish cache validators; unknown
-skins and temporary Minecraft service failures return the shared JSON error envelope.
+`128` and `all`. The `face` view composites the exact front 8×8 face and transparent head overlay
+without interpolation, perspective, shading, or blur. For the three-dimensional views, `all` renders
+the hat, jacket, sleeves, and trousers as independently inflated Minecraft cuboids, including their
+transparent pixels, rather than flattening them onto the base texture. These five routes allow
+cross-origin image reads and publish cache validators; unknown skins and temporary Minecraft service
+failures return the shared JSON error envelope.
 
 ## Requirements
 

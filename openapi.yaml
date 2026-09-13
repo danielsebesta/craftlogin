@@ -204,6 +204,93 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{uuid}/face:
+    get:
+      summary: Render a Minecraft face
+      tags:
+        - Avatars
+      description: Render the front eight-by-eight face with its transparent Minecraft
+        head overlay.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            type: string
+          in: path
+          name: uuid
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
   /api/avatars/{uuid}/head:
     get:
       summary: Render a Minecraft head

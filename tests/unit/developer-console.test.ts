@@ -179,7 +179,7 @@ describe('Developer Console', (): void => {
     expect(response.body).toContain('Access registry');
     expect(response.body).toContain('<strong>VerifiedPlayer</strong>');
     expect(response.body).toContain(
-      `/api/avatars/${developerSession.userUuid}/head?size=64&amp;layers=all`,
+      `/api/avatars/${developerSession.userUuid}/face?size=32&amp;layers=all`,
     );
     expect(response.body).not.toContain('<span class="console-identity"><code>');
     expect(response.body).toContain(`value="${developerSession.csrfToken}"`);

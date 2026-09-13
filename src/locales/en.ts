@@ -28,6 +28,11 @@ export const english = {
           description: 'Render the Minecraft head, torso, and arms from its current signed skin.',
           summary: 'Render a Minecraft bust',
         },
+        avatarFace: {
+          description:
+            'Render the front eight-by-eight face with its transparent Minecraft head overlay.',
+          summary: 'Render a Minecraft face',
+        },
         avatarHead: {
           description: 'Render a three-dimensional Minecraft head from its current signed skin.',
           summary: 'Render a Minecraft head',

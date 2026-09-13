@@ -56,6 +56,10 @@ export class CanvasAvatarRenderer implements AvatarRenderer {
     model: MinecraftSkinModel,
     options: AvatarRenderOptions,
   ): Promise<Buffer> {
+    if (options.view === 'face') {
+      return await renderFace(texture, options.layers, options.size);
+    }
+
     const scene = buildAvatarScene(options.view, model, options.layers, texture.legacy);
     // Use the all-layers envelope for both modes so switching layers never
     // changes the camera framing and the outer cuboid visibly extends outward.
@@ -73,6 +77,57 @@ export class CanvasAvatarRenderer implements AvatarRenderer {
 
     return await canvas.encode('png');
   }
+}
+
+async function renderFace(
+  texture: SkinTexture,
+  layers: AvatarLayers,
+  outputSize: number,
+): Promise<Buffer> {
+  const canvas = createCanvas(outputSize, outputSize);
+  const context = canvas.getContext('2d');
+  const output = context.createImageData(outputSize, outputSize);
+
+  for (let y = 0; y < outputSize; y += 1) {
+    const sourceY = Math.floor((y * 8) / outputSize);
+    for (let x = 0; x < outputSize; x += 1) {
+      const sourceX = Math.floor((x * 8) / outputSize);
+      const base = { ...readColor(texture, 8 + sourceX, 8 + sourceY), alpha: 255 };
+      const color =
+        layers === 'all'
+          ? compositeColor(base, readColor(texture, 40 + sourceX, 8 + sourceY))
+          : base;
+      const outputIndex = (y * outputSize + x) * 4;
+      output.data[outputIndex] = color.red;
+      output.data[outputIndex + 1] = color.green;
+      output.data[outputIndex + 2] = color.blue;
+      output.data[outputIndex + 3] = color.alpha;
+    }
+  }
+
+  context.putImageData(output, 0, 0);
+  return await canvas.encode('png');
+}
+
+function compositeColor(base: Color, overlay: Color): Color {
+  const overlayAlpha = overlay.alpha / 255;
+  const baseAlpha = base.alpha / 255;
+  const alpha = overlayAlpha + baseAlpha * (1 - overlayAlpha);
+  if (alpha === 0) {
+    return { alpha: 0, blue: 0, green: 0, red: 0 };
+  }
+  return {
+    alpha: Math.round(alpha * 255),
+    blue: Math.round(
+      (overlay.blue * overlayAlpha + base.blue * baseAlpha * (1 - overlayAlpha)) / alpha,
+    ),
+    green: Math.round(
+      (overlay.green * overlayAlpha + base.green * baseAlpha * (1 - overlayAlpha)) / alpha,
+    ),
+    red: Math.round(
+      (overlay.red * overlayAlpha + base.red * baseAlpha * (1 - overlayAlpha)) / alpha,
+    ),
+  };
 }
 
 export function buildAvatarScene(

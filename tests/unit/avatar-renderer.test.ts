@@ -173,6 +173,39 @@ describe('Minecraft avatar geometry', (): void => {
     ).toBeGreaterThan(0);
   });
 
+  it('renders a crisp front face with the Minecraft head overlay and no interpolation', async (): Promise<void> => {
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
+        { color: { blue: 10, green: 230, red: 230 }, height: 8, width: 8, x: 40, y: 8 },
+        { color: { alpha: 0, blue: 0, green: 0, red: 0 }, height: 2, width: 2, x: 43, y: 11 },
+      ]),
+    );
+    const image = await decodePng(
+      await new CanvasAvatarRenderer().render(texture, 'classic', {
+        layers: 'all',
+        size: 32,
+        view: 'face',
+      }),
+    );
+
+    expect(readFixturePixel(image, 0, 0)).toEqual({
+      alpha: 255,
+      blue: 10,
+      green: 230,
+      red: 230,
+    });
+    expect(readFixturePixel(image, 12, 12)).toEqual({
+      alpha: 255,
+      blue: 20,
+      green: 20,
+      red: 220,
+    });
+    expect(readFixturePixel(image, 12, 12)).toEqual(readFixturePixel(image, 15, 15));
+    expect(readFixturePixel(image, 15, 15)).not.toEqual(readFixturePixel(image, 20, 20));
+    expect(readFixturePixel(image, 0, 0)).toEqual(readFixturePixel(image, 3, 3));
+  });
+
   it.each<{ readonly model: MinecraftSkinModel; readonly view: AvatarView }>([
     { model: 'slim', view: 'bust' },
     { model: 'classic', view: 'body' },
