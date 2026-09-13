@@ -51,6 +51,12 @@ export const skinVerificationStartRateLimit = {
   timeWindow: 60 * 60 * 1_000,
 };
 
+export const skinVerificationLookupRateLimit = {
+  groupId: 'skin-verification-lookup',
+  max: 30,
+  timeWindow: 60 * 1_000,
+};
+
 export const avatarRenderRateLimit = {
   groupId: 'avatar-render',
   max: 60,

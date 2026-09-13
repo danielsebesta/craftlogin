@@ -205,6 +205,15 @@ const verificationStatusSchema = {
   type: 'object',
 };
 
+const skinVerificationLookupQuerySchema = {
+  additionalProperties: false,
+  properties: {
+    username: { maxLength: 16, minLength: 3, pattern: '^[A-Za-z0-9_]+$', type: 'string' },
+  },
+  required: ['username'],
+  type: 'object',
+};
+
 const microsoftOAuthCallbackQuerySchema = {
   additionalProperties: false,
   oneOf: [
@@ -315,6 +324,41 @@ export const skinVerificationStartRouteSchema: FastifySchema = {
   },
   summary: operations.skinVerificationStart.summary,
   tags: ['Interactions'],
+};
+
+export const skinVerificationLookupRouteSchema: FastifySchema = {
+  hide: true,
+  params: interactionParamsSchema,
+  querystring: skinVerificationLookupQuerySchema,
+  response: {
+    200: {
+      oneOf: [
+        {
+          additionalProperties: false,
+          properties: { found: { const: false, type: 'boolean' } },
+          required: ['found'],
+          type: 'object',
+        },
+        {
+          additionalProperties: false,
+          properties: {
+            found: { const: true, type: 'boolean' },
+            hasSkin: { type: 'boolean' },
+            model: { enum: ['classic', 'slim'], type: 'string' },
+            username: { maxLength: 16, minLength: 3, type: 'string' },
+            uuid: { format: 'uuid', type: 'string' },
+          },
+          required: ['found', 'hasSkin', 'model', 'username', 'uuid'],
+          type: 'object',
+        },
+      ],
+    },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
 };
 
 export const microsoftOAuthStartRouteSchema: FastifySchema = {

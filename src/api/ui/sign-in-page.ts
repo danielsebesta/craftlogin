@@ -29,6 +29,7 @@ export interface SignInVerification {
   readonly initialStatus: string;
   readonly initialStatusState: string;
   readonly statusUrl: string;
+  readonly method?: 'online' | 'skin';
   readonly steps?: readonly string[];
   readonly stepsHeading?: string;
 }
@@ -36,6 +37,10 @@ export interface SignInVerification {
 export interface SignInSkinChallenge {
   readonly downloadLabel: string;
   readonly downloadUrl: string;
+  readonly originalDownloadLabel: string;
+  readonly originalDownloadUrl: string;
+  readonly changeSkinLabel: string;
+  readonly changeSkinUrl: string;
   readonly format: string;
   readonly formatLabel: string;
   readonly model: string;
@@ -52,11 +57,19 @@ export interface SignInSkinVerification {
   readonly error?: string;
   readonly heading: string;
   readonly hint: string;
+  readonly lookupFoundMessage?: string;
+  readonly lookupNotFoundMessage?: string;
+  readonly lookupSkinMessage?: string;
+  readonly lookupUnavailableMessage?: string;
+  readonly lookupUrl?: string;
+  readonly status?: SignInVerification;
+  readonly statusMessages?: SignInMessages;
   readonly startAction: string;
   readonly startLabel: string;
 }
 
 export interface SignInMicrosoftVerification {
+  readonly error?: string;
   readonly heading: string;
   readonly hint: string;
   readonly startAction: string;
@@ -80,10 +93,17 @@ export interface SignInPageInput {
   readonly heading: string;
   readonly lead: string;
   readonly messages: SignInMessages;
+  readonly methodChoices?: readonly {
+    readonly detail: string;
+    readonly id: string;
+    readonly label: string;
+  }[];
+  readonly methodHeading?: string;
   readonly microsoftVerification?: SignInMicrosoftVerification;
   readonly noJavaScript: string;
   readonly permissions: readonly ConsentPermission[];
   readonly securityNote?: string;
+  readonly selectedMethod?: string;
   readonly skinVerification?: SignInSkinVerification;
   readonly switchAccount?: SignInCancel;
   readonly verification?: SignInVerification;
@@ -143,20 +163,33 @@ function renderVerification(input: SignInPageInput): string {
           </div>`;
 
   return `
-        <div class="consent-verify">${steps}${address}
+        <div class="consent-verify" data-method-panel="${verification.method ?? 'online'}" data-verification data-status-url="${escapeHtml(verification.statusUrl)}" data-maximum-attempts="${MAXIMUM_POLL_ATTEMPTS.toString()}"
+          data-pending-message="${escapeHtml(input.messages.pending)}" data-verified-message="${escapeHtml(input.messages.verified)}"
+          data-expired-message="${escapeHtml(input.messages.expired)}" data-network-message="${escapeHtml(input.messages.networkError)}"
+          data-stopped-message="${escapeHtml(input.messages.stopped)}">${steps}${address}
           <p class="signin-status" data-status-message data-state="${escapeHtml(verification.initialStatusState)}" role="status" aria-live="polite">${escapeHtml(verification.initialStatus)}</p>
         </div>`;
 }
 
-function renderVerificationAttributes(input: SignInPageInput): string {
-  const verification = input.verification;
-  if (verification === undefined) {
+function renderMethodChooser(input: SignInPageInput): string {
+  if (input.methodChoices === undefined || input.methodChoices.length < 2) {
     return '';
   }
-  return ` data-verification data-status-url="${escapeHtml(verification.statusUrl)}" data-maximum-attempts="${MAXIMUM_POLL_ATTEMPTS.toString()}"
-      data-pending-message="${escapeHtml(input.messages.pending)}" data-verified-message="${escapeHtml(input.messages.verified)}"
-      data-expired-message="${escapeHtml(input.messages.expired)}" data-network-message="${escapeHtml(input.messages.networkError)}"
-      data-stopped-message="${escapeHtml(input.messages.stopped)}"`;
+  return `
+        <fieldset class="method-picker" data-method-picker>
+          <legend>${escapeHtml(input.methodHeading ?? '')}</legend>
+          <div class="method-options">
+            ${input.methodChoices
+              .map(
+                (choice): string => `
+            <label class="method-option">
+              <input type="radio" name="verification-method" value="${escapeHtml(choice.id)}" data-method-choice${input.selectedMethod === choice.id ? ' checked' : ''}>
+              <span><strong>${escapeHtml(choice.label)}</strong><small>${escapeHtml(choice.detail)}</small></span>
+            </label>`,
+              )
+              .join('')}
+          </div>
+        </fieldset>`;
 }
 
 function renderSkinVerification(input: SignInSkinVerification | undefined): string {
@@ -167,12 +200,13 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
   const challengeMarkup =
     challenge === undefined
       ? `
-          <form class="field" action="${escapeHtml(input.startAction)}" method="post">
+          <form class="field" action="${escapeHtml(input.startAction)}" method="post" data-skin-lookup${input.lookupUrl === undefined ? '' : ` data-lookup-url="${escapeHtml(input.lookupUrl)}"`} data-lookup-found-message="${escapeHtml(input.lookupFoundMessage ?? '')}" data-lookup-not-found-message="${escapeHtml(input.lookupNotFoundMessage ?? '')}" data-lookup-skin-message="${escapeHtml(input.lookupSkinMessage ?? '')}" data-lookup-unavailable-message="${escapeHtml(input.lookupUnavailableMessage ?? '')}">
             <label for="skin-username">${escapeHtml(input.accountLabel)}</label>
             <div class="skin-start-controls">
-              <input id="skin-username" name="username" type="text" minlength="3" maxlength="16" pattern="[A-Za-z0-9_]+" placeholder="${escapeHtml(input.accountPlaceholder)}" autocomplete="username" required>
-              <button class="button button-secondary" type="submit">${escapeHtml(input.startLabel)}</button>
+              <input id="skin-username" name="username" type="text" minlength="3" maxlength="16" pattern="[A-Za-z0-9_]+" placeholder="${escapeHtml(input.accountPlaceholder)}" autocomplete="username" required data-skin-username>
+              <button class="button button-secondary" type="submit" data-skin-start>${escapeHtml(input.startLabel)}</button>
             </div>
+            <p class="field-hint" data-skin-lookup-status role="status" aria-live="polite"></p>
           </form>`
       : `
           <dl class="summary-list">
@@ -192,14 +226,32 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
           <ol class="steps">
             ${challenge.steps.map((step): string => `<li>${escapeHtml(step)}</li>`).join('\n            ')}
           </ol>
-          <a class="button button-secondary skin-download" href="${escapeHtml(challenge.downloadUrl)}" download>${escapeHtml(challenge.downloadLabel)}</a>`;
+          <div class="skin-actions">
+            <a class="button button-secondary" href="${escapeHtml(challenge.originalDownloadUrl)}" download>${escapeHtml(challenge.originalDownloadLabel)}</a>
+            <a class="button button-secondary" href="${escapeHtml(challenge.downloadUrl)}" download>${escapeHtml(challenge.downloadLabel)}</a>
+            <a class="button button-secondary" href="${escapeHtml(challenge.changeSkinUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(challenge.changeSkinLabel)}</a>
+          </div>`;
 
   return `
-        <section class="skin-verification" aria-labelledby="skin-verification-heading">
+        <section class="skin-verification" data-method-panel="skin" aria-labelledby="skin-verification-heading">
           <h2 id="skin-verification-heading">${escapeHtml(input.heading)}</h2>
           <p class="field-hint">${escapeHtml(input.hint)}</p>
-          ${input.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(input.error)}</p>`}${challengeMarkup}
+          ${input.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(input.error)}</p>`}${challengeMarkup}${input.status === undefined ? '' : renderVerificationStatus(input.status, input.statusMessages)}
         </section>`;
+}
+
+function renderVerificationStatus(
+  verification: SignInVerification,
+  messages: SignInMessages | undefined,
+): string {
+  const fallback = messages ?? {
+    expired: verification.initialStatus,
+    networkError: verification.initialStatus,
+    pending: verification.initialStatus,
+    stopped: verification.initialStatus,
+    verified: verification.initialStatus,
+  };
+  return `<div class="signin-status" data-verification data-status-url="${escapeHtml(verification.statusUrl)}" data-maximum-attempts="${MAXIMUM_POLL_ATTEMPTS.toString()}" data-pending-message="${escapeHtml(fallback.pending)}" data-verified-message="${escapeHtml(fallback.verified)}" data-expired-message="${escapeHtml(fallback.expired)}" data-network-message="${escapeHtml(fallback.networkError)}" data-stopped-message="${escapeHtml(fallback.stopped)}" data-state="${escapeHtml(verification.initialStatusState)}" role="status" aria-live="polite"><span data-status-message>${escapeHtml(verification.initialStatus)}</span></div>`;
 }
 
 function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefined): string {
@@ -207,9 +259,10 @@ function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefi
     return '';
   }
   return `
-        <section class="microsoft-verification" aria-labelledby="microsoft-verification-heading">
+        <section class="microsoft-verification" data-method-panel="microsoft" aria-labelledby="microsoft-verification-heading">
           <h2 id="microsoft-verification-heading">${escapeHtml(input.heading)}</h2>
           <p class="field-hint">${escapeHtml(input.hint)}</p>
+          ${input.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(input.error)}</p>`}
           <form action="${escapeHtml(input.startAction)}" method="post">
             <button class="button button-secondary" type="submit">${escapeHtml(input.startLabel)}</button>
           </form>
@@ -241,7 +294,7 @@ export function renderSignInPage(input: SignInPageInput): string {
           <ul>
             ${input.permissions.map(renderPermission).join('\n            ')}
           </ul>
-        </div>${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
+        </div>${renderMethodChooser(input)}${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
         <div class="consent-actions">${renderFormAction(input.cancel)}${renderFormAction(input.switchAccount)}
           <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
             <button class="button" type="submit">${escapeHtml(input.continueLabel)}</button>
@@ -253,7 +306,7 @@ export function renderSignInPage(input: SignInPageInput): string {
     footer: [input.footer],
     header: { brand: input.brand },
     layout: 'narrow',
-    mainAttributes: renderVerificationAttributes(input),
+    ...(input.methodChoices === undefined ? {} : { mainAttributes: ' data-methods' }),
     mainClass: `page-column signin${singular ? ' signin-compact' : ''}`,
     script: '/assets/interaction.js',
     stylesheet: '/assets/interaction.css',

@@ -7,7 +7,10 @@ import {
   VerificationStateError,
 } from '../verification/redis-verification-store.js';
 import type { SkinVerificationChallenge } from '../verification/redis-skin-verification-store.js';
-import type { SkinVerificationService } from '../verification/skin-verification-service.js';
+import type {
+  SkinVerificationLookup,
+  SkinVerificationService,
+} from '../verification/skin-verification-service.js';
 import type { VerificationStatus } from '../verification/types.js';
 import type { DeveloperAccessRepository } from './developer-repository.js';
 import type {
@@ -48,7 +51,8 @@ export class DeveloperLoginService {
     private readonly skinVerification?: Pick<
       SkinVerificationService,
       'check' | 'getChallenge' | 'start'
-    >,
+    > &
+      Partial<Pick<SkinVerificationService, 'lookup'>>,
   ) {}
 
   public async resume(existingLoginId?: string): Promise<DeveloperLoginAttempt | undefined> {
@@ -110,6 +114,12 @@ export class DeveloperLoginService {
       throw new Error('Developer skin verification is unavailable');
     }
     return await this.skinVerification.check(loginId);
+  }
+
+  public async lookupSkin(username: string): Promise<SkinVerificationLookup | undefined> {
+    return this.skinVerification?.lookup === undefined
+      ? undefined
+      : await this.skinVerification.lookup(username);
   }
 
   public async complete(

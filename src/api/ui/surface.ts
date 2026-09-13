@@ -1,4 +1,16 @@
 export const signInSurfaceStyles = `
+.method-picker { display: grid; gap: var(--s3); padding: 0; border: 0; }
+.method-picker legend { margin-bottom: var(--s2); font-size: var(--t-lg); font-weight: 700; }
+.method-options { display: grid; gap: var(--s2); }
+.method-option { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s3); border: 1px solid var(--line); cursor: pointer; }
+.method-option:focus-within, .method-option:hover { border-color: var(--accent); }
+.method-option input { flex: none; margin-top: .25rem; }
+.method-option span { display: grid; gap: var(--s1); }
+.method-option small { color: var(--muted); }
+[data-method-panel][hidden] { display: none; }
+.skin-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.skin-lookup-status { min-height: 1.4em; }
+
 .signin {
   display: grid;
   gap: var(--s6);

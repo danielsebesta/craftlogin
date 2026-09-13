@@ -372,6 +372,21 @@ export const english = {
     scopeProfile: 'Your current username and avatar',
     interactionRequired: 'Minecraft account verification is required',
     lead: 'Confirm your Minecraft account below to continue.',
+    methodHeading: 'Choose how to verify',
+    methods: {
+      microsoft: {
+        detail: 'Confirm ownership through Microsoft without opening Minecraft.',
+        label: 'Sign in with Microsoft',
+      },
+      online: {
+        detail: 'Join a short-lived server address in Minecraft Java Edition.',
+        label: 'Join Minecraft server',
+      },
+      skin: {
+        detail: 'Change your skin briefly, then change it back when verification finishes.',
+        label: 'Verify with a skin',
+      },
+    },
     signedInAs: 'Signed in as',
     consentLead: 'Review what this application is requesting.',
     noJavaScript:
@@ -415,15 +430,22 @@ export const english = {
     skin: {
       accountLabel: 'Minecraft Java username',
       accountPlaceholder: 'Player',
+      changeSkinButton: 'Open Minecraft skin settings',
+      changeSkinUrl: 'https://www.minecraft.net/en-us/msaprofile/mygames/editskin',
       downloadButton: 'Download verification skin',
       formatLegacy: 'legacy 64×32',
       formatModern: 'modern 64×64',
       formatLabel: 'Skin format',
       heading: 'Or verify by changing your skin',
       headingAlternative: 'Verify by changing your skin',
+      lookupFound: 'Account found. Checking its current skin…',
+      lookupNotFound: 'No Minecraft account was found with that username.',
+      lookupSkin: 'Account found. A current skin is available.',
+      lookupUnavailable: 'Minecraft lookup is temporarily unavailable. Try again shortly.',
       modelClassic: 'classic / wide arms',
       modelSlim: 'slim arms',
       modelLabel: 'Arm model',
+      originalDownloadButton: 'Download current skin backup',
       startButton: 'Create verification skin',
       startHint:
         'CraftLogin adds a one-time marker to an unused 8×8 area. Existing custom skins keep every visible base and overlay pixel; accounts using only a default skin receive a temporary template.',

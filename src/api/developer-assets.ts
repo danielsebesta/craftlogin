@@ -1,5 +1,6 @@
 import { uiBaseStyles } from './ui/base.js';
 import { uiControlStyles } from './ui/controls.js';
+import { signInSurfaceStyles } from './ui/surface.js';
 
 /**
  * The console is a single wide column: an intro block, the applications table,
@@ -151,4 +152,4 @@ const consoleStyles = `
 }
 `;
 
-export const developerStyles = `${uiBaseStyles}${uiControlStyles}${consoleStyles}`;
+export const developerStyles = `${uiBaseStyles}${uiControlStyles}${signInSurfaceStyles}${consoleStyles}`;

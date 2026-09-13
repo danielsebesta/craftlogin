@@ -51,6 +51,13 @@ export class SkinVerificationPlayerNotFoundError extends Error {
   public override readonly name = 'SkinVerificationPlayerNotFoundError';
 }
 
+export interface SkinVerificationLookup {
+  readonly hasSkin: boolean;
+  readonly model: 'classic' | 'slim';
+  readonly username: string;
+  readonly uuid: string;
+}
+
 export class SkinVerificationResolutionError extends Error {
   public override readonly name = 'SkinVerificationResolutionError';
 }
@@ -101,9 +108,31 @@ export class SkinVerificationService {
         height: marked.height,
         markerHash: marked.markerHash,
         model: marked.height === 32 ? 'classic' : (profile.texture?.model ?? 'classic'),
+        originalBody: source,
         username: profile.username,
         userUuid: profile.uuid,
       });
+    } catch (error: unknown) {
+      throw normalizeMinecraftError(error);
+    }
+  }
+
+  public async lookup(username: string): Promise<SkinVerificationLookup | undefined> {
+    try {
+      const namedProfile = await this.players.findProfileByName(username);
+      if (namedProfile === undefined) {
+        return undefined;
+      }
+      const profile = await this.players.findProfileById(namedProfile.uuid);
+      if (profile?.uuid !== namedProfile.uuid) {
+        return undefined;
+      }
+      return {
+        hasSkin: profile.texture !== undefined,
+        model: profile.texture?.model ?? 'classic',
+        username: profile.username,
+        uuid: profile.uuid,
+      };
     } catch (error: unknown) {
       throw normalizeMinecraftError(error);
     }

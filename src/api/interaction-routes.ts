@@ -18,7 +18,11 @@ import { ApiError } from './errors.js';
 import { interactionScript, interactionStyles } from './interaction-assets.js';
 import { renderInteractionPage } from './interaction-page.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
-import { skinVerificationStartRateLimit, verificationStatusRateLimit } from './rate-limit.js';
+import {
+  skinVerificationLookupRateLimit,
+  skinVerificationStartRateLimit,
+  verificationStatusRateLimit,
+} from './rate-limit.js';
 import {
   interactionAbortRouteSchema,
   interactionAssetRouteSchema,
@@ -26,6 +30,7 @@ import {
   interactionPageRouteSchema,
   interactionStatusRouteSchema,
   skinVerificationDownloadRouteSchema,
+  skinVerificationLookupRouteSchema,
   skinVerificationStartRouteSchema,
   skinVerificationStatusRouteSchema,
 } from './schemas.js';
@@ -35,6 +40,10 @@ interface InteractionParams {
 }
 
 interface SkinVerificationBody {
+  readonly username: string;
+}
+
+interface SkinVerificationLookupQuery {
   readonly username: string;
 }
 
@@ -74,6 +83,14 @@ export interface ApiInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<VerificationStatus>;
+  lookupSkin?(
+    request: IncomingMessage,
+    response: ServerResponse,
+    username: string,
+    expectedInteractionId?: string,
+  ): Promise<
+    import('../verification/skin-verification-service.js').SkinVerificationLookup | undefined
+  >;
   getSkinChallenge?(
     request: IncomingMessage,
     response: ServerResponse,
@@ -217,6 +234,51 @@ export function registerInteractionRoutes(
     },
   );
 
+  server.get<{ Params: InteractionParams; Querystring: SkinVerificationLookupQuery }>(
+    '/interaction/:uid/skin/lookup',
+    {
+      config: { rateLimit: skinVerificationLookupRateLimit },
+      schema: skinVerificationLookupRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      if (options.interactions.lookupSkin === undefined) {
+        throw new ApiError(501, 'internal_error', english.api.errors.internal);
+      }
+      try {
+        const profile = await options.interactions.lookupSkin(
+          request.raw,
+          reply.raw,
+          request.query.username,
+          request.params.uid,
+        );
+        void reply.header('cache-control', 'no-store');
+        await reply.send(
+          profile === undefined
+            ? { found: false }
+            : {
+                found: true,
+                hasSkin: profile.hasSkin,
+                model: profile.model,
+                username: profile.username,
+                uuid: profile.uuid,
+              },
+        );
+      } catch (error: unknown) {
+        if (error instanceof SkinVerificationResolutionError) {
+          throw new ApiError(
+            503,
+            'service_unavailable',
+            english.api.errors.minecraftSkinUnavailable,
+            {
+              cause: error,
+            },
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
   server.get<{ Params: InteractionParams }>(
     '/interaction/:uid/skin/download',
     { schema: skinVerificationDownloadRouteSchema },
@@ -238,6 +300,30 @@ export function registerInteractionRoutes(
         'x-content-type-options': 'nosniff',
       });
       await reply.type('image/png').send(challenge.body);
+    },
+  );
+
+  server.get<{ Params: InteractionParams }>(
+    '/interaction/:uid/skin/original-download',
+    { schema: skinVerificationDownloadRouteSchema },
+    async (request, reply): Promise<void> => {
+      if (options.interactions.getSkinChallenge === undefined) {
+        throw new ApiError(501, 'internal_error', english.api.errors.internal);
+      }
+      const challenge = await options.interactions.getSkinChallenge(
+        request.raw,
+        reply.raw,
+        request.params.uid,
+      );
+      if (challenge?.originalBody === undefined) {
+        throw new ApiError(404, 'not_found', english.api.errors.notFound);
+      }
+      void reply.headers({
+        'cache-control': 'no-store',
+        'content-disposition': `attachment; filename="craftlogin-${challenge.username}-original.png"`,
+        'x-content-type-options': 'nosniff',
+      });
+      await reply.type('image/png').send(challenge.originalBody);
     },
   );
 

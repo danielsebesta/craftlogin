@@ -6,6 +6,7 @@ import type {
 } from '../verification/redis-verification-store.js';
 import type { VerificationStatus } from '../verification/types.js';
 import type { SkinVerificationChallenge } from '../verification/redis-skin-verification-store.js';
+import type { SkinVerificationLookup } from '../verification/skin-verification-service.js';
 import { getErrorKind } from '../logging/error-kind.js';
 import type { OAuthInteractionContext, OAuthInteractionGateway } from './interaction-gateway.js';
 import { OAuthInteractionStateError } from './interaction-gateway.js';
@@ -26,6 +27,7 @@ interface VerificationInteractionStore {
 interface SkinInteractionVerification {
   check(interactionId: string): Promise<VerificationStatus>;
   getChallenge(interactionId: string): Promise<SkinVerificationChallenge | undefined>;
+  lookup?(username: string): Promise<SkinVerificationLookup | undefined>;
   start(interactionId: string, username: string): Promise<SkinVerificationChallenge>;
 }
 
@@ -172,6 +174,26 @@ export class OAuthInteractionService {
     return toSkinInteractionChallenge(
       await this.skinVerification.start(interaction.interactionId, username),
     );
+  }
+
+  public async lookupSkin(
+    request: IncomingMessage,
+    response: ServerResponse,
+    username: string,
+    expectedInteractionId?: string,
+  ): Promise<SkinVerificationLookup | undefined> {
+    const interaction = await this.requireLoginInteraction(
+      request,
+      response,
+      expectedInteractionId,
+    );
+    if (
+      this.skinVerification?.lookup === undefined ||
+      !this.allowsSkinVerification(interaction)
+    ) {
+      throw new OAuthInteractionStateError('Skin verification is not available');
+    }
+    return await this.skinVerification.lookup(username);
   }
 
   public async getSkinChallenge(

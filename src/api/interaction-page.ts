@@ -49,27 +49,44 @@ export function renderInteractionPage(input: InteractionPageInput): string {
   const isConsent = input.kind === 'consent';
   const allowsOnlineVerification = input.allowsOnlineVerification !== false;
   const skinChallenge = input.skinChallenge;
-  const usesSkinVerification = skinChallenge !== undefined;
   // A client that requests only the skin verification method never sees the
   // Minecraft join address, so its status is the skin status.
   const verification =
-    isConsent || (!allowsOnlineVerification && !usesSkinVerification)
+    isConsent || !allowsOnlineVerification
       ? undefined
       : {
-          ...(allowsOnlineVerification
-            ? {
-                address: `${input.code ?? ''}.${input.minecraftBaseDomain}`,
-                addressLabel: strings.addressLabel,
-                steps: strings.steps,
-                stepsHeading: strings.stepsHeading,
-              }
-            : {}),
-          initialStatus: usesSkinVerification ? skin.statusPending : strings.status.pending,
+          address: `${input.code ?? ''}.${input.minecraftBaseDomain}`,
+          addressLabel: strings.addressLabel,
+          initialStatus: strings.status.pending,
           initialStatusState: 'pending',
-          statusUrl: usesSkinVerification
-            ? `${interactionPath}/skin/status`
-            : `${interactionPath}/status`,
+          statusUrl: `${interactionPath}/status`,
+          steps: strings.steps,
+          stepsHeading: strings.stepsHeading,
         };
+
+  const methodChoices = [
+    ...(allowsOnlineVerification
+      ? [
+          {
+            detail: strings.methods.online.detail,
+            id: 'online',
+            label: strings.methods.online.label,
+          },
+        ]
+      : []),
+    ...(input.allowsMicrosoftVerification === true
+      ? [
+          {
+            detail: strings.methods.microsoft.detail,
+            id: 'microsoft',
+            label: strings.methods.microsoft.label,
+          },
+        ]
+      : []),
+    ...(input.allowsSkinVerification === true
+      ? [{ detail: strings.methods.skin.detail, id: 'skin', label: strings.methods.skin.label }]
+      : []),
+  ];
 
   return renderSignInPage({
     ...(input.accountAvatarUrl === undefined ? {} : { accountAvatarUrl: input.accountAvatarUrl }),
@@ -92,6 +109,9 @@ export function renderInteractionPage(input: InteractionPageInput): string {
         ? strings.status
         : { ...strings.status, pending: skin.statusPending },
     noJavaScript: strings.noJavaScript,
+    ...(methodChoices.length < 2 ? {} : { methodChoices }),
+    methodHeading: strings.methodHeading,
+    ...(skinChallenge === undefined ? {} : { selectedMethod: 'skin' }),
     ...(isConsent || input.allowsMicrosoftVerification !== true
       ? {}
       : {
@@ -116,14 +136,34 @@ export function renderInteractionPage(input: InteractionPageInput): string {
             accountPlaceholder: skin.accountPlaceholder,
             heading: allowsOnlineVerification ? skin.heading : skin.headingAlternative,
             hint: skin.startHint,
+            lookupFoundMessage: skin.lookupFound,
+            lookupNotFoundMessage: skin.lookupNotFound,
+            lookupSkinMessage: skin.lookupSkin,
+            lookupUnavailableMessage: skin.lookupUnavailable,
+            lookupUrl: `${interactionPath}/skin/lookup`,
+            statusMessages: strings.status,
+            ...(skinChallenge === undefined
+              ? {}
+              : {
+                  status: {
+                    initialStatus: skin.statusPending,
+                    initialStatusState: 'pending',
+                    method: 'skin' as const,
+                    statusUrl: `${interactionPath}/skin/status`,
+                  },
+                }),
             startAction: `${interactionPath}/skin/start`,
             startLabel: skin.startButton,
             ...(skinChallenge === undefined
               ? {}
               : {
                   challenge: {
+                    changeSkinLabel: skin.changeSkinButton,
+                    changeSkinUrl: skin.changeSkinUrl,
                     downloadLabel: skin.downloadButton,
                     downloadUrl: `${interactionPath}/skin/download`,
+                    originalDownloadLabel: skin.originalDownloadButton,
+                    originalDownloadUrl: `${interactionPath}/skin/original-download`,
                     format: skinChallenge.height === 32 ? skin.formatLegacy : skin.formatModern,
                     formatLabel: skin.formatLabel,
                     model: skinChallenge.model === 'slim' ? skin.modelSlim : skin.modelClassic,

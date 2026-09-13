@@ -23,6 +23,7 @@ const storedChallengeSchema = z.object({
   height: z.enum(['32', '64']),
   markerHash: z.string().regex(HASH_PATTERN),
   model: z.enum(['classic', 'slim']),
+  originalBody: z.string().optional(),
   status: z.enum(['pending', 'checking']),
   username: authenticatedMinecraftPlayerSchema.shape.username,
   userUuid: authenticatedMinecraftPlayerSchema.shape.uuid,
@@ -39,10 +40,11 @@ redis.call(
   'username', ARGV[2],
   'markerHash', ARGV[3],
   'body', ARGV[4],
-  'height', ARGV[5],
-  'model', ARGV[6]
+  'originalBody', ARGV[5],
+  'height', ARGV[6],
+  'model', ARGV[7]
 )
-redis.call('PEXPIRE', KEYS[1], ARGV[7])
+redis.call('PEXPIRE', KEYS[1], ARGV[8])
 return 1
 `;
 
@@ -99,6 +101,8 @@ export interface SkinVerificationChallengeInput {
   readonly height: 32 | 64;
   readonly markerHash: string;
   readonly model: 'classic' | 'slim';
+  /** The unmodified source skin, retained only for this five-minute challenge. */
+  readonly originalBody?: Buffer;
   readonly userUuid: string;
   readonly username: string;
 }
@@ -140,6 +144,7 @@ export class RedisSkinVerificationStore {
       challenge.username,
       challenge.markerHash,
       challenge.body.toString('base64'),
+      challenge.originalBody?.toString('base64') ?? '',
       challenge.height,
       challenge.model,
       CHALLENGE_TTL_MS,
@@ -166,6 +171,9 @@ export class RedisSkinVerificationStore {
       height: Number(parsed.data.height) === 32 ? 32 : 64,
       markerHash: parsed.data.markerHash,
       model: parsed.data.model,
+      ...(parsed.data.originalBody === undefined || parsed.data.originalBody.length === 0
+        ? {}
+        : { originalBody: Buffer.from(parsed.data.originalBody, 'base64') }),
       status: parsed.data.status,
       username: parsed.data.username,
       userUuid: parsed.data.userUuid,
@@ -209,10 +217,18 @@ function parseChallengeInput(
   input: SkinVerificationChallengeInput,
 ): SkinVerificationChallengeInput {
   const parsed = storedChallengeSchema
-    .omit({ status: true, body: true, height: true })
+    .omit({ originalBody: true, status: true, body: true, height: true })
     .parse(input);
   if (input.body.length === 0) {
     throw new SkinVerificationStateError('The skin verification image is invalid');
   }
-  return { ...parsed, body: input.body, height: input.height };
+  if (input.originalBody?.length === 0) {
+    throw new SkinVerificationStateError('The original Minecraft skin image is invalid');
+  }
+  return {
+    ...parsed,
+    body: input.body,
+    height: input.height,
+    ...(input.originalBody === undefined ? {} : { originalBody: input.originalBody }),
+  };
 }

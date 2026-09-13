@@ -1,5 +1,6 @@
+import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ZodError } from 'zod';
+import { ZodError, z } from 'zod';
 
 import type { AppManager } from '../developers/app-management.js';
 import type {
@@ -7,7 +8,7 @@ import type {
   DeveloperRole,
 } from '../developers/developer-repository.js';
 import { LastAdministratorError } from '../developers/developer-repository.js';
-import type { DeveloperLoginService } from '../developers/login-service.js';
+import { developerLoginIdSchema, type DeveloperLoginService } from '../developers/login-service.js';
 import { ApiError } from './errors.js';
 import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
@@ -16,6 +17,14 @@ import {
   SkinVerificationPlayerNotFoundError,
   SkinVerificationResolutionError,
 } from '../verification/skin-verification-service.js';
+import {
+  MicrosoftJavaOwnershipRequiredError,
+  MicrosoftOAuthUnavailableError,
+} from '../verification/microsoft-oauth-client.js';
+import {
+  MicrosoftOAuthVerificationService,
+  MicrosoftVerificationResolutionError,
+} from '../verification/microsoft-oauth-verification-service.js';
 import type { AppRegistrar, AppRegistrationInput } from './app-registration.js';
 import type { CurrentUser, CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
@@ -43,6 +52,8 @@ import {
   appRegistrationRateLimit,
   developerLoginCreationRateLimit,
   developerLoginPageRateLimit,
+  microsoftVerificationRateLimit,
+  skinVerificationLookupRateLimit,
   skinVerificationStartRateLimit,
   verificationStatusRateLimit,
 } from './rate-limit.js';
@@ -57,6 +68,9 @@ import {
   developerLoginPageRouteSchema,
   developerLoginStatusRouteSchema,
   developerLoginSkinDownloadRouteSchema,
+  skinVerificationLookupRouteSchema,
+  microsoftOAuthCallbackRouteSchema,
+  microsoftOAuthStartRouteSchema,
   developerLoginSkinStartRouteSchema,
   developerLoginSkinStatusRouteSchema,
   developerLogoutRouteSchema,
@@ -93,7 +107,14 @@ interface DashboardQuery {
 }
 
 interface DeveloperLoginQuery {
+  readonly microsoftError?: 'ownership' | 'unavailable';
   readonly skinError?: 'not-found' | 'unavailable';
+}
+
+interface DeveloperMicrosoftCallbackQuery {
+  readonly code?: string;
+  readonly error?: string;
+  readonly state: string;
 }
 
 interface SkinVerificationBody {
@@ -106,9 +127,17 @@ export interface DeveloperRoutesOptions {
   readonly authentication: DeveloperAuthentication;
   readonly developers: DeveloperAccessRepository;
   readonly logins: Pick<DeveloperLoginService, 'complete' | 'create' | 'resume' | 'status'> &
-    Partial<Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'startSkin'>>;
+    Partial<
+      Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'lookupSkin' | 'startSkin'>
+    >;
   readonly logger: FastifyBaseLogger;
   readonly minecraftBaseDomain: string;
+  readonly microsoftOAuth?: {
+    readonly verification: Pick<
+      MicrosoftOAuthVerificationService,
+      'createAuthorizationUrl' | 'verify'
+    >;
+  };
   readonly players?: MinecraftPlayerLookup;
   readonly users: CurrentUserLookup;
 }
@@ -146,7 +175,13 @@ export function registerDeveloperRoutes(
       await reply
         .type('text/html; charset=utf-8')
         .send(
-          renderDeveloperLoginPage(attempt, options.minecraftBaseDomain, request.query.skinError),
+          renderDeveloperLoginPage(
+            attempt,
+            options.minecraftBaseDomain,
+            request.query.skinError,
+            request.query.microsoftError,
+            options.microsoftOAuth !== undefined,
+          ),
         );
     },
   );
@@ -166,6 +201,139 @@ export function registerDeveloperRoutes(
       }
       const status = await options.logins.status(loginId);
       await reply.send({ status: status.status });
+    },
+  );
+
+  server.get<{ Querystring: { readonly username: string } }>(
+    '/developers/login/skin/lookup',
+    {
+      config: { rateLimit: skinVerificationLookupRateLimit },
+      schema: skinVerificationLookupRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
+      if (loginId === undefined || options.logins.lookupSkin === undefined) {
+        void reply.header('cache-control', 'no-store');
+        await reply.send({ found: false });
+        return;
+      }
+      if ((await options.logins.status(loginId)).status !== 'pending') {
+        void reply.header('cache-control', 'no-store');
+        await reply.send({ found: false });
+        return;
+      }
+      const profile = await options.logins.lookupSkin(request.query.username);
+      void reply.header('cache-control', 'no-store');
+      await reply.send(
+        profile === undefined
+          ? { found: false }
+          : {
+              found: true,
+              hasSkin: profile.hasSkin,
+              model: profile.model,
+              username: profile.username,
+              uuid: profile.uuid,
+            },
+      );
+    },
+  );
+
+  server.post(
+    '/developers/login/microsoft/start',
+    {
+      config: { rateLimit: microsoftVerificationRateLimit },
+      schema: microsoftOAuthStartRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      if (options.microsoftOAuth === undefined) {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
+      if (loginId === undefined || (await options.logins.status(loginId)).status !== 'pending') {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      const transaction = createDeveloperMicrosoftTransaction(loginId);
+      void reply.setCookie(
+        transaction.cookieName,
+        encodeDeveloperMicrosoftTransaction(transaction),
+        {
+          httpOnly: true,
+          maxAge: 300,
+          path: '/developers/login/microsoft/callback',
+          priority: 'high',
+          sameSite: 'lax',
+          secure: true,
+          signed: true,
+        },
+      );
+      await reply.redirect(
+        options.microsoftOAuth.verification.createAuthorizationUrl(
+          transaction.state,
+          transaction.codeChallenge,
+        ),
+        303,
+      );
+    },
+  );
+
+  server.get<{ Querystring: DeveloperMicrosoftCallbackQuery }>(
+    '/developers/login/microsoft/callback',
+    {
+      config: { rateLimit: microsoftVerificationRateLimit },
+      schema: microsoftOAuthCallbackRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      if (options.microsoftOAuth === undefined) {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      const transaction = readDeveloperMicrosoftTransaction(
+        request.cookies,
+        request.query.state,
+        (value): ReturnType<typeof request.unsignCookie> => request.unsignCookie(value),
+      );
+      void reply.clearCookie(transaction.cookieName, {
+        httpOnly: true,
+        path: '/developers/login/microsoft/callback',
+        sameSite: 'lax',
+        secure: true,
+      });
+      if (request.query.error !== undefined) {
+        await reply.redirect(
+          request.query.error === 'access_denied'
+            ? '/developers/login'
+            : '/developers/login?microsoftError=unavailable',
+          303,
+        );
+        return;
+      }
+      if (request.query.code === undefined) {
+        await reply.redirect('/developers/login?microsoftError=unavailable', 303);
+        return;
+      }
+      try {
+        await options.microsoftOAuth.verification.verify(
+          transaction.loginId,
+          request.query.code,
+          transaction.codeVerifier,
+        );
+        await reply.redirect('/developers/login', 303);
+      } catch (error: unknown) {
+        const destination =
+          error instanceof MicrosoftJavaOwnershipRequiredError
+            ? '/developers/login?microsoftError=ownership'
+            : error instanceof MicrosoftOAuthUnavailableError ||
+                error instanceof MicrosoftVerificationResolutionError
+              ? '/developers/login?microsoftError=unavailable'
+              : undefined;
+        if (destination !== undefined) {
+          await reply.redirect(destination, 303);
+          return;
+        }
+        throw error;
+      }
     },
   );
 
@@ -223,6 +391,29 @@ export function registerDeveloperRoutes(
         'x-content-type-options': 'nosniff',
       });
       await reply.type('image/png').send(challenge.body);
+    },
+  );
+
+  server.get(
+    '/developers/login/skin/original-download',
+    { schema: developerLoginSkinDownloadRouteSchema },
+    async (request, reply): Promise<void> => {
+      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
+      if (loginId === undefined || options.logins.getSkinChallenge === undefined) {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      const challenge = await options.logins.getSkinChallenge(loginId);
+      if (challenge?.originalBody === undefined) {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      void reply.headers({
+        'cache-control': 'no-store',
+        'content-disposition': `attachment; filename="craftlogin-${challenge.username}-original.png"`,
+        'x-content-type-options': 'nosniff',
+      });
+      await reply.type('image/png').send(challenge.originalBody);
     },
   );
 
@@ -513,6 +704,74 @@ export function registerDeveloperRoutes(
       await reply.type('text/css; charset=utf-8').send(developerStyles);
     },
   );
+}
+
+interface DeveloperMicrosoftTransaction {
+  readonly codeChallenge: string;
+  readonly codeVerifier: string;
+  readonly cookieName: string;
+  readonly loginId: string;
+  readonly state: string;
+}
+
+function createDeveloperMicrosoftTransaction(loginId: string): DeveloperMicrosoftTransaction {
+  const state = randomBytes(32).toString('base64url');
+  const codeVerifier = randomBytes(32).toString('base64url');
+  return {
+    codeChallenge: createHash('sha256').update(codeVerifier, 'ascii').digest('base64url'),
+    codeVerifier,
+    cookieName: `__Secure-craftlogin_developer_ms_${state}`,
+    loginId,
+    state,
+  };
+}
+
+function encodeDeveloperMicrosoftTransaction(transaction: DeveloperMicrosoftTransaction): string {
+  return Buffer.from(
+    JSON.stringify({ codeVerifier: transaction.codeVerifier, loginId: transaction.loginId }),
+    'utf8',
+  ).toString('base64url');
+}
+
+function readDeveloperMicrosoftTransaction(
+  cookies: Readonly<Record<string, string | undefined>>,
+  state: string,
+  unsignCookie: (value: string) => {
+    readonly renew: boolean;
+    readonly valid: boolean;
+    readonly value: string | null;
+  },
+): Pick<DeveloperMicrosoftTransaction, 'codeVerifier' | 'cookieName' | 'loginId' | 'state'> {
+  const cookieName = `__Secure-craftlogin_developer_ms_${state}`;
+  const signedValue = cookies[cookieName];
+  if (signedValue === undefined) {
+    throw new ApiError(400, 'bad_request', english.api.errors.microsoftStateInvalid);
+  }
+  const unsigned = unsignCookie(signedValue);
+  if (!unsigned.valid || unsigned.value === null) {
+    throw new ApiError(400, 'bad_request', english.api.errors.microsoftStateInvalid);
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(Buffer.from(unsigned.value, 'base64url').toString('utf8'));
+  } catch {
+    throw new ApiError(400, 'bad_request', english.api.errors.microsoftStateInvalid);
+  }
+  const parsed = z
+    .object({
+      codeVerifier: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+      loginId: developerLoginIdSchema,
+    })
+    .safeParse(decoded);
+  if (!parsed.success) {
+    throw new ApiError(400, 'bad_request', english.api.errors.microsoftStateInvalid);
+  }
+  return {
+    codeVerifier: parsed.data.codeVerifier,
+    cookieName,
+    loginId: parsed.data.loginId,
+    state,
+  };
 }
 
 async function requireSession(

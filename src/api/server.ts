@@ -54,7 +54,9 @@ export interface ApiServerOptions {
     DeveloperLoginService,
     'complete' | 'create' | 'resume' | 'status'
   > &
-    Partial<Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'startSkin'>>;
+    Partial<
+      Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'lookupSkin' | 'startSkin'>
+    >;
   readonly interactions: ApiInteractionService;
   readonly issuer: string;
   readonly logger?: FastifyBaseLogger;
@@ -136,6 +138,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     logins: options.developerLogins,
     logger: server.log,
     minecraftBaseDomain: options.minecraftBaseDomain,
+    ...(options.microsoftOAuth === undefined ? {} : { microsoftOAuth: options.microsoftOAuth }),
     users: options.users,
     ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });

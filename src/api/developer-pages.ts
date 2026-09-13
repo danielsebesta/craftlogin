@@ -29,6 +29,8 @@ export function renderDeveloperLoginPage(
   attempt: DeveloperLoginAttempt,
   minecraftBaseDomain: string,
   skinError?: 'not-found' | 'unavailable',
+  microsoftError?: 'ownership' | 'unavailable',
+  microsoftEnabled = false,
 ): string {
   const developer = english.developer;
   const interaction = english.interaction;
@@ -41,6 +43,23 @@ export function renderDeveloperLoginPage(
         : developer.login.addressPending
       : `${attempt.code}.${minecraftBaseDomain}`;
   const verified = attempt.status === 'verified';
+  const methodChoices = [
+    {
+      detail: interaction.methods.online.detail,
+      id: 'online',
+      label: interaction.methods.online.label,
+    },
+    ...(microsoftEnabled
+      ? [
+          {
+            detail: interaction.methods.microsoft.detail,
+            id: 'microsoft',
+            label: interaction.methods.microsoft.label,
+          },
+        ]
+      : []),
+    { detail: interaction.methods.skin.detail, id: 'skin', label: interaction.methods.skin.label },
+  ];
 
   return renderSignInPage({
     accountLabel: interaction.signedInAs,
@@ -60,6 +79,24 @@ export function renderDeveloperLoginPage(
         ? interaction.status
         : { ...interaction.status, pending: skin.statusPending },
     noJavaScript: interaction.noJavaScript,
+    methodChoices,
+    methodHeading: interaction.methodHeading,
+    ...(skinChallenge === undefined ? {} : { selectedMethod: 'skin' }),
+    ...(microsoftEnabled
+      ? {
+          microsoftVerification: {
+            ...(microsoftError === 'ownership'
+              ? { error: interaction.microsoft.ownershipLead }
+              : microsoftError === 'unavailable'
+                ? { error: english.api.errors.microsoftSignInUnavailable }
+                : {}),
+            heading: interaction.microsoft.heading,
+            hint: interaction.microsoft.hint,
+            startAction: '/developers/login/microsoft/start',
+            startLabel: interaction.microsoft.startButton,
+          },
+        }
+      : {}),
     permissions: [{ kind: 'text', text: developer.login.permission }],
     securityNote: interaction.securityNote,
     skinVerification: {
@@ -67,6 +104,12 @@ export function renderDeveloperLoginPage(
       accountPlaceholder: skin.accountPlaceholder,
       heading: skin.headingAlternative,
       hint: skin.startHint,
+      lookupFoundMessage: skin.lookupFound,
+      lookupNotFoundMessage: skin.lookupNotFound,
+      lookupSkinMessage: skin.lookupSkin,
+      lookupUnavailableMessage: skin.lookupUnavailable,
+      lookupUrl: '/developers/login/skin/lookup',
+      statusMessages: interaction.status,
       startAction: '/developers/login/skin/start',
       startLabel: skin.startButton,
       ...(skinError === undefined
@@ -81,8 +124,12 @@ export function renderDeveloperLoginPage(
         ? {}
         : {
             challenge: {
+              changeSkinLabel: skin.changeSkinButton,
+              changeSkinUrl: skin.changeSkinUrl,
               downloadLabel: skin.downloadButton,
               downloadUrl: '/developers/login/skin/download',
+              originalDownloadLabel: skin.originalDownloadButton,
+              originalDownloadUrl: '/developers/login/skin/original-download',
               format: skinChallenge.height === 32 ? skin.formatLegacy : skin.formatModern,
               formatLabel: skin.formatLabel,
               model: skinChallenge.model === 'slim' ? skin.modelSlim : skin.modelClassic,
@@ -90,6 +137,16 @@ export function renderDeveloperLoginPage(
               steps: skin.steps,
               username: skinChallenge.username,
               usernameLabel: skin.usernameLabel,
+            },
+          }),
+      ...(skinChallenge === undefined
+        ? {}
+        : {
+            status: {
+              initialStatus: skin.statusPending,
+              initialStatusState: 'pending',
+              method: 'skin' as const,
+              statusUrl: '/developers/login/skin/status',
             },
           }),
     },
@@ -102,8 +159,8 @@ export function renderDeveloperLoginPage(
           ? interaction.status.pending
           : skin.statusPending,
       initialStatusState: verified ? 'verified' : 'pending',
-      statusUrl:
-        skinChallenge === undefined ? '/developers/login/status' : '/developers/login/skin/status',
+      statusUrl: '/developers/login/status',
+      method: 'online',
       steps: interaction.steps,
       stepsHeading: interaction.stepsHeading,
     },
