@@ -10,6 +10,8 @@ import type { ManagedApp } from '../../src/developers/app-management.js';
 import type { DeveloperRole } from '../../src/developers/developer-repository.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
+import type { SkinVerificationChallenge } from '../../src/verification/redis-skin-verification-store.js';
+import type { VerificationStatus } from '../../src/verification/types.js';
 
 const developerSession: AuthenticatedDeveloperSession = {
   csrfToken: 'developer-csrf-token',
@@ -39,6 +41,8 @@ describe('Developer Console', (): void => {
     expect(response.body).toContain('ABCDEFGH.craftlogin.com');
     expect(response.body).toContain('<noscript>');
     expect(response.body).toContain('/assets/interaction.js');
+    expect(response.body).toContain('Or verify by changing your skin');
+    expect(response.body).toContain('action="/developers/login/skin/start"');
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['content-security-policy']).toContain("form-action 'self'");
     const loginCookie = response.headers['set-cookie'];
@@ -46,6 +50,66 @@ describe('Developer Console', (): void => {
     expect(loginCookie).toContain('HttpOnly');
     expect(loginCookie).toContain('Secure');
     expect(loginCookie).toContain('SameSite=Lax');
+  });
+
+  it('starts skin verification from the signed developer login attempt', async (): Promise<void> => {
+    const skinStartCalls: { loginId: string; username: string }[] = [];
+    const server = await buildServer({ authenticated: false, skinStartCalls });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
+    const response = await server.inject({
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: cookiePair(login.headers['set-cookie']),
+      },
+      method: 'POST',
+      payload: 'username=BuilderOne',
+      url: '/developers/login/skin/start',
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers/login');
+    expect(skinStartCalls).toEqual([{ loginId: `dl_${'b'.repeat(43)}`, username: 'BuilderOne' }]);
+  });
+
+  it('renders, downloads, and checks an active developer skin challenge', async (): Promise<void> => {
+    const challenge: SkinVerificationChallenge = {
+      body: Buffer.from('marked-skin-png'),
+      height: 64,
+      markerHash: 'marker-hash',
+      model: 'slim',
+      status: 'pending',
+      username: 'BuilderOne',
+      userUuid: developerSession.userUuid,
+    };
+    const server = await buildServer({ authenticated: false, skinChallenge: challenge });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
+    const cookie = cookiePair(login.headers['set-cookie']);
+
+    expect(login.body).toContain('Verification skin for');
+    expect(login.body).toContain('BuilderOne');
+    expect(login.body).toContain('slim arms');
+    expect(login.body).toContain('/developers/login/skin/download');
+    expect(login.body).toContain('data-status-url="/developers/login/skin/status"');
+
+    const download = await server.inject({
+      headers: { cookie },
+      method: 'GET',
+      url: '/developers/login/skin/download',
+    });
+    expect(download.statusCode).toBe(200);
+    expect(download.headers['content-type']).toBe('image/png');
+    expect(download.headers['content-disposition']).toBe(
+      'attachment; filename="craftlogin-BuilderOne.png"',
+    );
+    expect(download.rawPayload).toEqual(challenge.body);
+
+    const status = await server.inject({
+      headers: { cookie },
+      method: 'GET',
+      url: '/developers/login/skin/status',
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toEqual({ status: 'pending' });
   });
 
   it('consumes an unregistered Minecraft login without creating a console session', async (): Promise<void> => {
@@ -171,6 +235,9 @@ describe('Developer Console', (): void => {
     readonly denyLogin?: boolean;
     readonly grantCalls?: { role: DeveloperRole; uuid: string }[];
     readonly players?: MinecraftPlayerLookup;
+    readonly skinChallenge?: SkinVerificationChallenge;
+    readonly skinStartCalls?: { loginId: string; username: string }[];
+    readonly skinStatus?: VerificationStatus;
   }): Promise<FastifyInstance> {
     const unavailable = (): never => {
       throw new Error('Unexpected developer console test dependency call');
@@ -206,8 +273,34 @@ describe('Developer Console', (): void => {
           Promise.resolve({
             code: 'ABCDEFGH',
             loginId: `dl_${'b'.repeat(43)}`,
+            ...(options.skinChallenge === undefined
+              ? {}
+              : {
+                  skinChallenge: {
+                    height: options.skinChallenge.height,
+                    model: options.skinChallenge.model,
+                    username: options.skinChallenge.username,
+                  },
+                }),
             status: 'pending',
           }),
+        startSkin: (loginId, username) => {
+          options.skinStartCalls?.push({ loginId, username });
+          return Promise.resolve(
+            options.skinChallenge ?? {
+              body: Buffer.from('marked-skin-png'),
+              height: 64,
+              markerHash: 'marker-hash',
+              model: 'classic',
+              status: 'pending',
+              username,
+              userUuid: developerSession.userUuid,
+            },
+          );
+        },
+        getSkinChallenge: () => Promise.resolve(options.skinChallenge),
+        checkSkin: () =>
+          Promise.resolve(options.skinStatus ?? { code: 'ABCDEFGH', status: 'pending' }),
         status: () => Promise.resolve({ code: 'ABCDEFGH', status: 'pending' }),
       },
       developers: {

@@ -132,7 +132,12 @@ async function main(): Promise<void> {
       clients,
       cookieKeys: credentials.cookieKeys,
       developerAuthentication,
-      developerLogins: new DeveloperLoginService(verification, developers, developerSessions),
+      developerLogins: new DeveloperLoginService(
+        verification,
+        developers,
+        developerSessions,
+        skinVerification,
+      ),
       developers,
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,

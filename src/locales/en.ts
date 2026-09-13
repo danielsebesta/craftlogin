@@ -211,6 +211,8 @@ export const english = {
       appName: 'Developer Console',
       permission: 'Access the Developer Console and manage your applications.',
       verifiedAddress: 'Minecraft verification complete',
+      skinNotFound: 'That Minecraft Java player could not be found. Check the username.',
+      skinUnavailable: 'Minecraft skin verification is temporarily unavailable. Try again shortly.',
     },
     navigation: {
       ariaLabel: 'Developer navigation',

@@ -439,10 +439,49 @@ export const appDeleteRouteSchema: FastifySchema = {
 
 export const developerLoginPageRouteSchema: FastifySchema = {
   hide: true,
+  querystring: {
+    additionalProperties: false,
+    properties: { skinError: { enum: ['not-found', 'unavailable'], type: 'string' } },
+    type: 'object',
+  },
   response: {
     200: htmlResponseSchema,
     303: { type: 'null' },
     429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerLoginSkinStartRouteSchema: FastifySchema = {
+  body: skinVerificationBodySchema,
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerLoginSkinDownloadRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: pngResponseSchema,
+    303: { type: 'null' },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerLoginSkinStatusRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: verificationStatusSchema,
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },

@@ -4,6 +4,7 @@ import type { DeveloperAccess } from '../../src/developers/developer-repository.
 import { DeveloperLoginService } from '../../src/developers/login-service.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 import type { VerificationFinalizationClaim } from '../../src/verification/redis-verification-store.js';
+import type { SkinVerificationChallenge } from '../../src/verification/redis-skin-verification-store.js';
 import type { VerificationStatus } from '../../src/verification/types.js';
 
 const player = {
@@ -158,6 +159,68 @@ describe('DeveloperLoginService', (): void => {
     const replacement = await service.start(existingId);
     expect(replacement.loginId).not.toBe(existingId);
     expect(replacement.loginId).toMatch(/^dl_[A-Za-z0-9_-]{43}$/u);
+  });
+
+  it('reuses a skin challenge and delegates skin checks for the same login attempt', async (): Promise<void> => {
+    const verification = new VerificationStub();
+    verification.statusValue = { code: 'ABCDEFGH', status: 'pending' };
+    const challenge: SkinVerificationChallenge = {
+      body: Buffer.from('marked-skin'),
+      height: 64,
+      markerHash: 'marker-hash',
+      model: 'slim',
+      status: 'pending',
+      username: player.username,
+      userUuid: player.uuid,
+    };
+    const calls: { operation: string; loginId: string; username?: string }[] = [];
+    const service = new DeveloperLoginService(
+      verification,
+      { find: (): Promise<undefined> => Promise.resolve(undefined) },
+      new SessionStub(),
+      {
+        check: (loginId): Promise<VerificationStatus> => {
+          calls.push({ loginId, operation: 'check' });
+          return Promise.resolve({ code: 'ABCDEFGH', status: 'pending' });
+        },
+        getChallenge: (loginId): Promise<SkinVerificationChallenge> => {
+          calls.push({ loginId, operation: 'get' });
+          return Promise.resolve(challenge);
+        },
+        start: (loginId, username): Promise<SkinVerificationChallenge> => {
+          calls.push({ loginId, operation: 'start', username });
+          return Promise.resolve(challenge);
+        },
+      },
+    );
+    const loginId = validLoginId();
+
+    await expect(service.start(loginId)).resolves.toMatchObject({
+      code: 'ABCDEFGH',
+      loginId,
+      skinChallenge: { height: 64, model: 'slim', username: player.username },
+      status: 'pending',
+    });
+    await expect(service.startSkin(loginId, player.username)).resolves.toEqual({
+      height: 64,
+      model: 'slim',
+      username: player.username,
+    });
+    await expect(service.checkSkin(loginId)).resolves.toEqual({
+      code: 'ABCDEFGH',
+      status: 'pending',
+    });
+    expect(calls).toEqual([
+      { loginId, operation: 'get' },
+      { loginId, operation: 'start', username: player.username },
+      { loginId, operation: 'check' },
+    ]);
+
+    verification.statusValue = { status: 'expired' };
+    await expect(service.startSkin(loginId, player.username)).rejects.toThrow(
+      'Developer login is not pending',
+    );
+    expect(calls).toHaveLength(3);
   });
 });
 

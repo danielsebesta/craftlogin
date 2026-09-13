@@ -46,6 +46,7 @@ export interface SignInSkinVerification {
   };
   readonly heading: string;
   readonly hint: string;
+  readonly error?: string;
   readonly startAction: string;
   readonly startLabel: string;
 }
@@ -224,6 +225,7 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
   return `<section class="skin-verification" aria-labelledby="skin-verification-heading">
     <h2 id="skin-verification-heading">${escapeHtml(input.heading)}</h2>
     <p class="field-hint">${escapeHtml(input.hint)}</p>
+    ${input.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(input.error)}</p>`}
     ${
       challenge === undefined
         ? `<form class="skin-start-form" action="${escapeHtml(input.startAction)}" method="post">

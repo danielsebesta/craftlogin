@@ -2,7 +2,12 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
-import type { RedisVerificationStore } from '../verification/redis-verification-store.js';
+import {
+  type RedisVerificationStore,
+  VerificationStateError,
+} from '../verification/redis-verification-store.js';
+import type { SkinVerificationChallenge } from '../verification/redis-skin-verification-store.js';
+import type { SkinVerificationService } from '../verification/skin-verification-service.js';
 import type { VerificationStatus } from '../verification/types.js';
 import type { DeveloperAccessRepository } from './developer-repository.js';
 import type {
@@ -17,6 +22,13 @@ export interface DeveloperLoginAttempt {
   readonly code: string | null;
   readonly loginId: string;
   readonly status: 'pending' | 'verified';
+  readonly skinChallenge?: DeveloperSkinChallenge;
+}
+
+export interface DeveloperSkinChallenge {
+  readonly height: 32 | 64;
+  readonly model: 'classic' | 'slim';
+  readonly username: string;
 }
 
 export type DeveloperLoginCompletion =
@@ -33,6 +45,10 @@ export class DeveloperLoginService {
     >,
     private readonly developers: Pick<DeveloperAccessRepository, 'find'>,
     private readonly sessions: Pick<DeveloperSessionService, 'create' | 'revoke'>,
+    private readonly skinVerification?: Pick<
+      SkinVerificationService,
+      'check' | 'getChallenge' | 'start'
+    >,
   ) {}
 
   public async start(existingLoginId?: string): Promise<DeveloperLoginAttempt> {
@@ -41,10 +57,12 @@ export class DeveloperLoginService {
       if (parsed.success) {
         const existing = await this.verification.getStatus(parsed.data);
         if (existing.status === 'pending') {
+          const skinChallenge = await this.readSkinChallenge(parsed.data);
           return {
             code: existing.code,
             loginId: parsed.data,
             status: 'pending',
+            ...(skinChallenge === undefined ? {} : { skinChallenge }),
           };
         }
         if (existing.status === 'verified') {
@@ -60,6 +78,33 @@ export class DeveloperLoginService {
 
   public async status(loginIdInput: string): Promise<VerificationStatus> {
     return await this.verification.getStatus(developerLoginIdSchema.parse(loginIdInput));
+  }
+
+  public async startSkin(loginIdInput: string, username: string): Promise<DeveloperSkinChallenge> {
+    const loginId = developerLoginIdSchema.parse(loginIdInput);
+    if (this.skinVerification === undefined) {
+      throw new Error('Developer skin verification is unavailable');
+    }
+    const status = await this.verification.getStatus(loginId);
+    if (status.status !== 'pending') {
+      throw new VerificationStateError('Developer login is not pending');
+    }
+    return toDeveloperSkinChallenge(await this.skinVerification.start(loginId, username));
+  }
+
+  public async getSkinChallenge(
+    loginIdInput: string,
+  ): Promise<SkinVerificationChallenge | undefined> {
+    const loginId = developerLoginIdSchema.parse(loginIdInput);
+    return await this.skinVerification?.getChallenge(loginId);
+  }
+
+  public async checkSkin(loginIdInput: string): Promise<VerificationStatus> {
+    const loginId = developerLoginIdSchema.parse(loginIdInput);
+    if (this.skinVerification === undefined) {
+      throw new Error('Developer skin verification is unavailable');
+    }
+    return await this.skinVerification.check(loginId);
   }
 
   public async complete(
@@ -110,4 +155,17 @@ export class DeveloperLoginService {
       throw error;
     }
   }
+
+  private async readSkinChallenge(loginId: string): Promise<DeveloperSkinChallenge | undefined> {
+    const challenge = await this.skinVerification?.getChallenge(loginId);
+    return challenge === undefined ? undefined : toDeveloperSkinChallenge(challenge);
+  }
+}
+
+function toDeveloperSkinChallenge(challenge: SkinVerificationChallenge): DeveloperSkinChallenge {
+  return {
+    height: challenge.height,
+    model: challenge.model,
+    username: challenge.username,
+  };
 }

@@ -26,6 +26,7 @@ export interface DeveloperDashboardInput {
 export function renderDeveloperLoginPage(
   attempt: DeveloperLoginAttempt,
   minecraftBaseDomain: string,
+  skinError?: 'not-found' | 'unavailable',
 ): string {
   const developer = english.developer;
   const interaction = english.interaction;
@@ -51,16 +52,61 @@ export function renderDeveloperLoginPage(
     documentTitle: `${developer.login.appName} · ${interaction.title}`,
     footer: interaction.footer,
     heading: interaction.heading,
-    initialStatus: verified ? interaction.status.verified : interaction.status.pending,
+    initialStatus: verified
+      ? interaction.status.verified
+      : attempt.skinChallenge === undefined
+        ? interaction.status.pending
+        : interaction.skin.statusPending,
     initialStatusState: verified ? 'verified' : 'pending',
     lead: interaction.lead,
-    messages: interaction.status,
+    messages:
+      attempt.skinChallenge === undefined
+        ? interaction.status
+        : { ...interaction.status, pending: interaction.skin.statusPending },
     noJavaScript: interaction.noJavaScript,
     securityNote: interaction.securityNote,
     skipLabel: english.common.skipToContent,
-    statusUrl: '/developers/login/status',
+    statusUrl:
+      attempt.skinChallenge === undefined
+        ? '/developers/login/status'
+        : '/developers/login/skin/status',
     steps: interaction.steps,
     stepsHeading: interaction.stepsHeading,
+    skinVerification: {
+      accountLabel: interaction.skin.accountLabel,
+      accountPlaceholder: interaction.skin.accountPlaceholder,
+      ...(attempt.skinChallenge === undefined
+        ? {}
+        : {
+            challenge: {
+              downloadLabel: interaction.skin.downloadButton,
+              downloadUrl: '/developers/login/skin/download',
+              format:
+                attempt.skinChallenge.height === 32
+                  ? interaction.skin.formatLegacy
+                  : interaction.skin.formatModern,
+              model:
+                attempt.skinChallenge.model === 'slim'
+                  ? interaction.skin.modelSlim
+                  : interaction.skin.modelClassic,
+              steps: interaction.skin.steps,
+              username: attempt.skinChallenge.username,
+              verificationFor: interaction.skin.verificationFor,
+            },
+          }),
+      ...(skinError === undefined
+        ? {}
+        : {
+            error:
+              skinError === 'not-found'
+                ? developer.login.skinNotFound
+                : developer.login.skinUnavailable,
+          }),
+      heading: interaction.skin.heading,
+      hint: interaction.skin.startHint,
+      startAction: '/developers/login/skin/start',
+      startLabel: interaction.skin.startButton,
+    },
   });
 }
 

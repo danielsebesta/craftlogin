@@ -8,9 +8,14 @@ import type {
 } from '../developers/developer-repository.js';
 import { LastAdministratorError } from '../developers/developer-repository.js';
 import type { DeveloperLoginService } from '../developers/login-service.js';
+import { ApiError } from './errors.js';
 import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import { english } from '../locales/en.js';
+import {
+  SkinVerificationPlayerNotFoundError,
+  SkinVerificationResolutionError,
+} from '../verification/skin-verification-service.js';
 import type { AppRegistrar, AppRegistrationInput } from './app-registration.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
 import { requestSignal } from './developer-authentication.js';
@@ -36,6 +41,7 @@ import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import {
   appRegistrationRateLimit,
   developerLoginRateLimit,
+  skinVerificationStartRateLimit,
   verificationStatusRateLimit,
 } from './rate-limit.js';
 import {
@@ -48,6 +54,9 @@ import {
   developerLoginCompleteRouteSchema,
   developerLoginPageRouteSchema,
   developerLoginStatusRouteSchema,
+  developerLoginSkinDownloadRouteSchema,
+  developerLoginSkinStartRouteSchema,
+  developerLoginSkinStatusRouteSchema,
   developerLogoutRouteSchema,
   developerRevokeConfirmRouteSchema,
   developerRevokeRouteSchema,
@@ -81,12 +90,21 @@ interface DashboardQuery {
   readonly notice?: DashboardNotice;
 }
 
+interface DeveloperLoginQuery {
+  readonly skinError?: 'not-found' | 'unavailable';
+}
+
+interface SkinVerificationBody {
+  readonly username: string;
+}
+
 export interface DeveloperRoutesOptions {
   readonly appManager: AppManager;
   readonly apps: AppRegistrar;
   readonly authentication: DeveloperAuthentication;
   readonly developers: DeveloperAccessRepository;
-  readonly logins: Pick<DeveloperLoginService, 'complete' | 'start' | 'status'>;
+  readonly logins: Pick<DeveloperLoginService, 'complete' | 'start' | 'status'> &
+    Partial<Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'startSkin'>>;
   readonly logger: FastifyBaseLogger;
   readonly minecraftBaseDomain: string;
   readonly players?: MinecraftPlayerLookup;
@@ -96,7 +114,7 @@ export function registerDeveloperRoutes(
   server: FastifyInstance,
   options: DeveloperRoutesOptions,
 ): void {
-  server.get(
+  server.get<{ Querystring: DeveloperLoginQuery }>(
     '/developers/login',
     { config: { rateLimit: developerLoginRateLimit }, schema: developerLoginPageRouteSchema },
     async (request, reply): Promise<void> => {
@@ -110,7 +128,9 @@ export function registerDeveloperRoutes(
       setDeveloperPageHeaders(reply);
       await reply
         .type('text/html; charset=utf-8')
-        .send(renderDeveloperLoginPage(attempt, options.minecraftBaseDomain));
+        .send(
+          renderDeveloperLoginPage(attempt, options.minecraftBaseDomain, request.query.skinError),
+        );
     },
   );
 
@@ -129,6 +149,93 @@ export function registerDeveloperRoutes(
       }
       const status = await options.logins.status(loginId);
       await reply.send({ status: status.status });
+    },
+  );
+
+  server.post<{ Body: SkinVerificationBody }>(
+    '/developers/login/skin/start',
+    {
+      config: { rateLimit: skinVerificationStartRateLimit },
+      schema: developerLoginSkinStartRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
+      if (loginId === undefined || options.logins.startSkin === undefined) {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      const status = await options.logins.status(loginId);
+      if (status.status !== 'pending') {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      try {
+        await options.logins.startSkin(loginId, request.body.username);
+      } catch (error: unknown) {
+        if (error instanceof SkinVerificationPlayerNotFoundError) {
+          await reply.redirect('/developers/login?skinError=not-found', 303);
+          return;
+        }
+        if (error instanceof SkinVerificationResolutionError) {
+          await reply.redirect('/developers/login?skinError=unavailable', 303);
+          return;
+        }
+        throw error;
+      }
+      await reply.redirect('/developers/login', 303);
+    },
+  );
+
+  server.get(
+    '/developers/login/skin/download',
+    { schema: developerLoginSkinDownloadRouteSchema },
+    async (request, reply): Promise<void> => {
+      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
+      if (loginId === undefined || options.logins.getSkinChallenge === undefined) {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      const challenge = await options.logins.getSkinChallenge(loginId);
+      if (challenge === undefined) {
+        await reply.redirect('/developers/login', 303);
+        return;
+      }
+      void reply.headers({
+        'cache-control': 'no-store',
+        'content-disposition': `attachment; filename="craftlogin-${challenge.username}.png"`,
+        'x-content-type-options': 'nosniff',
+      });
+      await reply.type('image/png').send(challenge.body);
+    },
+  );
+
+  server.get(
+    '/developers/login/skin/status',
+    {
+      config: { rateLimit: verificationStatusRateLimit },
+      schema: developerLoginSkinStatusRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
+      void reply.header('cache-control', 'no-store');
+      if (loginId === undefined || options.logins.checkSkin === undefined) {
+        await reply.send({ status: 'expired' });
+        return;
+      }
+      try {
+        const status = await options.logins.checkSkin(loginId);
+        await reply.send({ status: status.status });
+      } catch (error: unknown) {
+        if (error instanceof SkinVerificationResolutionError) {
+          throw new ApiError(
+            503,
+            'service_unavailable',
+            english.api.errors.minecraftSkinUnavailable,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
     },
   );
 
