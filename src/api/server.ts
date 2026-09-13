@@ -45,7 +45,10 @@ export interface ApiServerOptions {
   readonly cookieKeys: readonly string[];
   readonly developerAuthentication: DeveloperAuthentication;
   readonly developers: DeveloperAccessRepository;
-  readonly developerLogins: Pick<DeveloperLoginService, 'complete' | 'start' | 'status'> &
+  readonly developerLogins: Pick<
+    DeveloperLoginService,
+    'complete' | 'create' | 'resume' | 'status'
+  > &
     Partial<Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'startSkin'>>;
   readonly interactions: ApiInteractionService;
   readonly issuer: string;

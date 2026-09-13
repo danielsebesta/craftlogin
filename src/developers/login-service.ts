@@ -51,26 +51,31 @@ export class DeveloperLoginService {
     >,
   ) {}
 
-  public async start(existingLoginId?: string): Promise<DeveloperLoginAttempt> {
-    if (existingLoginId !== undefined) {
-      const parsed = developerLoginIdSchema.safeParse(existingLoginId);
-      if (parsed.success) {
-        const existing = await this.verification.getStatus(parsed.data);
-        if (existing.status === 'pending') {
-          const skinChallenge = await this.readSkinChallenge(parsed.data);
-          return {
-            code: existing.code,
-            loginId: parsed.data,
-            status: 'pending',
-            ...(skinChallenge === undefined ? {} : { skinChallenge }),
-          };
-        }
-        if (existing.status === 'verified') {
-          return { code: null, loginId: parsed.data, status: 'verified' };
-        }
-      }
+  public async resume(existingLoginId?: string): Promise<DeveloperLoginAttempt | undefined> {
+    if (existingLoginId === undefined) {
+      return undefined;
     }
+    const parsed = developerLoginIdSchema.safeParse(existingLoginId);
+    if (!parsed.success) {
+      return undefined;
+    }
+    const existing = await this.verification.getStatus(parsed.data);
+    if (existing.status === 'pending') {
+      const skinChallenge = await this.readSkinChallenge(parsed.data);
+      return {
+        code: existing.code,
+        loginId: parsed.data,
+        status: 'pending',
+        ...(skinChallenge === undefined ? {} : { skinChallenge }),
+      };
+    }
+    if (existing.status === 'verified') {
+      return { code: null, loginId: parsed.data, status: 'verified' };
+    }
+    return undefined;
+  }
 
+  public async create(): Promise<DeveloperLoginAttempt> {
     const loginId = `dl_${randomBytes(32).toString('base64url')}`;
     const code = await this.verification.allocate(loginId);
     return { code, loginId, status: 'pending' };

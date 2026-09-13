@@ -52,6 +52,43 @@ describe('Developer Console', (): void => {
     expect(loginCookie).toContain('SameSite=Lax');
   });
 
+  it('reuses one pending login code across repeated page refreshes', async (): Promise<void> => {
+    const loginCreations: string[] = [];
+    const server = await buildServer({ authenticated: false, loginCreations });
+    const first = await server.inject({ method: 'GET', url: '/developers/login' });
+    const cookie = cookiePair(first.headers['set-cookie']);
+
+    for (let index = 0; index < 20; index += 1) {
+      const refresh = await server.inject({
+        headers: { cookie },
+        method: 'GET',
+        url: '/developers/login',
+      });
+      expect(refresh.statusCode).toBe(200);
+      expect(refresh.body).toContain('ABCDEFGH.craftlogin.com');
+    }
+
+    expect(loginCreations).toEqual([`dl_${'b'.repeat(43)}`]);
+  });
+
+  it('rate-limits only creation of new developer login attempts', async (): Promise<void> => {
+    const loginCreations: string[] = [];
+    const server = await buildServer({ authenticated: false, loginCreations });
+
+    for (let index = 0; index < 10; index += 1) {
+      const response = await server.inject({ method: 'GET', url: '/developers/login' });
+      expect(response.statusCode).toBe(200);
+    }
+    const limited = await server.inject({ method: 'GET', url: '/developers/login' });
+
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toEqual({
+      error: { code: 'rate_limited', message: 'Too many requests. Wait a moment and try again.' },
+    });
+    expect(limited.headers['retry-after']).toBeTypeOf('string');
+    expect(loginCreations).toHaveLength(10);
+  });
+
   it('starts skin verification from the signed developer login attempt', async (): Promise<void> => {
     const skinStartCalls: { loginId: string; username: string }[] = [];
     const server = await buildServer({ authenticated: false, skinStartCalls });
@@ -82,8 +119,13 @@ describe('Developer Console', (): void => {
       userUuid: developerSession.userUuid,
     };
     const server = await buildServer({ authenticated: false, skinChallenge: challenge });
-    const login = await server.inject({ method: 'GET', url: '/developers/login' });
-    const cookie = cookiePair(login.headers['set-cookie']);
+    const initial = await server.inject({ method: 'GET', url: '/developers/login' });
+    const cookie = cookiePair(initial.headers['set-cookie']);
+    const login = await server.inject({
+      headers: { cookie },
+      method: 'GET',
+      url: '/developers/login',
+    });
 
     expect(login.body).toContain('Verification skin for');
     expect(login.body).toContain('BuilderOne');
@@ -234,6 +276,7 @@ describe('Developer Console', (): void => {
     readonly authenticated: boolean;
     readonly denyLogin?: boolean;
     readonly grantCalls?: { role: DeveloperRole; uuid: string }[];
+    readonly loginCreations?: string[];
     readonly players?: MinecraftPlayerLookup;
     readonly skinChallenge?: SkinVerificationChallenge;
     readonly skinStartCalls?: { loginId: string; username: string }[];
@@ -269,21 +312,32 @@ describe('Developer Console', (): void => {
               ? { status: 'denied' }
               : { session: developerSession, status: 'complete' },
           ),
-        start: () =>
-          Promise.resolve({
+        create: () => {
+          const loginId = `dl_${'b'.repeat(43)}`;
+          options.loginCreations?.push(loginId);
+          return Promise.resolve({
             code: 'ABCDEFGH',
-            loginId: `dl_${'b'.repeat(43)}`,
-            ...(options.skinChallenge === undefined
-              ? {}
-              : {
-                  skinChallenge: {
-                    height: options.skinChallenge.height,
-                    model: options.skinChallenge.model,
-                    username: options.skinChallenge.username,
-                  },
-                }),
+            loginId,
             status: 'pending',
-          }),
+          });
+        },
+        resume: (loginId) =>
+          loginId === undefined
+            ? Promise.resolve(undefined)
+            : Promise.resolve({
+                code: 'ABCDEFGH',
+                loginId,
+                ...(options.skinChallenge === undefined
+                  ? {}
+                  : {
+                      skinChallenge: {
+                        height: options.skinChallenge.height,
+                        model: options.skinChallenge.model,
+                        username: options.skinChallenge.username,
+                      },
+                    }),
+                status: 'pending',
+              }),
         startSkin: (loginId, username) => {
           options.skinStartCalls?.push({ loginId, username });
           return Promise.resolve(

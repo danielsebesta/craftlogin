@@ -5,7 +5,10 @@ import { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { appRegistrationRateLimit } from '../../src/api/rate-limit.js';
+import {
+  appRegistrationRateLimit,
+  developerLoginCreationRateLimit,
+} from '../../src/api/rate-limit.js';
 import { createApiServer } from '../../src/api/server.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 
@@ -55,6 +58,21 @@ describe('Redis-backed API rate limits', (): void => {
     expect(errorResponseSchema.parse(limited.json()).error.code).toBe('rate_limited');
     expect(limited.headers['retry-after']).toBeTypeOf('string');
   });
+
+  it('shares developer login creation counters between API instances', async (): Promise<void> => {
+    const first = requireServer(servers[0]);
+    const second = requireServer(servers[1]);
+
+    for (let index = 0; index < developerLoginCreationRateLimit.max; index += 1) {
+      const response = await startDeveloperLogin(index % 2 === 0 ? first : second);
+      expect(response.statusCode).toBe(200);
+    }
+
+    const limited = await startDeveloperLogin(second);
+    expect(limited.statusCode).toBe(429);
+    expect(errorResponseSchema.parse(limited.json()).error.code).toBe('rate_limited');
+    expect(limited.headers['retry-after']).toBeTypeOf('string');
+  });
 });
 
 async function buildServer(redis: Redis, namespace: string): Promise<FastifyInstance> {
@@ -91,9 +109,24 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
       requireAdministrator: unavailable,
       requireCsrf: (): void => undefined,
     },
-    developerLogins: { complete: unavailable, start: unavailable, status: unavailable },
+    developerLogins: {
+      complete: unavailable,
+      create: () =>
+        Promise.resolve({
+          code: 'ABCDEFGH',
+          loginId: `dl_${'b'.repeat(43)}`,
+          status: 'pending',
+        }),
+      resume: (): Promise<undefined> => Promise.resolve(undefined),
+      status: unavailable,
+    },
     developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
-    interactions: { abort: unavailable, complete: unavailable, start: unavailable, status: unavailable },
+    interactions: {
+      abort: unavailable,
+      complete: unavailable,
+      start: unavailable,
+      status: unavailable,
+    },
     issuer: 'https://craftlogin.com',
     minecraftBaseDomain: 'craftlogin.com',
     nodeEnvironment: 'test',
@@ -118,6 +151,10 @@ async function registerApp(server: FastifyInstance): Promise<LightMyRequestRespo
     },
     url: '/api/apps',
   });
+}
+
+async function startDeveloperLogin(server: FastifyInstance): Promise<LightMyRequestResponse> {
+  return await server.inject({ method: 'GET', url: '/developers/login' });
 }
 
 function requireServer(server: FastifyInstance | undefined): FastifyInstance {

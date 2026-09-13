@@ -40,7 +40,8 @@ import {
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import {
   appRegistrationRateLimit,
-  developerLoginRateLimit,
+  developerLoginCreationRateLimit,
+  developerLoginPageRateLimit,
   skinVerificationStartRateLimit,
   verificationStatusRateLimit,
 } from './rate-limit.js';
@@ -103,7 +104,7 @@ export interface DeveloperRoutesOptions {
   readonly apps: AppRegistrar;
   readonly authentication: DeveloperAuthentication;
   readonly developers: DeveloperAccessRepository;
-  readonly logins: Pick<DeveloperLoginService, 'complete' | 'start' | 'status'> &
+  readonly logins: Pick<DeveloperLoginService, 'complete' | 'create' | 'resume' | 'status'> &
     Partial<Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'startSkin'>>;
   readonly logger: FastifyBaseLogger;
   readonly minecraftBaseDomain: string;
@@ -114,16 +115,30 @@ export function registerDeveloperRoutes(
   server: FastifyInstance,
   options: DeveloperRoutesOptions,
 ): void {
+  const checkLoginCreationRateLimit = server.createRateLimit({
+    keyGenerator: (request): string => `developer-login-creation:${request.ip}`,
+    max: developerLoginCreationRateLimit.max,
+    timeWindow: developerLoginCreationRateLimit.timeWindow,
+  });
+
   server.get<{ Querystring: DeveloperLoginQuery }>(
     '/developers/login',
-    { config: { rateLimit: developerLoginRateLimit }, schema: developerLoginPageRouteSchema },
+    { config: { rateLimit: developerLoginPageRateLimit }, schema: developerLoginPageRouteSchema },
     async (request, reply): Promise<void> => {
       if ((await options.authentication.authenticate(request, reply)) !== undefined) {
         await reply.redirect('/developers', 303);
         return;
       }
 
-      const attempt = await options.logins.start(readSignedCookie(request, DEVELOPER_LOGIN_COOKIE));
+      let attempt = await options.logins.resume(readSignedCookie(request, DEVELOPER_LOGIN_COOKIE));
+      if (attempt === undefined) {
+        const limit = await checkLoginCreationRateLimit(request);
+        if (!limit.isAllowed && limit.isExceeded) {
+          void reply.header('retry-after', String(Math.max(1, limit.ttlInSeconds)));
+          throw new ApiError(429, 'rate_limited', english.api.errors.rateLimited);
+        }
+        attempt = await options.logins.create();
+      }
       setDeveloperLoginCookie(reply, attempt.loginId);
       setDeveloperPageHeaders(reply);
       await reply

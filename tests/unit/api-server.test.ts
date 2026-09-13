@@ -660,8 +660,11 @@ describe('CraftLogin API server', (): void => {
         complete: (): never => {
           throw new Error('Unexpected developer login completion');
         },
-        start: (): never => {
-          throw new Error('Unexpected developer login start');
+        create: (): never => {
+          throw new Error('Unexpected developer login creation');
+        },
+        resume: (): never => {
+          throw new Error('Unexpected developer login resume');
         },
         status: (): never => {
           throw new Error('Unexpected developer login status');

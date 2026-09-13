@@ -17,8 +17,13 @@ export const tokenRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
-export const developerLoginRateLimit = {
-  groupId: 'developer-login',
+export const developerLoginPageRateLimit = {
+  groupId: 'developer-login-page',
+  max: 120,
+  timeWindow: 60 * 1_000,
+};
+
+export const developerLoginCreationRateLimit = {
   max: 10,
   timeWindow: 60 * 60 * 1_000,
 };

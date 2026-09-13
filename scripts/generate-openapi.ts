@@ -27,7 +27,12 @@ async function generate(): Promise<void> {
       requireAdministrator: unavailable,
       requireCsrf: unavailable,
     },
-    developerLogins: { complete: unavailable, start: unavailable, status: unavailable },
+    developerLogins: {
+      complete: unavailable,
+      create: unavailable,
+      resume: unavailable,
+      status: unavailable,
+    },
     developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
     interactions: {
       abort: unavailable,

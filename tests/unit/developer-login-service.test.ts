@@ -139,7 +139,7 @@ describe('DeveloperLoginService', (): void => {
     expect(sessions.revoked).toEqual([sessions.session.sessionId]);
   });
 
-  it('reuses pending attempts and replaces expired attempts', async (): Promise<void> => {
+  it('resumes pending attempts and creates replacements for expired attempts', async (): Promise<void> => {
     const verification = new VerificationStub();
     verification.statusValue = { code: 'ABCDEFGH', status: 'pending' };
     const service = new DeveloperLoginService(
@@ -149,14 +149,15 @@ describe('DeveloperLoginService', (): void => {
     );
     const existingId = validLoginId();
 
-    await expect(service.start(existingId)).resolves.toEqual({
+    await expect(service.resume(existingId)).resolves.toEqual({
       code: 'ABCDEFGH',
       loginId: existingId,
       status: 'pending',
     });
 
     verification.statusValue = { status: 'expired' };
-    const replacement = await service.start(existingId);
+    await expect(service.resume(existingId)).resolves.toBeUndefined();
+    const replacement = await service.create();
     expect(replacement.loginId).not.toBe(existingId);
     expect(replacement.loginId).toMatch(/^dl_[A-Za-z0-9_-]{43}$/u);
   });
@@ -195,7 +196,7 @@ describe('DeveloperLoginService', (): void => {
     );
     const loginId = validLoginId();
 
-    await expect(service.start(loginId)).resolves.toMatchObject({
+    await expect(service.resume(loginId)).resolves.toMatchObject({
       code: 'ABCDEFGH',
       loginId,
       skinChallenge: { height: 64, model: 'slim', username: player.username },
