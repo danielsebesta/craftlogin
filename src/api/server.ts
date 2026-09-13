@@ -30,6 +30,7 @@ import {
   type ClientNameLookup,
 } from './interaction-routes.js';
 import { registerLandingRoutes } from './landing-routes.js';
+import { registerMicrosoftIdentityAssociationRoute } from './microsoft-identity-association-route.js';
 import { registerOidcHttpRoutes, type OidcHttpHandler } from './oauth-http-routes.js';
 import { registerOpenApi } from './openapi.js';
 import { registerRateLimiting } from './rate-limit.js';
@@ -90,6 +91,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerFontAssetRoutes(server);
   registerAppAvatarAssetRoute(server);
   registerBackgroundAssetRoute(server);
+  registerMicrosoftIdentityAssociationRoute(server);
   if (options.minecraft !== undefined) {
     registerAvatarRoutes(server, options.minecraft);
   }

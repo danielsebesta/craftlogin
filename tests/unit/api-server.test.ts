@@ -401,6 +401,21 @@ describe('CraftLogin API server', (): void => {
     expect(unavailable.headers['cache-control']).toBe('no-store');
   });
 
+  it('serves the Microsoft identity association document at the well-known URL', async (): Promise<void> => {
+    const server = await buildServer('test', new InteractionStub());
+    const response = await server.inject({
+      method: 'GET',
+      url: '/.well-known/microsoft-identity-association.json',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toMatch(/^application\/json(?:;|$)/u);
+    expect(response.headers.location).toBeUndefined();
+    expect(response.json()).toEqual({
+      associatedApplications: [{ applicationId: '7f143b3d-bf80-4896-86ee-bd902f90ca63' }],
+    });
+  });
+
   it('rejects malformed app registration before calling its service', async (): Promise<void> => {
     const registeredInputs: AppRegistrationInput[] = [];
     const server = await buildServer('test', new InteractionStub(), registeredInputs);
