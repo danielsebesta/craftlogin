@@ -152,7 +152,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-security-policy']).toContain("font-src 'self'");
     expect(response.headers['content-security-policy']).toContain("img-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
-    expect(response.body).toContain('<main id="main">');
+    expect(response.body).toContain('<main id="main" class="container">');
     expect(response.body).toContain(
       '<h1 id="hero-heading">OIDC identity for Minecraft Java accounts</h1>',
     );
@@ -161,6 +161,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('/assets/landing.css');
     expect(response.body).toContain('class="skip-link"');
     expect(response.body).toContain('name="color-scheme" content="dark"');
+    expect(response.body).toContain('rel="icon" href="/assets/icon.svg"');
     expect(response.body).not.toContain('<script');
 
     const stylesheet = await server.inject({ method: 'GET', url: '/assets/landing.css' });
@@ -189,6 +190,17 @@ describe('CraftLogin API server', (): void => {
     expect(background.headers['content-type']).toContain('image/svg+xml');
     expect(background.headers['cache-control']).toBe('public, max-age=31536000, immutable');
     expect(background.body).toContain('<svg');
+
+    const icon = await server.inject({ method: 'GET', url: '/assets/icon.svg' });
+    expect(icon.statusCode).toBe(200);
+    expect(icon.headers['content-type']).toContain('image/svg+xml');
+    expect(icon.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect(icon.body).toContain('<svg');
+
+    const iconPng = await server.inject({ method: 'GET', url: '/assets/icon.png' });
+    expect(iconPng.statusCode).toBe(200);
+    expect(iconPng.headers['content-type']).toContain('image/png');
+    expect(iconPng.rawPayload.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
   });
 
   it('renders a secure semantic interaction page with a no-JavaScript fallback', async (): Promise<void> => {
@@ -485,13 +497,14 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).not.toHaveProperty('/skin/{hash}');
     const documentation = await development.inject({ method: 'GET', url: '/docs/' });
     expect(documentation.statusCode).toBe(200);
-    expect(documentation.body).toContain('pixeloid.css');
+    expect(documentation.body).toContain('craftlogin.css');
     const documentationTheme = await development.inject({
       method: 'GET',
-      url: '/docs/static/theme/pixeloid.css',
+      url: '/docs/static/theme/craftlogin.css',
     });
     expect(documentationTheme.statusCode).toBe(200);
     expect(documentationTheme.body).toContain('font-family: "Pixeloid Sans"');
+    expect(documentationTheme.body).toContain('color: var(--text)');
 
     const production = await buildServer('production', new InteractionStub());
     expect((await production.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(404);

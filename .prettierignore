@@ -1,3 +1,4 @@
+.agents/
 coverage/
 dist/
 node_modules/

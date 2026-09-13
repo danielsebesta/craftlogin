@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 
 import { fontAssetRouteSchema } from './schemas.js';
-import { fontFaceStyles } from './ui/fonts.js';
 
 interface FontAsset {
   readonly cacheControl: string;
@@ -38,36 +37,6 @@ const fontAssets: readonly FontAsset[] = [
     route: '/assets/fonts/OFL.txt',
   },
 ];
-
-export const swaggerTypographyStyles = `${fontFaceStyles}
-.swagger-ui,
-.swagger-ui button,
-.swagger-ui input,
-.swagger-ui select,
-.swagger-ui textarea {
-  font-family: "Pixeloid Sans", sans-serif;
-}
-
-.swagger-ui .info .title,
-.swagger-ui .opblock-tag,
-.swagger-ui .opblock .opblock-summary-method,
-.swagger-ui h1,
-.swagger-ui h2,
-.swagger-ui h3,
-.swagger-ui h4,
-.swagger-ui h5 {
-  font-family: "Pixeloid Sans", sans-serif;
-  font-weight: 700;
-}
-
-.swagger-ui code,
-.swagger-ui pre,
-.swagger-ui .parameter__name,
-.swagger-ui .prop-name,
-.swagger-ui .response-col_status {
-  font-family: "Pixeloid Mono", monospace;
-}
-`;
 
 export function registerFontAssetRoutes(server: FastifyInstance): void {
   for (const asset of fontAssets) {

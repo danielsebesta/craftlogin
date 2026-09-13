@@ -1,14 +1,28 @@
 export const signInSurfaceStyles = `
-.signin-header,
-.signin,
-.signin-footer {
-  width: min(42rem, 100% - (2 * var(--s4)));
-  margin-inline: auto;
+.signin {
+  display: grid;
+  gap: var(--s6);
+  padding-block: var(--s7) var(--s6);
 }
 
-.signin-header {
-  padding-block: var(--s5);
-  border-bottom: 1px solid var(--line);
+.signin-compact {
+  padding-block: 5rem var(--s6);
+}
+
+.signin-intro {
+  display: grid;
+  gap: var(--s4);
+}
+
+.signin-intro h1 {
+  max-width: 24ch;
+}
+
+.signin-action {
+  display: grid;
+  gap: var(--s4);
+  padding-top: var(--s6);
+  border-top: 1px solid var(--line);
 }
 
 .consent-card {
@@ -16,77 +30,37 @@ export const signInSurfaceStyles = `
   gap: var(--s5);
 }
 
-.consent-only {
-  width: min(30rem, 100% - (2 * var(--s4)));
-  padding-block: 5rem var(--s6);
-}
-
-.consent-only .card {
-  border-color: var(--line);
-  border-radius: 0;
-}
-
-.consent-only .consent-avatars {
-  justify-content: center;
-  width: 100%;
-}
-
-.consent-only .consent-avatar {
-  width: 4rem;
-  aspect-ratio: 1;
-  clip-path: circle(50%);
-}
-
-.consent-only .consent-title {
-  width: 100%;
-  text-align: center;
-}
-
 .consent-identity {
-  display: flex;
+  display: grid;
   gap: var(--s4);
-  align-items: flex-start;
-  flex-direction: column;
-}
-
-.consent-avatars {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  min-height: 4rem;
-}
-
-.consent-connector {
-  color: var(--muted);
-  letter-spacing: 0.16em;
-}
-
-.consent-avatar-account {
-  border-color: var(--accent);
-}
-
-.consent-avatar {
-  display: block;
-  flex: none;
-  width: 3rem;
-  aspect-ratio: 1 / 0.74;
-  overflow: hidden;
-  background: #fff;
-  border: 2px solid var(--line-strong);
-}
-
-.consent-avatar img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center top;
 }
 
 .consent-title {
   display: grid;
   gap: var(--s2);
   min-width: 0;
+}
+
+/* The verified Minecraft account, rendered from its signed skin. */
+.account-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+  justify-self: start;
+  font-size: var(--t-sm);
+}
+
+.account-chip-avatar {
+  width: 2rem;
+  height: 2rem;
+  background: var(--surface-raised);
+  border: 2px solid var(--accent);
+  image-rendering: pixelated;
+}
+
+.account-chip-name {
+  font-weight: 700;
 }
 
 .consent-scopes {
@@ -109,42 +83,22 @@ export const signInSurfaceStyles = `
 }
 
 .consent-check {
-  font-family: var(--font-mono);
+  flex: none;
   width: 1.5rem;
   height: 1.5rem;
   color: var(--bg);
   text-align: center;
   background: var(--accent);
   clip-path: circle(50%);
+  font-family: var(--font-mono);
 }
 
-.consent-verify {
+.consent-verify,
+.skin-verification {
   display: grid;
   gap: var(--s4);
   padding-top: var(--s5);
   border-top: 1px solid var(--line);
-}
-
-.skin-verification {
-  display: grid;
-  gap: var(--s3);
-  padding-top: var(--s5);
-  border-top: 1px solid var(--line);
-}
-
-.skin-start-form {
-  display: grid;
-  gap: var(--s2);
-}
-
-.skin-start-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3);
-}
-
-.skin-start-controls input {
-  flex: 1 1 12rem;
 }
 
 .skin-download {
@@ -164,28 +118,6 @@ export const signInSurfaceStyles = `
   margin-left: auto;
 }
 
-.signin {
-  display: grid;
-  gap: var(--s6);
-  padding-block: var(--s7) var(--s6);
-}
-
-.signin-intro {
-  display: grid;
-  gap: var(--s4);
-}
-
-.signin-intro h1 {
-  max-width: 24ch;
-}
-
-.signin-action {
-  display: grid;
-  gap: var(--s4);
-  padding-top: var(--s6);
-  border-top: 1px solid var(--line);
-}
-
 .signin-address-row {
   display: flex;
   flex-wrap: wrap;
@@ -203,27 +135,62 @@ export const signInSurfaceStyles = `
 }
 
 .signin-status {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
   min-height: 1.6em;
   color: var(--muted);
+  transition: color 120ms ease-out;
+}
+
+.signin-status::before {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  content: "";
+  border: 2px solid var(--line-strong);
+}
+
+.signin-status[data-state="pending"]::before {
+  background: var(--accent);
+  border-color: var(--accent);
+  animation: signin-pulse 1.6s ease-in-out infinite;
 }
 
 .signin-status[data-state="verified"] {
   color: var(--accent);
 }
 
+.signin-status[data-state="verified"]::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .signin-status[data-state="expired"],
-.signin-status[data-state="network-error"] {
+.signin-status[data-state="network-error"],
+.signin-status[data-state="stopped"] {
   color: var(--danger-strong);
+}
+
+.signin-status[data-state="expired"]::before,
+.signin-status[data-state="network-error"]::before,
+.signin-status[data-state="stopped"]::before {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+@keyframes signin-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.25;
+  }
 }
 
 .signin-continue[hidden] {
   display: none;
-}
-
-.signin-footer {
-  padding-block: var(--s5);
-  font-size: var(--t-xs);
-  color: var(--muted);
-  border-top: 1px solid var(--line);
 }
 `;

@@ -380,9 +380,12 @@ export const english = {
       downloadButton: 'Download verification skin',
       formatLegacy: 'legacy 64×32',
       formatModern: 'modern 64×64',
+      formatLabel: 'Skin format',
       heading: 'Or verify by changing your skin',
+      headingAlternative: 'Verify by changing your skin',
       modelClassic: 'classic / wide arms',
       modelSlim: 'slim arms',
+      modelLabel: 'Arm model',
       startButton: 'Create verification skin',
       startHint:
         'CraftLogin adds a one-time marker to an unused 8×8 area. Existing custom skins keep every visible base and overlay pixel; accounts using only a default skin receive a temporary template.',
@@ -392,7 +395,7 @@ export const english = {
         'Upload it as your skin in the Minecraft Launcher or on Minecraft.net. Keep the shown arm model.',
         'Wait here while CraftLogin checks the signed Minecraft profile.',
       ],
-      verificationFor: 'Verification skin for',
+      usernameLabel: 'Minecraft username',
     },
   },
   logout: {

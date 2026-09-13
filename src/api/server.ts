@@ -9,14 +9,14 @@ import type { AvatarService } from '../avatars/service.js';
 import type { AppManager } from '../developers/app-management.js';
 import type { DeveloperAccessRepository } from '../developers/developer-repository.js';
 import type { DeveloperLoginService } from '../developers/login-service.js';
-import type { SkinStore } from '../mojang/skin-store.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
+import type { SkinStore } from '../mojang/skin-store.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
-import { registerAppAvatarAssetRoute } from './app-avatar-asset.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
 import { registerAvatarRoutes } from './avatar-routes.js';
 import { registerBackgroundAssetRoute } from './background-asset.js';
+import { registerBrandIconAssetRoutes } from './brand-icon-asset.js';
 import type { RegisteredOriginLookup } from './client-directory.js';
 import type { CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
@@ -92,7 +92,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerSharedSchemas(server);
   registerErrorHandling(server);
   registerFontAssetRoutes(server);
-  registerAppAvatarAssetRoute(server);
+  registerBrandIconAssetRoutes(server);
   registerBackgroundAssetRoute(server);
   registerMicrosoftIdentityAssociationRoute(server);
   if (options.minecraft !== undefined) {

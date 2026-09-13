@@ -1,6 +1,6 @@
 import { english } from '../locales/en.js';
-import { renderSignInPage, type ConsentPermission } from './ui/sign-in-page.js';
 import type { SkinInteractionChallenge } from '../oauth/interaction-service.js';
+import { renderSignInPage, type ConsentPermission } from './ui/sign-in-page.js';
 
 export interface InteractionPageInput {
   readonly appName: string;
@@ -43,11 +43,16 @@ export function permissionsForScope(scope: string): readonly ConsentPermission[]
 export function renderInteractionPage(input: InteractionPageInput): string {
   const interactionPath = `/interaction/${encodeURIComponent(input.interactionId)}`;
   const strings = english.interaction;
+  const skin = strings.skin;
 
   const isConsent = input.kind === 'consent';
   const allowsOnlineVerification = input.allowsOnlineVerification !== false;
+  const skinChallenge = input.skinChallenge;
+  const usesSkinVerification = skinChallenge !== undefined;
+  // A client that requests only the skin verification method never sees the
+  // Minecraft join address, so its status is the skin status.
   const verification =
-    isConsent || (!allowsOnlineVerification && input.skinChallenge === undefined)
+    isConsent || (!allowsOnlineVerification && !usesSkinVerification)
       ? undefined
       : {
           ...(allowsOnlineVerification
@@ -58,25 +63,22 @@ export function renderInteractionPage(input: InteractionPageInput): string {
                 stepsHeading: strings.stepsHeading,
               }
             : {}),
-          initialStatus:
-            input.skinChallenge === undefined ? strings.status.pending : strings.skin.statusPending,
+          initialStatus: usesSkinVerification ? skin.statusPending : strings.status.pending,
           initialStatusState: 'pending',
-          statusUrl:
-            input.skinChallenge === undefined
-              ? `${interactionPath}/status`
-              : `${interactionPath}/skin/status`,
+          statusUrl: usesSkinVerification
+            ? `${interactionPath}/skin/status`
+            : `${interactionPath}/status`,
         };
+
   return renderSignInPage({
+    ...(input.accountAvatarUrl === undefined ? {} : { accountAvatarUrl: input.accountAvatarUrl }),
+    accountLabel: strings.signedInAs,
+    ...(input.accountName === undefined ? {} : { accountName: input.accountName }),
     action: `${interactionPath}/complete`,
     allowsHeading: strings.allowsHeading,
     appName: input.appName,
-    ...(input.accountName === undefined ? {} : { accountName: input.accountName }),
-    ...(input.accountAvatarUrl === undefined ? {} : { accountAvatarUrl: input.accountAvatarUrl }),
     brand: strings.brand,
     cancel: { action: `${interactionPath}/abort`, label: strings.cancelButton },
-    ...(isConsent
-      ? { switchAccount: { action: `${interactionPath}/switch`, label: strings.changeAccount } }
-      : {}),
     continueLabel: strings.continueButton,
     copiedLabel: strings.copied,
     copyLabel: strings.copyAddress,
@@ -85,43 +87,41 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     heading: strings.heading,
     lead: isConsent ? strings.consentLead : strings.lead,
     messages:
-      input.skinChallenge === undefined
+      skinChallenge === undefined
         ? strings.status
-        : { ...strings.status, pending: strings.skin.statusPending },
+        : { ...strings.status, pending: skin.statusPending },
     noJavaScript: strings.noJavaScript,
     permissions: permissionsForScope(input.scope),
     securityNote: strings.securityNote,
-    skipLabel: english.common.skipToContent,
+    ...(isConsent
+      ? { switchAccount: { action: `${interactionPath}/switch`, label: strings.changeAccount } }
+      : {}),
     ...(verification === undefined ? {} : { verification }),
     ...(isConsent || input.allowsSkinVerification !== true
       ? {}
       : {
           skinVerification: {
-            accountLabel: strings.skin.accountLabel,
-            accountPlaceholder: strings.skin.accountPlaceholder,
-            ...(input.skinChallenge === undefined
+            accountLabel: skin.accountLabel,
+            accountPlaceholder: skin.accountPlaceholder,
+            heading: allowsOnlineVerification ? skin.heading : skin.headingAlternative,
+            hint: skin.startHint,
+            startAction: `${interactionPath}/skin/start`,
+            startLabel: skin.startButton,
+            ...(skinChallenge === undefined
               ? {}
               : {
                   challenge: {
-                    downloadLabel: strings.skin.downloadButton,
+                    downloadLabel: skin.downloadButton,
                     downloadUrl: `${interactionPath}/skin/download`,
-                    format:
-                      input.skinChallenge.height === 32
-                        ? strings.skin.formatLegacy
-                        : strings.skin.formatModern,
-                    model:
-                      input.skinChallenge.model === 'slim'
-                        ? strings.skin.modelSlim
-                        : strings.skin.modelClassic,
-                    steps: strings.skin.steps,
-                    username: input.skinChallenge.username,
-                    verificationFor: strings.skin.verificationFor,
+                    format: skinChallenge.height === 32 ? skin.formatLegacy : skin.formatModern,
+                    formatLabel: skin.formatLabel,
+                    model: skinChallenge.model === 'slim' ? skin.modelSlim : skin.modelClassic,
+                    modelLabel: skin.modelLabel,
+                    steps: skin.steps,
+                    username: skinChallenge.username,
+                    usernameLabel: skin.usernameLabel,
                   },
                 }),
-            heading: strings.skin.heading,
-            hint: strings.skin.startHint,
-            startAction: `${interactionPath}/skin/start`,
-            startLabel: strings.skin.startButton,
           },
         }),
   });

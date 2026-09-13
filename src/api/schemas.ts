@@ -708,7 +708,7 @@ export const fontAssetRouteSchema: FastifySchema = {
   },
 };
 
-export const appAvatarAssetRouteSchema: FastifySchema = {
+export const brandIconRouteSchema: FastifySchema = {
   hide: true,
   response: {
     200: { type: 'string' },

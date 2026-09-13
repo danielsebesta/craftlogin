@@ -248,10 +248,13 @@ after role changes.
 ## Interface
 
 The web interface is dark only, uses one accent color, and shares a single component vocabulary
-across the developer landing page, the Developer Console, and the end-user Minecraft sign-in
-surface. It has no CSS framework and no asset build step: the styles live in `src/api/ui/` and are
-served as generated stylesheets. Every interactive element has a visible keyboard focus ring, every
-input has a visible label, and status messages are announced with a live region.
+across the developer landing page, the Developer Console, the end-user Minecraft sign-in surface,
+and the API reference. It has no CSS framework and no asset build step: the styles live in
+`src/api/ui/` and are served as generated stylesheets, the brand cube is one SVG with a raster copy
+that doubles as the Minecraft server icon, and the document head, header, and footer come from one
+shared shell. Every control is at least 44px tall with a visible keyboard focus ring, every input
+has a visible label, every text pairing meets WCAG 2.2 AA, and status messages combine a shape with
+the text announced in a live region.
 
 [`PRODUCT.md`](PRODUCT.md) records audiences and interface principles. [`DESIGN.md`](DESIGN.md)
 records the color, typography, spacing, and component rules. A unit test enforces the flat, dark,

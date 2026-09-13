@@ -23,38 +23,9 @@ body {
   line-height: 1.6;
 }
 
-body::before {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  content: "";
-  background-color: var(--pattern);
-  pointer-events: none;
-  -webkit-mask-image: url("/assets/background.svg");
-  mask-image: url("/assets/background.svg");
-  -webkit-mask-repeat: repeat;
-  mask-repeat: repeat;
-  -webkit-mask-size: 8.5rem auto;
-  mask-size: 8.5rem auto;
-}
-
-/* Solid center rail above the cube pattern, so the pattern stays visible
-   only in the side gutters outside the content column. */
-body::after {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  width: min(calc(var(--container) + (2 * var(--s4))), 100%);
-  margin-inline: auto;
-  content: "";
-  background: var(--bg);
-  border-inline: 1px solid var(--line);
-  pointer-events: none;
-}
-
-body > * {
-  position: relative;
-  z-index: 1;
+::selection {
+  color: var(--bg);
+  background: var(--accent);
 }
 
 h1,
@@ -139,13 +110,74 @@ textarea {
   outline-offset: 2px;
 }
 
-.container {
-  width: min(var(--container), 100% - (2 * var(--s4)));
+.container,
+.page-column,
+.page-header-inner,
+.page-footer-inner {
+  width: min(var(--page-width), 100% - (2 * var(--s4)));
   margin-inline: auto;
 }
 
-.page-surface {
-  background-color: var(--bg);
+.page-narrow {
+  --page-width: 42rem;
+}
+
+.page-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.page-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s4);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 4rem;
+}
+
+.page-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.page-nav a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.page-nav a[aria-current="page"] {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.brand {
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--text);
+}
+
+.brand-mark {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.page-footer {
+  padding-block: var(--s5);
+  color: var(--muted);
+  font-size: var(--t-xs);
+  border-top: 1px solid var(--line);
 }
 
 .skip-link {
@@ -177,6 +209,42 @@ textarea {
   clip-path: inset(50%);
 }
 
+/* The ambient cube texture is a wide-screen detail: the center rail covers it
+   everywhere else, so narrow viewports skip both layers entirely. */
+@media (min-width: 74.01rem) {
+  body::before {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    content: "";
+    background-color: var(--pattern);
+    pointer-events: none;
+    -webkit-mask-image: url("/assets/background.svg");
+    mask-image: url("/assets/background.svg");
+    -webkit-mask-repeat: repeat;
+    mask-repeat: repeat;
+    -webkit-mask-size: 8.5rem auto;
+    mask-size: 8.5rem auto;
+  }
+
+  body::after {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    width: min(calc(var(--container) + (2 * var(--s4))), 100%);
+    margin-inline: auto;
+    content: "";
+    background: var(--bg);
+    border-inline: 1px solid var(--line);
+    pointer-events: none;
+  }
+
+  body > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -185,12 +253,6 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-@media (max-width: 74rem) {
-  body::after {
-    border-inline: none;
   }
 }
 

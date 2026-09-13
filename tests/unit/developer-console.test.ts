@@ -41,7 +41,8 @@ describe('Developer Console', (): void => {
     expect(response.body).toContain('ABCDEFGH.craftlogin.com');
     expect(response.body).toContain('<noscript>');
     expect(response.body).toContain('/assets/interaction.js');
-    expect(response.body).toContain('Or verify by changing your skin');
+    // The developer login has no online-mode path, so the skin heading loses its "Or".
+    expect(response.body).toContain('Verify by changing your skin');
     expect(response.body).toContain('action="/developers/login/skin/start"');
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['content-security-policy']).toContain("form-action 'self'");
@@ -127,7 +128,7 @@ describe('Developer Console', (): void => {
       url: '/developers/login',
     });
 
-    expect(login.body).toContain('Verification skin for');
+    expect(login.body).toContain('Minecraft username');
     expect(login.body).toContain('BuilderOne');
     expect(login.body).toContain('slim arms');
     expect(login.body).toContain('/developers/login/skin/download');
@@ -177,11 +178,13 @@ describe('Developer Console', (): void => {
     expect(response.body).toContain('<h1>Developer Console</h1>');
     expect(response.body).toContain('Local map client');
     expect(response.body).toContain('Access registry');
-    expect(response.body).toContain('<strong>VerifiedPlayer</strong>');
+    expect(response.body).toContain('console-session-player');
+    expect(response.body).toContain('VerifiedPlayer');
     expect(response.body).toContain(
       `/api/avatars/${developerSession.userUuid}/face?size=32&amp;layers=all`,
     );
-    expect(response.body).not.toContain('<span class="console-identity"><code>');
+    const header = /<header class="page-header">[\s\S]*?<\/header>/u.exec(response.body)?.[0] ?? '';
+    expect(header).not.toContain('<code>');
     expect(response.body).toContain(`value="${developerSession.csrfToken}"`);
     expect(response.body).not.toContain('<script');
     expect(response.headers['set-cookie']).toContain('__Host-craftlogin_developer_session=');

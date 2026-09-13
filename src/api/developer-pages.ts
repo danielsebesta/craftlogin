@@ -4,6 +4,7 @@ import type { DeveloperLoginAttempt } from '../developers/login-service.js';
 import { english } from '../locales/en.js';
 import type { RegisteredApp } from './app-registration.js';
 import { escapeHtml } from './html.js';
+import { renderConsoleShell } from './ui/console-shell.js';
 import { renderSignInPage } from './ui/sign-in-page.js';
 
 export type DashboardNotice = 'invalid-form' | 'last-admin' | 'not-found';
@@ -31,6 +32,8 @@ export function renderDeveloperLoginPage(
 ): string {
   const developer = english.developer;
   const interaction = english.interaction;
+  const skin = interaction.skin;
+  const skinChallenge = attempt.skinChallenge;
   const address =
     attempt.code === null
       ? attempt.status === 'verified'
@@ -40,61 +43,32 @@ export function renderDeveloperLoginPage(
   const verified = attempt.status === 'verified';
 
   return renderSignInPage({
+    accountLabel: interaction.signedInAs,
     action: '/developers/login/complete',
-    address,
-    addressLabel: interaction.addressLabel,
     allowsHeading: interaction.allowsHeading,
     appName: developer.login.appName,
     brand: developer.navigation.brand,
     continueLabel: interaction.continueButton,
-    permissions: [{ kind: 'text', text: developer.login.permission }],
     copiedLabel: interaction.copied,
     copyLabel: interaction.copyAddress,
     documentTitle: `${developer.login.appName} · ${interaction.title}`,
     footer: interaction.footer,
     heading: interaction.heading,
-    initialStatus: verified
-      ? interaction.status.verified
-      : attempt.skinChallenge === undefined
-        ? interaction.status.pending
-        : interaction.skin.statusPending,
-    initialStatusState: verified ? 'verified' : 'pending',
     lead: interaction.lead,
     messages:
-      attempt.skinChallenge === undefined
+      skinChallenge === undefined
         ? interaction.status
-        : { ...interaction.status, pending: interaction.skin.statusPending },
+        : { ...interaction.status, pending: skin.statusPending },
     noJavaScript: interaction.noJavaScript,
+    permissions: [{ kind: 'text', text: developer.login.permission }],
     securityNote: interaction.securityNote,
-    skipLabel: english.common.skipToContent,
-    statusUrl:
-      attempt.skinChallenge === undefined
-        ? '/developers/login/status'
-        : '/developers/login/skin/status',
-    steps: interaction.steps,
-    stepsHeading: interaction.stepsHeading,
     skinVerification: {
-      accountLabel: interaction.skin.accountLabel,
-      accountPlaceholder: interaction.skin.accountPlaceholder,
-      ...(attempt.skinChallenge === undefined
-        ? {}
-        : {
-            challenge: {
-              downloadLabel: interaction.skin.downloadButton,
-              downloadUrl: '/developers/login/skin/download',
-              format:
-                attempt.skinChallenge.height === 32
-                  ? interaction.skin.formatLegacy
-                  : interaction.skin.formatModern,
-              model:
-                attempt.skinChallenge.model === 'slim'
-                  ? interaction.skin.modelSlim
-                  : interaction.skin.modelClassic,
-              steps: interaction.skin.steps,
-              username: attempt.skinChallenge.username,
-              verificationFor: interaction.skin.verificationFor,
-            },
-          }),
+      accountLabel: skin.accountLabel,
+      accountPlaceholder: skin.accountPlaceholder,
+      heading: skin.headingAlternative,
+      hint: skin.startHint,
+      startAction: '/developers/login/skin/start',
+      startLabel: skin.startButton,
       ...(skinError === undefined
         ? {}
         : {
@@ -103,28 +77,51 @@ export function renderDeveloperLoginPage(
                 ? developer.login.skinNotFound
                 : developer.login.skinUnavailable,
           }),
-      heading: interaction.skin.heading,
-      hint: interaction.skin.startHint,
-      startAction: '/developers/login/skin/start',
-      startLabel: interaction.skin.startButton,
+      ...(skinChallenge === undefined
+        ? {}
+        : {
+            challenge: {
+              downloadLabel: skin.downloadButton,
+              downloadUrl: '/developers/login/skin/download',
+              format: skinChallenge.height === 32 ? skin.formatLegacy : skin.formatModern,
+              formatLabel: skin.formatLabel,
+              model: skinChallenge.model === 'slim' ? skin.modelSlim : skin.modelClassic,
+              modelLabel: skin.modelLabel,
+              steps: skin.steps,
+              username: skinChallenge.username,
+              usernameLabel: skin.usernameLabel,
+            },
+          }),
+    },
+    verification: {
+      address,
+      addressLabel: interaction.addressLabel,
+      initialStatus: verified
+        ? interaction.status.verified
+        : skinChallenge === undefined
+          ? interaction.status.pending
+          : skin.statusPending,
+      initialStatusState: verified ? 'verified' : 'pending',
+      statusUrl:
+        skinChallenge === undefined ? '/developers/login/status' : '/developers/login/skin/status',
+      steps: interaction.steps,
+      stepsHeading: interaction.stepsHeading,
     },
   });
 }
 
 export function renderDeveloperAccessDeniedPage(): string {
   const strings = english.developer;
-  return pageShell(
-    strings.accessDenied.title,
-    `<main id="main" class="message-layout">
-      <section class="message-card card" aria-labelledby="denied-heading">
+  return renderConsoleShell(strings.accessDenied.title, {
+    className: 'container message-layout',
+    content: `      <section class="message-card card" aria-labelledby="denied-heading">
         <h1 id="denied-heading">${escapeHtml(strings.accessDenied.heading)}</h1>
         <p class="lead">${escapeHtml(strings.accessDenied.detail)}</p>
         <div class="button-row">
           <a class="button" href="/developers/login">${escapeHtml(strings.accessDenied.retry)}</a>
         </div>
-      </section>
-    </main>`,
-  );
+      </section>`,
+  });
 }
 
 export function renderDeveloperDashboard(input: DeveloperDashboardInput): string {
@@ -140,19 +137,31 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
     input.formError === undefined
       ? ''
       : `<p class="notice notice-error" role="alert">${escapeHtml(input.formError)}</p>`;
-  const dashboardNotice = renderDashboardNotice(input.notice);
-  const identity = `<span class="console-identity"><span class="console-player"><span class="console-player-head" aria-hidden="true"><img src="/api/avatars/${encodeURIComponent(input.userUuid)}/face?size=32&amp;layers=all" alt="" width="32" height="32" decoding="async"></span><span><span class="visually-hidden">${escapeHtml(strings.dashboard.signedInAs)} </span><strong>${escapeHtml(input.username)}</strong></span></span><span>${escapeHtml(roleLabel)}</span><form action="/developers/logout" method="post">${csrfField(input.csrfToken)}<button class="button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button></form></span>`;
+  const identity = `<span class="console-session">
+          <span class="console-session-player">
+            <img class="console-session-head" src="/api/avatars/${encodeURIComponent(input.userUuid)}/face?size=32&amp;layers=all" alt="" width="32" height="32" decoding="async">
+            <span><span class="visually-hidden">${escapeHtml(strings.dashboard.signedInAs)} </span>${escapeHtml(input.username)}</span>
+          </span>
+          <span class="console-session-role">${escapeHtml(roleLabel)}</span>
+          <form action="/developers/logout" method="post">
+            ${csrfField(input.csrfToken)}
+            <button class="button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button>
+          </form>
+        </span>`;
 
-  return pageShell(
+  return renderConsoleShell(
     strings.dashboard.heading,
-    `<main id="main" class="container console-main">
-      <h1>${escapeHtml(strings.dashboard.heading)}</h1>
-      <p class="lead">${escapeHtml(strings.dashboard.lead)}</p>
-      ${dashboardNotice}
+    {
+      className: 'container console-main',
+      content: `      <header class="console-intro">
+        <h1>${escapeHtml(strings.dashboard.heading)}</h1>
+        <p class="lead">${escapeHtml(strings.dashboard.lead)}</p>
+      </header>
+      ${renderDashboardNotice(input.notice)}
       <section class="console-section" aria-labelledby="apps-heading">
         <div class="console-section-head">
           <h2 id="apps-heading">${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
-          <a href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>
+          <a class="console-section-link" href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>
         </div>
         ${renderAppTable(input.apps, input.role)}
       </section>
@@ -164,8 +173,8 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
           ${renderRegistrationForm(input.csrfToken, input.formValues)}
         </div>
       </details>
-      ${adminPanel}
-    </main>`,
+      ${adminPanel}`,
+    },
     { identity },
   );
 }
@@ -179,7 +188,8 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
   const secret =
     app.clientSecret === undefined
       ? ''
-      : `<div class="credential">
+      : `
+        <div class="credential">
           <p class="field-label">${escapeHtml(strings.app.secretLabel)}</p>
           <code id="client-secret">${escapeHtml(app.clientSecret)}</code>
           <div class="button-row">
@@ -187,10 +197,11 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
           </div>
         </div>`;
 
-  return pageShell(
+  return renderConsoleShell(
     strings.app.createdTitle,
-    `<main id="main" class="message-layout">
-      <section class="message-card card" aria-labelledby="created-heading">
+    {
+      className: 'container message-layout',
+      content: `      <section class="message-card card" aria-labelledby="created-heading">
         <h1 id="created-heading">${escapeHtml(strings.app.createdHeading)}</h1>
         <p class="lead">${escapeHtml(strings.app.createdIntro)}</p>
         <dl class="summary-list">
@@ -206,23 +217,21 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
             <dt>${escapeHtml(strings.app.redirectLabel)}</dt>
             <dd><ul class="redirect-list">${redirects}</ul></dd>
           </div>
-        </dl>
-        ${secret}
+        </dl>${secret}
         <div class="button-row">
           <a class="button" href="/developers">${escapeHtml(strings.navigation.console)}</a>
         </div>
-      </section>
-    </main>`,
-    { includeScript: true },
+      </section>`,
+    },
+    { script: true },
   );
 }
 
 export function renderDeleteAppPage(app: ManagedApp, csrfToken: string): string {
   const strings = english.developer;
-  return pageShell(
-    strings.confirm.appTitle,
-    `<main id="main" class="message-layout">
-      <section class="message-card card" aria-labelledby="confirm-heading">
+  return renderConsoleShell(strings.confirm.appTitle, {
+    className: 'container message-layout',
+    content: `      <section class="message-card card" aria-labelledby="confirm-heading">
         <h1 id="confirm-heading">${escapeHtml(strings.confirm.appHeading)}</h1>
         <p class="lead">${escapeHtml(strings.confirm.appBody)}</p>
         <dl class="summary-list">
@@ -242,19 +251,17 @@ export function renderDeleteAppPage(app: ManagedApp, csrfToken: string): string 
             <a class="button button-secondary" href="/developers">${escapeHtml(strings.confirm.cancel)}</a>
           </div>
         </form>
-      </section>
-    </main>`,
-  );
+      </section>`,
+  });
 }
 
 export function renderRemoveDeveloperPage(developer: DeveloperAccess, csrfToken: string): string {
   const strings = english.developer;
   const roleLabel =
     developer.role === 'admin' ? strings.admin.adminRole : strings.admin.developerRole;
-  return pageShell(
-    strings.confirm.developerTitle,
-    `<main id="main" class="message-layout">
-      <section class="message-card card" aria-labelledby="confirm-heading">
+  return renderConsoleShell(strings.confirm.developerTitle, {
+    className: 'container message-layout',
+    content: `      <section class="message-card card" aria-labelledby="confirm-heading">
         <h1 id="confirm-heading">${escapeHtml(strings.confirm.developerHeading)}</h1>
         <p class="lead">${escapeHtml(strings.confirm.developerBody)}</p>
         <dl class="summary-list">
@@ -274,9 +281,8 @@ export function renderRemoveDeveloperPage(developer: DeveloperAccess, csrfToken:
             <a class="button button-secondary" href="/developers">${escapeHtml(strings.confirm.cancel)}</a>
           </div>
         </form>
-      </section>
-    </main>`,
-  );
+      </section>`,
+  });
 }
 
 function renderDashboardNotice(notice: DashboardNotice | undefined): string {
@@ -285,12 +291,12 @@ function renderDashboardNotice(notice: DashboardNotice | undefined): string {
     return '';
   }
   if (notice === 'last-admin') {
-    return `<p class="notice" role="status">${escapeHtml(strings.admin.lastAdminNotice)}</p>`;
+    return `      <p class="notice" role="status">${escapeHtml(strings.admin.lastAdminNotice)}</p>\n`;
   }
   if (notice === 'invalid-form') {
-    return `<p class="notice notice-error" role="alert">${escapeHtml(strings.admin.invalidFormNotice)}</p>`;
+    return `      <p class="notice notice-error" role="alert">${escapeHtml(strings.admin.invalidFormNotice)}</p>\n`;
   }
-  return `<p class="notice notice-error" role="alert">${escapeHtml(strings.admin.notFoundNotice)}</p>`;
+  return `      <p class="notice notice-error" role="alert">${escapeHtml(strings.admin.notFoundNotice)}</p>\n`;
 }
 
 function renderAppTable(apps: readonly ManagedApp[], role: DeveloperRole): string {
@@ -306,15 +312,17 @@ function renderAppTable(apps: readonly ManagedApp[], role: DeveloperRole): strin
         .join('');
       const owner =
         role === 'admin'
-          ? `<span class="app-type">${escapeHtml(strings.ownerLabel)}: ${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</span>`
+          ? `<span class="app-meta">${escapeHtml(strings.ownerLabel)}: <code>${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</code></span>`
           : '';
       return `<tr>
-        <td><span class="app-avatar" aria-hidden="true"><img src="/assets/app-avatar.jpg" alt="" width="740" height="740"></span></td>
-        <th scope="row"><span class="app-name">${escapeHtml(app.name)}</span><span class="app-type">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</span>${owner}</th>
-        <td><code>${escapeHtml(app.clientId)}</code></td>
-        <td><ul class="redirect-list">${redirects}</ul></td>
-        <td class="table-actions"><a class="button button-danger" href="/developers/apps/${encodeURIComponent(app.id)}/delete">${escapeHtml(strings.deleteAction)}</a></td>
-      </tr>`;
+          <th scope="row">
+            <span class="app-name">${escapeHtml(app.name)}</span>
+            <span class="app-meta">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</span>${owner}
+          </th>
+          <td><code>${escapeHtml(app.clientId)}</code></td>
+          <td><ul class="redirect-list">${redirects}</ul></td>
+          <td class="table-actions"><a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/delete">${escapeHtml(strings.deleteAction)}</a></td>
+        </tr>`;
     })
     .join('\n        ');
 
@@ -323,7 +331,6 @@ function renderAppTable(apps: readonly ManagedApp[], role: DeveloperRole): strin
         <caption class="visually-hidden">${escapeHtml(english.developer.dashboard.applicationsHeading)}</caption>
         <thead>
           <tr>
-            <th scope="col"><span class="visually-hidden">${escapeHtml(strings.avatarLabel)}</span></th>
             <th scope="col">${escapeHtml(strings.nameLabel)}</th>
             <th scope="col">${escapeHtml(strings.clientIdLabel)}</th>
             <th scope="col">${escapeHtml(strings.redirectLabel)}</th>
@@ -413,7 +420,7 @@ function renderAdministratorPanel(
             </form>
           </td>
           <td><time datetime="${escapeHtml(developer.createdAt)}">${escapeHtml(developer.createdAt.slice(0, 10))}</time></td>
-          <td class="table-actions"><a class="button button-danger" href="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete">${escapeHtml(admin.removeAction)}</a></td>
+          <td class="table-actions"><a class="button button-quiet" href="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete">${escapeHtml(admin.removeAction)}</a></td>
         </tr>`,
           )
           .join('\n        ')}
@@ -421,10 +428,10 @@ function renderAdministratorPanel(
       </table>
     </div>`;
 
-  return `<details class="disclosure"${open ? ' open' : ''}>
+  return `
+    <details class="disclosure"${open ? ' open' : ''}>
       <summary>${escapeHtml(admin.summary)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
       <div class="disclosure-body">
-        <h2>${escapeHtml(admin.heading)}</h2>
         <p class="lead">${escapeHtml(admin.intro)}</p>
         <form class="admin-grant" action="/developers/admin/developers" method="post">
           ${csrfField(csrfToken)}
@@ -448,40 +455,4 @@ function renderAdministratorPanel(
 
 function csrfField(token: string): string {
   return `<input type="hidden" name="csrfToken" value="${escapeHtml(token)}">`;
-}
-
-function pageShell(
-  title: string,
-  content: string,
-  options: { readonly identity?: string; readonly includeScript?: boolean } = {},
-): string {
-  const strings = english.developer;
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="dark">
-    <meta name="theme-color" content="#0b0e0b">
-    <title>${escapeHtml(title)} · ${escapeHtml(strings.navigation.brand)}</title>
-    <link rel="stylesheet" href="/assets/developer.css">
-    ${options.includeScript === true ? '<script src="/assets/interaction.js" defer></script>' : ''}
-  </head>
-  <body>
-    <a class="skip-link" href="#main">${escapeHtml(english.common.skipToContent)}</a>
-    <header class="site-header">
-      <div class="container site-header-inner">
-        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>${escapeHtml(strings.navigation.brand)}</a>
-        <nav class="site-nav" aria-label="${escapeHtml(strings.navigation.ariaLabel)}">
-          <a href="/developers">${escapeHtml(strings.navigation.console)}</a>
-          ${options.identity ?? ''}
-        </nav>
-      </div>
-    </header>
-    ${content}
-    <footer class="site-footer">
-      <div class="container">${escapeHtml(strings.footer)}</div>
-    </footer>
-  </body>
-</html>`;
 }

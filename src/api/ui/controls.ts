@@ -71,6 +71,11 @@ export const uiControlStyles = `
   background: var(--surface-raised);
 }
 
+/* Row-level destructive navigation stays quiet until it is pointed at. */
+.table-actions .button-quiet:hover {
+  color: var(--danger-strong);
+}
+
 .button:disabled,
 .button[aria-disabled="true"] {
   cursor: not-allowed;
@@ -195,6 +200,7 @@ textarea[aria-invalid="true"] {
 }
 
 .table-wrap {
+  position: relative;
   overflow-x: auto;
 }
 
@@ -226,6 +232,14 @@ textarea[aria-invalid="true"] {
 .table th:last-child,
 .table td:last-child {
   padding-right: 0;
+}
+
+.table tbody tr:hover > * {
+  background: var(--surface-raised);
+}
+
+.table tbody tr:last-child > * {
+  border-bottom: 0;
 }
 
 .table-actions {
@@ -280,15 +294,17 @@ textarea[aria-invalid="true"] {
 
 .notice {
   padding: var(--s3) var(--s4);
-  background: var(--surface);
-  border: 2px solid var(--line-strong);
+  background: var(--surface-raised);
+  border: 2px solid var(--line);
 }
 
 .notice-error {
+  color: var(--danger-strong);
   border-color: var(--danger);
 }
 
 .empty-state {
+  max-width: var(--measure);
   padding: var(--s5) 0;
   color: var(--muted);
 }
@@ -310,7 +326,7 @@ textarea[aria-invalid="true"] {
 .card {
   padding: var(--s5);
   background: var(--surface);
-  border: 2px solid var(--line-strong);
+  border: 2px solid var(--line);
 }
 
 .section {
@@ -340,7 +356,7 @@ textarea[aria-invalid="true"] {
 
 .steps {
   display: grid;
-  gap: var(--s2);
+  gap: var(--s3);
   padding-left: var(--s5);
   color: var(--muted);
 }
@@ -395,60 +411,5 @@ textarea[aria-invalid="true"] {
 
 .muted {
   color: var(--muted);
-}
-
-.site-header {
-  border-bottom: 1px solid var(--line);
-}
-
-.site-header-inner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3) var(--s4);
-  align-items: center;
-  justify-content: space-between;
-  min-height: 4rem;
-}
-
-.site-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s4);
-  align-items: center;
-  font-size: var(--t-sm);
-}
-
-.site-nav a {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.site-nav a:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-.brand {
-  display: inline-flex;
-  gap: var(--s2);
-  align-items: center;
-  color: var(--text);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.brand-mark {
-  width: 1.25rem;
-  height: 1.25rem;
-  background: var(--accent);
-  border: 0.3rem solid var(--surface-raised);
-  image-rendering: pixelated;
-}
-
-.site-footer {
-  padding-block: var(--s5);
-  color: var(--muted);
-  font-size: var(--t-xs);
-  border-top: 1px solid var(--line);
 }
 `;

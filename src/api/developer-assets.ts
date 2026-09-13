@@ -1,63 +1,57 @@
 import { uiBaseStyles } from './ui/base.js';
 import { uiControlStyles } from './ui/controls.js';
 
+/**
+ * The console is a single wide column: an intro block, the applications table,
+ * then disclosures for creating clients and administering access.
+ */
 const consoleStyles = `
-.console-header {
-  border-bottom: 1px solid var(--line);
-}
-
-.console-header-inner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3) var(--s4);
-  align-items: center;
-  justify-content: space-between;
-  min-height: 4rem;
-}
-
-.console-identity {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-  align-items: center;
-  font-size: var(--t-xs);
-  color: var(--muted);
-}
-
-.console-player {
-  display: inline-flex;
-  gap: var(--s2);
-  align-items: center;
-  color: var(--text);
-}
-
-.console-player-head {
-  display: grid;
-  width: 2rem;
-  height: 2rem;
-  overflow: hidden;
-  place-items: center;
-  background: var(--surface-raised);
-}
-
-.console-player-head img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  image-rendering: pixelated;
-  object-fit: contain;
-}
-
-.console-identity form {
-  display: inline;
-}
-
 .console-main {
   padding-block: var(--s6) var(--s7);
 }
 
-.console-main > h1 {
-  margin-bottom: var(--s3);
+.console-intro {
+  display: grid;
+  gap: var(--s3);
+  max-width: var(--measure);
+}
+
+.console-main > .notice {
+  margin-top: var(--s4);
+}
+
+.console-session {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
+
+.console-session-player {
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
+  color: var(--text);
+  font-size: var(--t-sm);
+}
+
+.console-session-role {
+  padding-inline: var(--s2);
+  border: 1px solid var(--line-strong);
+}
+
+.console-session form {
+  display: inline;
+}
+
+.console-session-head {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  background: var(--surface-raised);
+  image-rendering: pixelated;
 }
 
 .console-section {
@@ -68,26 +62,18 @@ const consoleStyles = `
   display: flex;
   flex-wrap: wrap;
   gap: var(--s3);
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  padding-bottom: var(--s3);
   margin-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
 }
 
-.app-avatar {
-  display: block;
-  width: 2.5rem;
-  aspect-ratio: 1 / 0.74;
-  overflow: hidden;
-  background: #fff;
-  border: 2px solid var(--line-strong);
-}
-
-.app-avatar img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center top;
+.console-section-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: var(--t-sm);
 }
 
 .app-name {
@@ -95,10 +81,11 @@ const consoleStyles = `
   font-weight: 700;
 }
 
-.app-type {
+.app-meta {
   display: block;
-  font-size: var(--t-xs);
   color: var(--muted);
+  font-size: var(--t-xs);
+  font-weight: 400;
 }
 
 .redirect-list {
@@ -113,11 +100,25 @@ const consoleStyles = `
   overflow-wrap: anywhere;
 }
 
+.role-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.role-form select {
+  width: auto;
+  min-width: 9rem;
+}
+
 .admin-grant {
   display: grid;
   gap: var(--s3);
   align-items: end;
-  margin-bottom: var(--s5);
+  padding-bottom: var(--s5);
+  margin-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
 }
 
 @media (min-width: 48rem) {
@@ -126,48 +127,27 @@ const consoleStyles = `
   }
 }
 
-.role-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.role-form select {
-  width: auto;
-  min-width: 9rem;
-}
-
 .credential {
+  display: grid;
+  gap: var(--s2);
   padding: var(--s4);
   background: var(--surface-raised);
   border: 2px solid var(--line-strong);
 }
 
-.credential dt {
-  font-size: var(--t-xs);
-  font-weight: 700;
-  color: var(--muted);
-}
-
 .credential code {
-  display: block;
-  margin-top: var(--s2);
   overflow-wrap: anywhere;
 }
 
 .message-layout {
   display: grid;
   place-items: center;
-  min-height: calc(100vh - 8rem);
+  min-height: calc(100vh - 12rem);
   padding-block: var(--s7);
 }
 
 .message-card {
-  display: grid;
-  width: min(44rem, 100% - (2 * var(--s4)));
-  gap: var(--s4);
+  width: min(44rem, 100%);
 }
 `;
 

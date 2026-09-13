@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { developerStyles } from '../../src/api/developer-assets.js';
 import { renderDeveloperDashboard } from '../../src/api/developer-pages.js';
-import { swaggerTypographyStyles } from '../../src/api/font-assets.js';
 import { interactionStyles } from '../../src/api/interaction-assets.js';
 import { permissionsForScope, renderInteractionPage } from '../../src/api/interaction-page.js';
 import { landingStyles } from '../../src/api/landing-assets.js';
+import { swaggerThemeStyles } from '../../src/api/swagger-theme.js';
 import { uiBaseStyles } from '../../src/api/ui/base.js';
 import { uiControlStyles } from '../../src/api/ui/controls.js';
 import { signInSurfaceStyles } from '../../src/api/ui/surface.js';
@@ -31,9 +31,16 @@ describe('shared UI styles', (): void => {
     }
   });
 
-  it('keeps the OpenAPI documentation typography on the same family', (): void => {
-    expect(swaggerTypographyStyles).toContain('font-family: "Pixeloid Sans"');
-    expect(swaggerTypographyStyles).not.toContain('box-shadow');
+  it('keeps the OpenAPI documentation on the shared tokens and family', (): void => {
+    expect(swaggerThemeStyles).toContain('font-family: "Pixeloid Sans"');
+    expect(swaggerThemeStyles).toContain('font-family: var(--font-mono)');
+    // Swagger UI ships shadows; the theme may only remove them.
+    expect(swaggerThemeStyles.replaceAll('box-shadow: none;', '')).not.toContain('box-shadow');
+    expect(swaggerThemeStyles).toContain('background: var(--surface)');
+    expect(swaggerThemeStyles).toContain('border-color: var(--line)');
+    for (const match of swaggerThemeStyles.matchAll(/border-radius:\s*([^;]+);/gu)) {
+      expect(match[1]?.trim()).toBe('0');
+    }
   });
 
   it('keeps the ambient background a quiet token-based mask', (): void => {
@@ -75,11 +82,28 @@ describe('page accessibility contract', (): void => {
     expect(html).toContain('data-continue-form');
     expect(html).toContain('Maps &amp; More');
     expect(html).not.toContain('<strong>');
-    expect(html).toContain('consent-avatar');
     expect(html).toContain('This app will receive:');
     expect(html).toContain('Stay signed in between visits');
     expect(html).toContain('action="/interaction/interaction-id/abort"');
     expect(html).toContain('name="color-scheme" content="dark"');
+    expect(html).toContain('rel="icon"');
+  });
+
+  it('renders the verified account as one labelled chip', (): void => {
+    const html = renderInteractionPage({
+      accountAvatarUrl: '/avatar.png',
+      accountName: 'VerifiedPlayer',
+      appName: 'Community Map',
+      interactionId: 'interaction-id',
+      kind: 'consent',
+      minecraftBaseDomain: 'craftlogin.com',
+      scope: 'openid',
+    });
+
+    expect(html).toContain('class="account-chip"');
+    expect(html).toContain('account-chip-name">VerifiedPlayer');
+    expect(html).toContain('Signed in as');
+    expect(html).toContain('Use a different account');
   });
 
   it('renders visible labels for every console input', (): void => {
@@ -97,24 +121,61 @@ describe('page accessibility contract', (): void => {
     expect(html).toContain('<label for="admin-identifier">');
     expect(html).toContain('<label for="admin-role">');
     expect(html).toContain('<h1>Developer Console</h1>');
-    expect(html).toContain('<strong>VerifiedPlayer</strong>');
     expect(html).toContain('/api/avatars/123e4567-e89b-42d3-a456-426614174000/face');
     expect(html).not.toContain('<code>123e4567-e89b-42d3-a456-426614174000</code>');
+  });
+
+  it('renders every surface from the same document shell', (): void => {
+    const interaction = renderInteractionPage({
+      appName: 'Community Map',
+      code: 'ABCDEFGH',
+      interactionId: 'interaction-id',
+      minecraftBaseDomain: 'craftlogin.com',
+      kind: 'login',
+      scope: 'openid',
+    });
+    const pages = [
+      interaction,
+      renderDeveloperDashboard({
+        apps: [],
+        csrfToken: 'csrf-token',
+        role: 'developer',
+        username: 'VerifiedPlayer',
+        userUuid: '123e4567-e89b-42d3-a456-426614174000',
+      }),
+    ];
+
+    for (const html of pages) {
+      expect(html.match(/<h1[\s>]/gu)).toHaveLength(1);
+      expect(html.match(/<main[\s>]/gu)).toHaveLength(1);
+      expect(html).toContain('<a class="skip-link" href="#main">');
+      expect(html).toContain('<header class="page-header">');
+      expect(html).toContain('<footer class="page-footer">');
+      expect(html).toContain('<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">');
+      expect(html).toContain('sizes="64x64"');
+      expect(html).toContain('<meta name="theme-color" content="#0b0e0b">');
+    }
+
+    expect(interaction).toContain('<body class="page-narrow">');
   });
 });
 
 describe('interaction consent permissions', (): void => {
   it('describes known scopes and falls back to code for unknown scopes', (): void => {
-    expect(permissionsForScope('openid profile custom_scope')).toEqual([
-      { kind: 'text', text: 'Your Minecraft identity (stable UUID)' },
-      { kind: 'text', text: 'Your current username and avatar' },
-      { code: 'custom_scope', kind: 'code' },
+    expect(permissionsForScope('openid profile')).toEqual([
+      { kind: 'text', text: english.interaction.scopeIdentity },
+      { kind: 'text', text: english.interaction.scopeProfile },
+    ]);
+    expect(permissionsForScope('openid custom')).toEqual([
+      { kind: 'text', text: english.interaction.scopeIdentity },
+      { code: 'custom', kind: 'code' },
     ]);
   });
 
   it('ignores blank entries and repeated scopes', (): void => {
-    expect(permissionsForScope('  openid openid  ')).toEqual([
-      { kind: 'text', text: 'Your Minecraft identity (stable UUID)' },
+    expect(permissionsForScope('  openid   openid offline_access ')).toEqual([
+      { kind: 'text', text: english.interaction.scopeIdentity },
+      { kind: 'text', text: english.interaction.scopeOffline },
     ]);
     expect(permissionsForScope('')).toEqual([]);
   });
