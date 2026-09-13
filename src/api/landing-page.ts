@@ -14,41 +14,32 @@ interface Section {
   readonly title: string;
 }
 
+function renderSteps(): string {
+  return english.landing.flow.items
+    .map(
+      (item, index): string => `
+            <li>
+              <span class="step-index" aria-hidden="true">${(index + 1).toString()}.</span>
+              <h3>${escapeHtml(item.title)}</h3>
+              <p>${escapeHtml(item.detail)}</p>
+            </li>`,
+    )
+    .join('');
+}
+
 export function renderLandingPage(input: LandingPageInput): string {
   const strings = english.landing;
-  const navigation = {
-    items: [
-      { href: '/developers', label: strings.navigation.developers },
-      ...(input.showDocumentation
-        ? [{ href: '/docs/', label: strings.navigation.documentation }]
-        : []),
-      { href: SOURCE_URL, label: strings.navigation.github },
-    ],
-    label: strings.navigation.ariaLabel,
-  };
+  const claims = strings.claims;
+
   const secondaryAction = input.showDocumentation
     ? `<a class="button button-secondary" href="/docs/">${escapeHtml(strings.hero.documentationAction)}</a>`
     : `<a class="button button-secondary" href="${SOURCE_URL}">${escapeHtml(strings.hero.githubAction)}</a>`;
 
   const sections: readonly Section[] = [
     {
-      body: `<p>${escapeHtml(strings.quickstart.text)}</p>
-          <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.quickstart.heading)}"><code>${escapeHtml(strings.quickstart.code)}</code></pre>
-          <h3>${escapeHtml(strings.quickstart.exchangeHeading)}</h3>
-          <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.quickstart.exchangeHeading)}"><code>${escapeHtml(strings.quickstart.exchangeCode)}</code></pre>`,
-      id: 'quickstart',
-      title: strings.quickstart.heading,
-    },
-    {
-      body: `<ol class="flow-list">
-            ${strings.flow.items
-              .map(
-                (item): string =>
-                  `<li><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.detail)}</p></li>`,
-              )
-              .join('\n            ')}
+      body: `<ol class="landing-steps">${renderSteps()}
           </ol>
-          <dl class="summary-list">
+          <dl class="summary-list landing-example">
             <div>
               <dt>${escapeHtml(strings.flow.exampleLabel)}</dt>
               <dd><code>${escapeHtml(strings.flow.exampleAddress)}</code></dd>
@@ -62,18 +53,27 @@ export function renderLandingPage(input: LandingPageInput): string {
       title: strings.flow.heading,
     },
     {
-      body: `<div class="table-wrap">
+      body: `<p class="section-intro">${escapeHtml(strings.quickstart.text)}</p>
+          <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.quickstart.heading)}"><code>${escapeHtml(strings.hero.request)}</code></pre>
+          <h3>${escapeHtml(strings.quickstart.exchangeHeading)}</h3>
+          <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.quickstart.exchangeHeading)}"><code>${escapeHtml(strings.quickstart.exchangeCode)}</code></pre>`,
+      id: 'quickstart',
+      title: strings.quickstart.heading,
+    },
+    {
+      body: `<p class="section-intro">${escapeHtml(claims.text)}</p>
+          <div class="table-wrap">
             <table class="table">
-              <caption class="visually-hidden">${escapeHtml(strings.claims.heading)}</caption>
+              <caption class="visually-hidden">${escapeHtml(claims.heading)}</caption>
               <thead>
                 <tr>
-                  <th scope="col">${escapeHtml(strings.claims.claimHeading)}</th>
-                  <th scope="col">${escapeHtml(strings.claims.valueHeading)}</th>
-                  <th scope="col">${escapeHtml(strings.claims.detailHeading)}</th>
+                  <th scope="col">${escapeHtml(claims.claimHeading)}</th>
+                  <th scope="col">${escapeHtml(claims.valueHeading)}</th>
+                  <th scope="col">${escapeHtml(claims.detailHeading)}</th>
                 </tr>
               </thead>
               <tbody>
-                ${strings.claims.rows
+                ${claims.rows
                   .map(
                     (row): string => `<tr>
                   <th scope="row"><code>${escapeHtml(row.claim)}</code></th>
@@ -85,9 +85,9 @@ export function renderLandingPage(input: LandingPageInput): string {
               </tbody>
             </table>
           </div>
-          <h3>${escapeHtml(strings.claims.scopesHeading)}</h3>
+          <h3>${escapeHtml(claims.scopesHeading)}</h3>
           <dl class="summary-list">
-            ${strings.claims.scopes
+            ${claims.scopes
               .map(
                 (scope): string => `<div>
               <dt><code>${escapeHtml(scope.name)}</code></dt>
@@ -97,7 +97,7 @@ export function renderLandingPage(input: LandingPageInput): string {
               .join('\n            ')}
           </dl>`,
       id: 'claims',
-      title: strings.claims.heading,
+      title: claims.heading,
     },
     {
       body: `<ul class="endpoint-list">
@@ -112,7 +112,7 @@ export function renderLandingPage(input: LandingPageInput): string {
       title: strings.endpoints.heading,
     },
     {
-      body: `<p>${escapeHtml(strings.security.text)}</p>`,
+      body: `<p class="section-intro">${escapeHtml(strings.security.text)}</p>`,
       id: 'security',
       title: strings.security.heading,
     },
@@ -121,11 +121,15 @@ export function renderLandingPage(input: LandingPageInput): string {
   return renderPageDocument({
     content: `      <section class="landing-hero" aria-labelledby="hero-heading">
         <h1 id="hero-heading">${escapeHtml(strings.hero.heading)}</h1>
-        <p class="lead">${escapeHtml(strings.hero.lead)}</p>
-        <div class="button-row">
+        <p class="landing-lead">${escapeHtml(strings.hero.lead)}</p>
+        <div class="button-row landing-actions">
           <a class="button" href="/developers">${escapeHtml(strings.hero.consoleAction)}</a>
           ${secondaryAction}
         </div>
+        <figure class="landing-request">
+          <figcaption>${escapeHtml(strings.hero.codeLabel)}</figcaption>
+          <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.hero.codeLabel)}"><code>${escapeHtml(strings.hero.request)}</code></pre>
+        </figure>
       </section>
 ${sections
   .map(
@@ -135,13 +139,30 @@ ${sections
         ${section.body}
       </section>`,
   )
-  .join('')}`,
+  .join('')}
+      <section class="landing-section landing-cta" aria-labelledby="cta-heading">
+        <h2 id="cta-heading">${escapeHtml(strings.callToAction.heading)}</h2>
+        <p class="section-intro">${escapeHtml(strings.callToAction.text)}</p>
+        <div class="button-row landing-actions">
+          <a class="button" href="/developers">${escapeHtml(strings.hero.consoleAction)}</a>
+          ${secondaryAction}
+        </div>
+      </section>`,
     description: strings.hero.lead,
     footer: [`${strings.navigation.brand} · ${strings.footer.license}`, strings.affiliation],
     header: {
       brand: strings.navigation.brand,
       brandHref: '/',
-      navigation,
+      navigation: {
+        items: [
+          { href: '/developers', label: strings.navigation.developers },
+          ...(input.showDocumentation
+            ? [{ href: '/docs/', label: strings.navigation.documentation }]
+            : []),
+          { href: SOURCE_URL, label: strings.navigation.github },
+        ],
+        label: strings.navigation.ariaLabel,
+      },
     },
     mainClass: 'container',
     stylesheet: '/assets/landing.css',

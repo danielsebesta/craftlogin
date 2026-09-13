@@ -2,46 +2,116 @@ import { uiBaseStyles } from './ui/base.js';
 import { uiControlStyles } from './ui/controls.js';
 
 /**
- * The landing main element is a plain container: the hero sits directly on the
- * page canvas and every following section is separated by one rule.
+ * The landing page is one centered rail. The hero, section headings, and section
+ * intros are centered; code, tables, and lists keep their text left-aligned so
+ * they stay scannable.
  */
 const landingPageStyles = `
 .landing-hero {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s4);
-  justify-items: start;
-  max-width: 48rem;
+  max-width: 56rem;
+  margin-inline: auto;
   padding-block: var(--s8) var(--s7);
+  text-align: center;
 }
 
 .landing-hero h1 {
-  max-width: 22ch;
+  max-width: 20ch;
+  margin-inline: auto;
+  font-size: var(--t-3xl);
 }
 
-.landing-hero .lead {
+.landing-lead {
+  max-width: 44rem;
+  margin-inline: auto;
+  color: var(--muted);
   font-size: var(--t-lg);
+  text-wrap: pretty;
 }
 
-.landing-hero .button-row {
+.landing-actions {
+  justify-content: center;
   margin-top: var(--s2);
 }
 
+.landing-request {
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
+  margin-top: var(--s5);
+  text-align: left;
+}
+
+.landing-request figcaption {
+  margin-bottom: var(--s2);
+  color: var(--muted);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+
+.landing-request .code-block {
+  margin: 0;
+}
+
 .landing-section {
+  max-width: 56rem;
+  margin-inline: auto;
   padding-block: var(--s7);
   border-top: 1px solid var(--line);
 }
 
+.landing-section > h2,
+.landing-section > .section-intro {
+  text-align: center;
+}
+
 .landing-section > h2 {
-  margin-bottom: var(--s5);
+  margin-bottom: var(--s4);
 }
 
 .landing-section > h3 {
   margin-block: var(--s6) var(--s3);
 }
 
-.landing-section > p {
-  max-width: var(--measure);
+.section-intro {
+  max-width: 46rem;
+  margin-inline: auto;
+  margin-bottom: var(--s5);
   color: var(--muted);
+  text-wrap: pretty;
+}
+
+.landing-steps {
+  display: grid;
+  gap: var(--s5);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.landing-steps li {
+  display: grid;
+  gap: var(--s1);
+}
+
+.step-index {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+}
+
+.landing-steps h3 {
+  margin: 0;
+}
+
+.landing-steps p {
+  color: var(--muted);
+}
+
+.landing-example {
+  margin-top: var(--s6);
 }
 
 .landing-section .code-block {
@@ -50,16 +120,17 @@ const landingPageStyles = `
 
 .endpoint-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 0 var(--s6);
   padding: 0;
   margin: 0;
   list-style: none;
-  border-top: 1px solid var(--line);
 }
 
 .endpoint-list li {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
+  gap: var(--s1) var(--s4);
   align-items: baseline;
   justify-content: space-between;
   padding-block: var(--s3);
@@ -75,28 +146,15 @@ const landingPageStyles = `
   text-align: right;
 }
 
-.flow-list {
-  display: grid;
-  gap: var(--s5);
-  padding-left: var(--s5);
-  max-width: var(--measure);
+.landing-cta {
+  padding-block: var(--s7) var(--s8);
 }
 
-.flow-list li::marker {
-  color: var(--muted);
-  font-family: var(--font-mono);
-}
-
-.flow-list h3 {
-  margin-bottom: var(--s1);
-}
-
-.flow-list p {
-  color: var(--muted);
-}
-
-.landing-section .summary-list {
-  margin-top: var(--s5);
+@media (min-width: 48rem) {
+  .landing-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s6);
+  }
 }
 
 @media (max-width: 40rem) {

@@ -241,70 +241,72 @@ export const english = {
   },
   landing: {
     affiliation: 'Not affiliated with Mojang or Microsoft.',
+    callToAction: {
+      heading: 'Ready to add it?',
+      text: 'Register a client in the Console, then send your first authorization request.',
+    },
     claims: {
-      heading: 'Claims and scopes',
+      claimHeading: 'Claim',
+      detailHeading: 'Detail',
+      heading: 'What your app receives',
       rows: [
         {
           claim: 'sub',
-          detail: 'Stable Minecraft UUID of the verified account.',
+          detail: 'The Minecraft UUID. It survives a username change.',
           value: '123e4567-e89b-42d3-a456-426614174000',
         },
         {
           claim: 'preferred_username',
-          detail: 'Current Minecraft username at verification time.',
+          detail: 'The username the account has right now.',
           value: 'Player',
         },
         {
           claim: 'picture',
-          detail: 'Avatar head rendered from the current Mojang skin.',
+          detail: 'A head rendered from the current Mojang skin.',
           value: 'https://craftlogin.com/avatar/123e4567-e89b-42d3-a456-426614174000',
         },
       ],
-      scopesHeading: 'Scopes',
       scopes: [
-        { detail: 'Authenticate the Minecraft account.', name: 'openid' },
-        { detail: 'Read the current Minecraft username.', name: 'profile' },
+        { detail: 'Sign in to the Minecraft account.', name: 'openid' },
+        { detail: 'Read the username and avatar.', name: 'profile' },
       ],
-      claimHeading: 'Claim',
-      detailHeading: 'Detail',
+      scopesHeading: 'Scopes',
       valueHeading: 'Example',
+      text: 'Every sign-in returns the same three values, whatever the player is called now.',
     },
     endpoints: {
       heading: 'Endpoints',
       items: [
-        { detail: 'Authorization code flow with S256 PKCE.', path: '/oauth2/authorize' },
-        { detail: 'Code exchange and refresh token rotation.', path: '/oauth2/token' },
-        { detail: 'OpenID Connect UserInfo.', path: '/oauth2/userinfo' },
-        {
-          detail: 'Validate opaque access tokens for resource servers.',
-          path: '/oauth2/introspect',
-        },
-        { detail: 'RP-initiated logout.', path: '/oauth2/logout' },
-        { detail: 'Signing keys.', path: '/oauth2/jwks' },
-        { detail: 'Token revocation.', path: '/oauth2/revoke' },
+        { detail: 'Start the sign-in. Requires S256 PKCE.', path: '/oauth2/authorize' },
+        { detail: 'Exchange a code, or rotate a refresh token.', path: '/oauth2/token' },
+        { detail: 'Read the OpenID Connect claims.', path: '/oauth2/userinfo' },
+        { detail: 'Check a token from a resource server.', path: '/oauth2/introspect' },
+        { detail: 'End the session at the provider.', path: '/oauth2/logout' },
+        { detail: 'Public keys that verify our tokens.', path: '/oauth2/jwks' },
+        { detail: 'Invalidate a token.', path: '/oauth2/revoke' },
       ],
     },
     flow: {
-      claimLabel: 'Returned identity',
+      claimLabel: 'Your callback receives',
       claimValue: '{ sub: "minecraft-uuid", preferred_username: "Player" }',
       exampleAddress: 'K7MPQ4RX.craftlogin.com',
-      exampleLabel: 'Temporary Minecraft address',
-      heading: 'How verification works',
+      exampleLabel: 'The player connects to',
+      heading: 'How it works',
       items: [
         {
           detail:
-            'Your application redirects the user with a standard authorization request and S256 PKCE.',
-          title: 'Start OAuth',
+            'Send a normal authorization request with S256 PKCE. CraftLogin answers with one server address to show the player.',
+          title: 'Your app starts the sign-in',
         },
         {
           detail:
-            'CraftLogin shows a single-use Minecraft address that stays valid for five minutes.',
-          title: 'User joins Minecraft',
+            'The player pastes that address into Minecraft Java Edition and joins. It works once, then expires after five minutes.',
+          title: 'The player joins the server',
         },
         {
           detail:
-            'Online mode authenticates the account, and your callback receives the UUID and username.',
-          title: 'Receive identity',
+            'Online mode proves the account is theirs. CraftLogin returns the UUID and the current username.',
+          title: 'You receive the identity',
         },
       ],
     },
@@ -312,30 +314,32 @@ export const english = {
       license: 'MIT licensed',
     },
     hero: {
-      consoleAction: 'Open Developer Console',
+      codeLabel: 'Your app sends',
+      consoleAction: 'Open the Console',
       documentationAction: 'Read the API docs',
-      githubAction: 'View on GitHub',
-      heading: 'OIDC identity for Minecraft Java accounts',
-      lead: 'CraftLogin verifies a Minecraft Java account through a short-lived online-mode server and returns the player UUID and current username using standard OAuth 2.0 and OpenID Connect.',
+      githubAction: 'View source',
+      heading: 'Add Minecraft login to your app',
+      lead: 'An OpenID Connect provider for Minecraft Java Edition. The player joins a short server address to prove the account is theirs, and your app receives the UUID and username.',
+      request:
+        'GET /oauth2/authorize\n  ?response_type=code\n  &client_id=cl_your_client\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &scope=openid%20profile\n  &state=<random>\n  &code_challenge=<S256>\n  &code_challenge_method=S256',
     },
     navigation: {
       ariaLabel: 'Primary navigation',
       brand: 'CraftLogin',
-      documentation: 'Docs',
       developers: 'Console',
+      documentation: 'Docs',
       github: 'GitHub',
     },
     quickstart: {
-      code: 'GET /oauth2/authorize\n  ?response_type=code\n  &client_id=cl_your_client\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &scope=openid%20profile\n  &state=<random>\n  &code_challenge=<S256>\n  &code_challenge_method=S256',
-      exchangeHeading: 'Exchange the code',
       exchangeCode:
         'POST /oauth2/token\n  grant_type=authorization_code\n  &code=<code>\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &client_id=cl_your_client\n  &code_verifier=<verifier>',
+      exchangeHeading: 'Then exchange the code',
       heading: 'Quickstart',
-      text: 'Register a client in the Developer Console, then send a standard authorization request with S256 PKCE. Your callback receives a single-use code that you exchange for tokens.',
+      text: 'Register a client in the Console to get a client ID. Redirect the player to the authorization endpoint, then trade the single-use code from your callback for tokens.',
     },
     security: {
-      heading: 'Security model',
-      text: 'CraftLogin verifies account control through Minecraft online mode or a fresh Mojang-signed skin profile. It stores no email address or password, requires PKCE on every client, and matches redirect URIs exactly.',
+      heading: 'Security',
+      text: 'No Microsoft password ever reaches CraftLogin, so there is no password or email address to leak. Every client must use PKCE, redirect URIs are matched exactly, and each authorization code works once.',
     },
   },
   interaction: {

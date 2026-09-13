@@ -153,9 +153,8 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-security-policy']).toContain("img-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
     expect(response.body).toContain('<main id="main" class="container">');
-    expect(response.body).toContain(
-      '<h1 id="hero-heading">OIDC identity for Minecraft Java accounts</h1>',
-    );
+    expect(response.body).toContain('<h1 id="hero-heading">Add Minecraft login to your app</h1>');
+    expect(response.body).toContain('class="landing-steps"');
     expect(response.body).toContain('K7MPQ4RX.craftlogin.com');
     expect(response.body).toContain('href="/docs/"');
     expect(response.body).toContain('/assets/landing.css');
