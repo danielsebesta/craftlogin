@@ -87,21 +87,54 @@ async function renderFace(
   const canvas = createCanvas(outputSize, outputSize);
   const context = canvas.getContext('2d');
   const output = context.createImageData(outputSize, outputSize);
+  const pixelSize = outputSize / 8;
+  const extrusion = Math.max(1, Math.round(pixelSize / 3));
 
   for (let y = 0; y < outputSize; y += 1) {
     const sourceY = Math.floor((y * 8) / outputSize);
     for (let x = 0; x < outputSize; x += 1) {
       const sourceX = Math.floor((x * 8) / outputSize);
       const base = { ...readColor(texture, 8 + sourceX, 8 + sourceY), alpha: 255 };
+      writeColor(output.data, (y * outputSize + x) * 4, base);
+    }
+  }
+
+  if (layers === 'all') {
+    for (let y = 0; y < outputSize; y += 1) {
+      const sourceY = Math.floor((y * 8) / outputSize);
+      for (let x = 0; x < outputSize; x += 1) {
+        const sourceX = Math.floor((x * 8) / outputSize);
+        const overlay = readColor(texture, 40 + sourceX, 8 + sourceY);
+        if (overlay.alpha === 0) {
+          continue;
+        }
+        const shadowX = Math.min(outputSize - 1, x + extrusion);
+        const shadowY = Math.min(outputSize - 1, y + extrusion);
+        writeColor(
+          output.data,
+          (shadowY * outputSize + shadowX) * 4,
+          compositeColor(readOutputColor(output.data, (shadowY * outputSize + shadowX) * 4), {
+            ...shadeColor(overlay, 'right'),
+            alpha: overlay.alpha,
+          }),
+        );
+      }
+    }
+  }
+
+  for (let y = 0; y < outputSize; y += 1) {
+    const sourceY = Math.floor((y * 8) / outputSize);
+    for (let x = 0; x < outputSize; x += 1) {
+      const sourceX = Math.floor((x * 8) / outputSize);
       const color =
         layers === 'all'
-          ? compositeColor(base, readColor(texture, 40 + sourceX, 8 + sourceY))
-          : base;
+          ? compositeColor(
+              readOutputColor(output.data, (y * outputSize + x) * 4),
+              readColor(texture, 40 + sourceX, 8 + sourceY),
+            )
+          : readOutputColor(output.data, (y * outputSize + x) * 4);
       const outputIndex = (y * outputSize + x) * 4;
-      output.data[outputIndex] = color.red;
-      output.data[outputIndex + 1] = color.green;
-      output.data[outputIndex + 2] = color.blue;
-      output.data[outputIndex + 3] = color.alpha;
+      writeColor(output.data, outputIndex, color);
     }
   }
 
@@ -128,6 +161,22 @@ function compositeColor(base: Color, overlay: Color): Color {
       (overlay.red * overlayAlpha + base.red * baseAlpha * (1 - overlayAlpha)) / alpha,
     ),
   };
+}
+
+function readOutputColor(output: Uint8ClampedArray, index: number): Color {
+  return {
+    alpha: output[index + 3] ?? 0,
+    blue: output[index + 2] ?? 0,
+    green: output[index + 1] ?? 0,
+    red: output[index] ?? 0,
+  };
+}
+
+function writeColor(output: Uint8ClampedArray, index: number, color: Color): void {
+  output[index] = color.red;
+  output[index + 1] = color.green;
+  output[index + 2] = color.blue;
+  output[index + 3] = color.alpha;
 }
 
 export function buildAvatarScene(

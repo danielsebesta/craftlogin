@@ -195,13 +195,13 @@ describe('Minecraft avatar geometry', (): void => {
       green: 230,
       red: 230,
     });
-    expect(readFixturePixel(image, 12, 12)).toEqual({
+    expect(readFixturePixel(image, 14, 14)).toEqual({
       alpha: 255,
       blue: 20,
       green: 20,
       red: 220,
     });
-    expect(readFixturePixel(image, 12, 12)).toEqual(readFixturePixel(image, 15, 15));
+    expect(readFixturePixel(image, 14, 14)).toEqual(readFixturePixel(image, 15, 15));
     expect(readFixturePixel(image, 15, 15)).not.toEqual(readFixturePixel(image, 20, 20));
     expect(readFixturePixel(image, 0, 0)).toEqual(readFixturePixel(image, 3, 3));
   });

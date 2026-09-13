@@ -38,7 +38,6 @@ const consoleStyles = `
   overflow: hidden;
   place-items: center;
   background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
 }
 
 .console-player-head img {
