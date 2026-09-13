@@ -13,6 +13,7 @@ import { DeveloperRequestAuthenticator } from './api/developer-authentication.js
 import { renderLogoutPage, renderLogoutSuccessPage } from './api/logout-page.js';
 import { createApiServer } from './api/server.js';
 import { loadEnvironment } from './config/environment.js';
+import { loadMicrosoftOAuthCredentials } from './config/microsoft-oauth.js';
 import { loadOAuthCredentials } from './config/oauth-credentials.js';
 import { PrismaAppManager } from './developers/app-management.js';
 import { PrismaDeveloperAccessRepository } from './developers/developer-repository.js';
@@ -34,6 +35,8 @@ import { installSessionSignalLogging } from './oauth/session-security.js';
 import { PrismaVerifiedUserRepository } from './users/verified-user-repository.js';
 import { MojangUsernameResolver, PrismaUsernameStore } from './users/username-resolver.js';
 import { RedisVerificationStore } from './verification/redis-verification-store.js';
+import { HttpMicrosoftOAuthClient } from './verification/microsoft-oauth-client.js';
+import { MicrosoftOAuthVerificationService } from './verification/microsoft-oauth-verification-service.js';
 import { RedisSkinVerificationStore } from './verification/redis-skin-verification-store.js';
 import { SkinVerificationService } from './verification/skin-verification-service.js';
 import { VerificationResolver } from './verification/verification-resolver.js';
@@ -43,6 +46,7 @@ const bootstrapLogger = createLogger('info');
 async function main(): Promise<void> {
   const environment = loadEnvironment();
   const credentials = loadOAuthCredentials(process.env, environment.nodeEnvironment);
+  const microsoftCredentials = loadMicrosoftOAuthCredentials(process.env);
   const logger = createLogger(environment.logLevel);
   const database = createDatabaseClient(environment.databaseUrl);
   const redis = createRedisClient(environment.redisUrl);
@@ -81,6 +85,17 @@ async function main(): Promise<void> {
       verifiedUsers,
       logger,
     );
+    const verificationResolver = new VerificationResolver(verification, verifiedUsers, players);
+    const microsoftVerification = new MicrosoftOAuthVerificationService(
+      new HttpMicrosoftOAuthClient({
+        clientId: microsoftCredentials.clientId,
+        ...(microsoftCredentials.clientSecret === undefined
+          ? {}
+          : { clientSecret: microsoftCredentials.clientSecret }),
+        redirectUri: `${environment.oidcIssuer}/interaction/microsoft/callback`,
+      }),
+      verificationResolver,
+    );
     minecraft = await startGhostServer(
       {
         baseDomain: environment.minecraftBaseDomain,
@@ -91,7 +106,7 @@ async function main(): Promise<void> {
       {
         logger,
         pendingCodes: verification,
-        resolver: new VerificationResolver(verification, verifiedUsers, players),
+        resolver: verificationResolver,
       },
     );
 
@@ -101,6 +116,7 @@ async function main(): Promise<void> {
         issuer: environment.oidcIssuer,
         jwks: credentials.jwks,
         logger,
+        microsoftVerificationEnabled: true,
         logoutSource: renderLogoutPage,
         postLogoutSuccessSource: renderLogoutSuccessPage,
         renderError: renderAuthorizationError,
@@ -144,6 +160,10 @@ async function main(): Promise<void> {
       logger,
       minecraft: { avatars, players, skins },
       minecraftBaseDomain: environment.minecraftBaseDomain,
+      microsoftOAuth: {
+        clientId: microsoftCredentials.clientId,
+        verification: microsoftVerification,
+      },
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),
       rateLimitRedis: redis,

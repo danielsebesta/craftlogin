@@ -21,6 +21,7 @@ export interface OAuthRuntimeConfig {
   readonly issuer: string;
   readonly jwks: JWKS;
   readonly logger: OAuthInteractionLogger;
+  readonly microsoftVerificationEnabled?: boolean;
   readonly logoutSource?: LogoutSourceRenderer;
   readonly postLogoutSuccessSource?: PostLogoutSuccessRenderer;
   readonly renderError: NonNullable<Configuration['renderError']>;
@@ -59,6 +60,7 @@ export function createOAuthRuntime(
       verification,
       config.logger,
       config.skinVerification,
+      config.microsoftVerificationEnabled ?? false,
     ),
     provider,
   };

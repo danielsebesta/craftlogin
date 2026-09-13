@@ -1379,6 +1379,128 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/microsoft/start:
+    post:
+      summary: Start Microsoft verification
+      tags:
+        - Interactions
+      description: Begin one-shot Microsoft OAuth verification with S256 PKCE and only
+        the XboxLive.signin scope.
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "303":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/microsoft/callback:
+    get:
+      summary: Complete Microsoft verification
+      tags:
+        - Interactions
+      description: Complete one-shot Microsoft, Xbox Live, and Minecraft Services
+        verification without persisting Microsoft-side tokens or account data.
+      parameters:
+        - schema:
+            maxLength: 2048
+            minLength: 1
+            type: string
+          in: query
+          name: code
+          required: false
+        - schema:
+            maxLength: 128
+            minLength: 1
+            type: string
+          in: query
+          name: error
+          required: false
+        - schema:
+            maxLength: 1024
+            type: string
+          in: query
+          name: error_description
+          required: false
+        - schema:
+            pattern: ^[A-Za-z0-9_-]{43}$
+            type: string
+          in: query
+          name: state
+          required: false
+      responses:
+        "200":
+          description: Default Response
+          content:
+            text/html:
+              schema:
+                type: string
+        "303":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "403":
+          description: Default Response
+          content:
+            text/html:
+              schema:
+                type: string
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
   /api/users/@me:
     get:
       summary: Get the current Minecraft user

@@ -37,6 +37,14 @@ export const verificationStatusRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
+// This has the same trust assumptions and budget as status polling, but an
+// independent bucket keeps background polls from blocking a provider callback.
+export const microsoftVerificationRateLimit = {
+  groupId: 'microsoft-verification',
+  max: verificationStatusRateLimit.max,
+  timeWindow: verificationStatusRateLimit.timeWindow,
+};
+
 export const skinVerificationStartRateLimit = {
   groupId: 'skin-verification-start',
   max: 10,

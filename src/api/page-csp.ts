@@ -6,6 +6,7 @@ export const PAGE_CONTENT_SECURITY_POLICY = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "img-src 'self'",
+  "manifest-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
 ].join('; ');

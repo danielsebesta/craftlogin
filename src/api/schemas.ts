@@ -205,6 +205,21 @@ const verificationStatusSchema = {
   type: 'object',
 };
 
+const microsoftOAuthCallbackQuerySchema = {
+  additionalProperties: false,
+  oneOf: [
+    { not: { required: ['error'] }, required: ['code', 'state'] },
+    { not: { required: ['code'] }, required: ['error', 'state'] },
+  ],
+  properties: {
+    code: { maxLength: 2_048, minLength: 1, type: 'string' },
+    error: { maxLength: 128, minLength: 1, type: 'string' },
+    error_description: { maxLength: 1_024, type: 'string' },
+    state: { pattern: '^[A-Za-z0-9_-]{43}$', type: 'string' },
+  },
+  type: 'object',
+};
+
 const oauthErrorSchema = {
   additionalProperties: true,
   properties: {
@@ -299,6 +314,37 @@ export const skinVerificationStartRouteSchema: FastifySchema = {
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
   summary: operations.skinVerificationStart.summary,
+  tags: ['Interactions'],
+};
+
+export const microsoftOAuthStartRouteSchema: FastifySchema = {
+  description: operations.microsoftOAuthStart.description,
+  params: interactionParamsSchema,
+  response: {
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.microsoftOAuthStart.summary,
+  tags: ['Interactions'],
+};
+
+export const microsoftOAuthCallbackRouteSchema: FastifySchema = {
+  description: operations.microsoftOAuthCallback.description,
+  querystring: microsoftOAuthCallbackQuerySchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: htmlResponseSchema,
+    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.microsoftOAuthCallback.summary,
   tags: ['Interactions'],
 };
 
@@ -709,6 +755,15 @@ export const fontAssetRouteSchema: FastifySchema = {
 };
 
 export const brandIconRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const faviconAssetRouteSchema: FastifySchema = {
   hide: true,
   response: {
     200: { type: 'string' },

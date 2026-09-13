@@ -11,6 +11,7 @@ const LANDING_CSP = [
   "form-action 'none'",
   "frame-ancestors 'none'",
   "img-src 'self'",
+  "manifest-src 'self'",
   "style-src 'self'",
 ].join('; ');
 

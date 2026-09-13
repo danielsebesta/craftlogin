@@ -9,7 +9,11 @@ import { z } from 'zod';
 
 import { english } from '../locales/en.js';
 import { verifyClientSecret } from './client-secret.js';
-import { MINECRAFT_ONLINE_MODE_ACR, MINECRAFT_PROFILE_SKIN_ACR } from './constants.js';
+import {
+  MICROSOFT_OAUTH_ACR,
+  MINECRAFT_ONLINE_MODE_ACR,
+  MINECRAFT_PROFILE_SKIN_ACR,
+} from './constants.js';
 import { createMinecraftInteractionPolicy } from './interaction-policy.js';
 import { oidcSessionTtl } from './session-security.js';
 
@@ -51,11 +55,12 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
   }
 
   const configuration: Configuration = {
-    acrValues: [MINECRAFT_ONLINE_MODE_ACR, MINECRAFT_PROFILE_SKIN_ACR],
+    acrValues: [MINECRAFT_ONLINE_MODE_ACR, MINECRAFT_PROFILE_SKIN_ACR, MICROSOFT_OAUTH_ACR],
     adapter: options.adapter,
     allowOmittingSingleRegisteredRedirectUri: false,
     claims: {
-      openid: ['sub'],
+      acr: null,
+      openid: ['sub', 'amr'],
       profile: ['preferred_username', 'picture'],
     },
     clientAuthMethods: ['none', 'client_secret_basic'],

@@ -8,8 +8,10 @@ import {
   authenticatedMinecraftPlayerSchema,
   interactionIdSchema,
   type AuthenticatedMinecraftPlayer,
+  type VerificationMethod,
   type VerificationStatus,
   verificationCodeSchema,
+  verificationMethodSchema,
 } from './types.js';
 
 const VERIFICATION_TTL_MS = 5 * 60 * 1_000;
@@ -17,9 +19,6 @@ const PROCESSING_TTL_MS = 60 * 1_000;
 const RESOLVED_TTL_MS = 5 * 60 * 1_000;
 const MAX_CODE_ALLOCATION_ATTEMPTS = 12;
 const KEY_ID_PATTERN = /^[0-9a-f]{64}$/u;
-const verificationMethodSchema = z.enum(['minecraft_online_mode', 'minecraft_profile_skin']);
-export type VerificationMethod = z.infer<typeof verificationMethodSchema>;
-
 const createResultSchema = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const scriptBooleanSchema = z.union([z.literal(0), z.literal(1)]);
 const keyIdSchema = z.string().regex(KEY_ID_PATTERN);

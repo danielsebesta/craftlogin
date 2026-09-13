@@ -18,6 +18,17 @@ export const authenticatedMinecraftPlayerSchema = z.object({
 
 export type AuthenticatedMinecraftPlayer = z.infer<typeof authenticatedMinecraftPlayerSchema>;
 
+export const verificationMethodSchema = z.enum([
+  'minecraft_online_mode',
+  'minecraft_profile_skin',
+  'microsoft_oauth',
+]);
+export type VerificationMethod = z.infer<typeof verificationMethodSchema>;
+
+export type InteractionVerifiedIdentity = AuthenticatedMinecraftPlayer & {
+  readonly verifiedVia: 'microsoft-oauth' | 'skin-pattern';
+};
+
 export type VerificationStatus =
   | { status: 'expired' }
   | { status: 'pending'; code: string | null }

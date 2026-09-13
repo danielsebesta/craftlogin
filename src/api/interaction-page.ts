@@ -14,6 +14,7 @@ export interface InteractionPageInput {
   readonly skinChallenge?: SkinInteractionChallenge;
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
+  readonly allowsMicrosoftVerification?: boolean;
 }
 
 const KNOWN_SCOPE_DESCRIPTIONS: Readonly<Record<string, string>> = {
@@ -91,6 +92,16 @@ export function renderInteractionPage(input: InteractionPageInput): string {
         ? strings.status
         : { ...strings.status, pending: skin.statusPending },
     noJavaScript: strings.noJavaScript,
+    ...(isConsent || input.allowsMicrosoftVerification !== true
+      ? {}
+      : {
+          microsoftVerification: {
+            heading: strings.microsoft.heading,
+            hint: strings.microsoft.hint,
+            startAction: `${interactionPath}/microsoft/start`,
+            startLabel: strings.microsoft.startButton,
+          },
+        }),
     permissions: permissionsForScope(input.scope),
     securityNote: strings.securityNote,
     ...(isConsent

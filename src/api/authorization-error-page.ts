@@ -11,7 +11,7 @@ export const renderAuthorizationError: AuthorizationErrorRenderer = (context, ou
   context.set('cache-control', 'no-store');
   context.set(
     'content-security-policy',
-    "default-src 'none'; base-uri 'none'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; style-src 'self'",
+    "default-src 'none'; base-uri 'none'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; style-src 'self'",
   );
   context.set('referrer-policy', 'no-referrer');
   context.set('x-content-type-options', 'nosniff');

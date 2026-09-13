@@ -56,6 +56,13 @@ export interface SignInSkinVerification {
   readonly startLabel: string;
 }
 
+export interface SignInMicrosoftVerification {
+  readonly heading: string;
+  readonly hint: string;
+  readonly startAction: string;
+  readonly startLabel: string;
+}
+
 export interface SignInPageInput {
   readonly accountAvatarUrl?: string;
   readonly accountLabel: string;
@@ -73,6 +80,7 @@ export interface SignInPageInput {
   readonly heading: string;
   readonly lead: string;
   readonly messages: SignInMessages;
+  readonly microsoftVerification?: SignInMicrosoftVerification;
   readonly noJavaScript: string;
   readonly permissions: readonly ConsentPermission[];
   readonly securityNote?: string;
@@ -194,6 +202,20 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
         </section>`;
 }
 
+function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefined): string {
+  if (input === undefined) {
+    return '';
+  }
+  return `
+        <section class="microsoft-verification" aria-labelledby="microsoft-verification-heading">
+          <h2 id="microsoft-verification-heading">${escapeHtml(input.heading)}</h2>
+          <p class="field-hint">${escapeHtml(input.hint)}</p>
+          <form action="${escapeHtml(input.startAction)}" method="post">
+            <button class="button button-secondary" type="submit">${escapeHtml(input.startLabel)}</button>
+          </form>
+        </section>`;
+}
+
 export function renderSignInPage(input: SignInPageInput): string {
   const headingSuffix =
     input.appName === undefined ? '' : ` <bdi>${escapeHtml(input.appName)}</bdi>`;
@@ -201,7 +223,10 @@ export function renderSignInPage(input: SignInPageInput): string {
     input.securityNote === undefined
       ? ''
       : `<p class="field-hint">${escapeHtml(input.securityNote)}</p>`;
-  const singular = input.verification === undefined && input.skinVerification === undefined;
+  const singular =
+    input.verification === undefined &&
+    input.skinVerification === undefined &&
+    input.microsoftVerification === undefined;
 
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="${SIGN_IN_HEADING_ID}">
@@ -216,7 +241,7 @@ export function renderSignInPage(input: SignInPageInput): string {
           <ul>
             ${input.permissions.map(renderPermission).join('\n            ')}
           </ul>
-        </div>${renderVerification(input)}${renderSkinVerification(input.skinVerification)}
+        </div>${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
         <div class="consent-actions">${renderFormAction(input.cancel)}${renderFormAction(input.switchAccount)}
           <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
             <button class="button" type="submit">${escapeHtml(input.continueLabel)}</button>

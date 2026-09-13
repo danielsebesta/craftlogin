@@ -9,7 +9,11 @@ import type { SkinVerificationChallenge } from '../verification/redis-skin-verif
 import { getErrorKind } from '../logging/error-kind.js';
 import type { OAuthInteractionContext, OAuthInteractionGateway } from './interaction-gateway.js';
 import { OAuthInteractionStateError } from './interaction-gateway.js';
-import { MINECRAFT_ONLINE_MODE_ACR, MINECRAFT_PROFILE_SKIN_ACR } from './constants.js';
+import {
+  MICROSOFT_OAUTH_ACR,
+  MINECRAFT_ONLINE_MODE_ACR,
+  MINECRAFT_PROFILE_SKIN_ACR,
+} from './constants.js';
 
 interface VerificationInteractionStore {
   allocate(interactionId: string): Promise<string>;
@@ -45,6 +49,7 @@ export interface PendingOAuthInteraction {
   readonly skinChallenge?: SkinInteractionChallenge;
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
+  readonly allowsMicrosoftVerification?: boolean;
 }
 
 export type OAuthInteractionCompletion =
@@ -69,6 +74,7 @@ export class OAuthInteractionService {
       | VerificationInteractionStore,
     private readonly logger: OAuthInteractionLogger,
     private readonly skinVerification?: SkinInteractionVerification,
+    private readonly microsoftVerificationEnabled = false,
   ) {}
 
   public async start(
@@ -105,6 +111,9 @@ export class OAuthInteractionService {
       interaction,
       MINECRAFT_ONLINE_MODE_ACR,
     );
+    const allowsMicrosoftVerification =
+      this.microsoftVerificationEnabled &&
+      permitsAuthenticationMethod(interaction, MICROSOFT_OAUTH_ACR);
     return {
       clientId: interaction.clientId,
       ...(allowsOnlineVerification ? { code } : {}),
@@ -114,7 +123,30 @@ export class OAuthInteractionService {
       ...(skinChallenge === undefined ? {} : { skinChallenge }),
       allowsSkinVerification,
       allowsOnlineVerification,
+      ...(this.microsoftVerificationEnabled ? { allowsMicrosoftVerification } : {}),
     };
+  }
+
+  public async prepareMicrosoft(
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<{ readonly interactionId: string }> {
+    const interaction = await this.requireLoginInteraction(
+      request,
+      response,
+      expectedInteractionId,
+    );
+    if (
+      !this.microsoftVerificationEnabled ||
+      !permitsAuthenticationMethod(interaction, MICROSOFT_OAUTH_ACR)
+    ) {
+      throw new OAuthInteractionStateError(
+        'The authorization request does not permit Microsoft OAuth verification',
+      );
+    }
+    await this.verification.allocate(interaction.interactionId);
+    return { interactionId: interaction.interactionId };
   }
 
   public async startSkin(
@@ -306,7 +338,7 @@ export class OAuthInteractionService {
       expectedInteractionId,
     );
     if (interaction.promptName !== 'login') {
-      throw new OAuthInteractionStateError('Skin verification requires a login interaction');
+      throw new OAuthInteractionStateError('Verification requires a login interaction');
     }
     return interaction;
   }

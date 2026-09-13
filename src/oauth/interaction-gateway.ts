@@ -3,9 +3,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type Provider from 'oidc-provider';
 import { z } from 'zod';
 
-import type { VerificationMethod } from '../verification/redis-verification-store.js';
-import type { AuthenticatedMinecraftPlayer } from '../verification/types.js';
-import { MINECRAFT_ONLINE_MODE_ACR, MINECRAFT_PROFILE_SKIN_ACR } from './constants.js';
+import type { AuthenticatedMinecraftPlayer, VerificationMethod } from '../verification/types.js';
+import {
+  MICROSOFT_OAUTH_ACR,
+  MINECRAFT_ONLINE_MODE_ACR,
+  MINECRAFT_PROFILE_SKIN_ACR,
+} from './constants.js';
 
 const interactionContextSchema = z.object({
   clientId: z.string().min(1).max(64),
@@ -207,8 +210,7 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
     if (context.interactionId !== expectedInteractionId || context.promptName !== 'login') {
       throw new OAuthInteractionStateError('The OIDC interaction changed before completion');
     }
-    const acr =
-      method === 'minecraft_profile_skin' ? MINECRAFT_PROFILE_SKIN_ACR : MINECRAFT_ONLINE_MODE_ACR;
+    const acr = authenticationContextForMethod(method);
     if (context.acrValues !== undefined && !context.acrValues.split(/\s+/u).includes(acr)) {
       throw new OAuthInteractionStateError(
         'The completed authentication method does not satisfy the authorization request',
@@ -249,6 +251,17 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
         cause: error,
       });
     }
+  }
+}
+
+function authenticationContextForMethod(method: VerificationMethod): string {
+  switch (method) {
+    case 'minecraft_online_mode':
+      return MINECRAFT_ONLINE_MODE_ACR;
+    case 'minecraft_profile_skin':
+      return MINECRAFT_PROFILE_SKIN_ACR;
+    case 'microsoft_oauth':
+      return MICROSOFT_OAUTH_ACR;
   }
 }
 

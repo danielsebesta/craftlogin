@@ -9,11 +9,11 @@ import type {
 } from '../../src/oauth/interaction-gateway.js';
 import { OAuthInteractionService } from '../../src/oauth/interaction-service.js';
 import type { OAuthInteractionLogger } from '../../src/oauth/interaction-service.js';
+import type { VerificationFinalizationClaim } from '../../src/verification/redis-verification-store.js';
 import type {
-  VerificationFinalizationClaim,
+  AuthenticatedMinecraftPlayer,
   VerificationMethod,
-} from '../../src/verification/redis-verification-store.js';
-import type { AuthenticatedMinecraftPlayer } from '../../src/verification/types.js';
+} from '../../src/verification/types.js';
 
 const player: AuthenticatedMinecraftPlayer = {
   uuid: '123e4567-e89b-42d3-a456-426614174000',
@@ -219,6 +219,40 @@ describe('OAuthInteractionService', (): void => {
     await expect(
       service.startSkin(denied.request, denied.response, 'VerifiedPlayer'),
     ).rejects.toThrow('requires a different authentication method');
+  });
+
+  it('offers Microsoft verification only when enabled and permitted by acr_values', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    const service = new OAuthInteractionService(
+      gateway,
+      store,
+      new RecordingLogger(),
+      undefined,
+      true,
+    );
+    const offered = createTransport();
+
+    await expect(service.start(offered.request, offered.response)).resolves.toMatchObject({
+      allowsMicrosoftVerification: true,
+    });
+    const prepared = createTransport();
+    await expect(
+      service.prepareMicrosoft(prepared.request, prepared.response, 'interaction-id'),
+    ).resolves.toEqual({ interactionId: 'interaction-id' });
+
+    gateway.context = {
+      ...gateway.context,
+      acrValues: 'urn:craftlogin:minecraft-profile-skin',
+    };
+    const restricted = createTransport();
+    await expect(service.start(restricted.request, restricted.response)).resolves.toMatchObject({
+      allowsMicrosoftVerification: false,
+    });
+    const denied = createTransport();
+    await expect(service.prepareMicrosoft(denied.request, denied.response)).rejects.toThrow(
+      'does not permit Microsoft OAuth verification',
+    );
   });
 
   it('denies the pending request without persisting an OIDC login', async (): Promise<void> => {

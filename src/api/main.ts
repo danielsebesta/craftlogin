@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import { CanvasAvatarRenderer } from '../avatars/renderer.js';
 import { CachedAvatarService } from '../avatars/service.js';
 import { loadEnvironment } from '../config/environment.js';
+import { loadMicrosoftOAuthCredentials } from '../config/microsoft-oauth.js';
 import { loadOAuthCredentials } from '../config/oauth-credentials.js';
 import { PrismaAppManager } from '../developers/app-management.js';
 import { PrismaDeveloperAccessRepository } from '../developers/developer-repository.js';
@@ -22,8 +23,11 @@ import { HttpSkinStore } from '../mojang/skin-store.js';
 import { createOAuthRuntime } from '../oauth/runtime.js';
 import { installSessionSignalLogging } from '../oauth/session-security.js';
 import { RedisVerificationStore } from '../verification/redis-verification-store.js';
+import { HttpMicrosoftOAuthClient } from '../verification/microsoft-oauth-client.js';
+import { MicrosoftOAuthVerificationService } from '../verification/microsoft-oauth-verification-service.js';
 import { RedisSkinVerificationStore } from '../verification/redis-skin-verification-store.js';
 import { SkinVerificationService } from '../verification/skin-verification-service.js';
+import { VerificationResolver } from '../verification/verification-resolver.js';
 import { PrismaVerifiedUserRepository } from '../users/verified-user-repository.js';
 import { ProviderAccessTokenAuthenticator } from './access-token-authenticator.js';
 import { PrismaAppRegistrar } from './app-registration.js';
@@ -38,6 +42,7 @@ const bootstrapLogger = createLogger('info');
 async function main(): Promise<void> {
   const environment = loadEnvironment();
   const credentials = loadOAuthCredentials(process.env, environment.nodeEnvironment);
+  const microsoftCredentials = loadMicrosoftOAuthCredentials(process.env);
   const logger = createLogger(environment.logLevel);
   const database = createDatabaseClient(environment.databaseUrl);
   const redis = createRedisClient(environment.redisUrl);
@@ -66,13 +71,24 @@ async function main(): Promise<void> {
     const mojangCache = new RedisMinecraftCache(redis);
     const players = new HttpMojangClient({ cache: mojangCache });
     const skins = new HttpSkinStore({ cache: mojangCache, logger });
+    const verifiedUsers = new PrismaVerifiedUserRepository(database);
     const skinVerification = new SkinVerificationService(
       new RedisSkinVerificationStore(redis),
       verification,
       players,
       skins,
-      new PrismaVerifiedUserRepository(database),
+      verifiedUsers,
       logger,
+    );
+    const microsoftVerification = new MicrosoftOAuthVerificationService(
+      new HttpMicrosoftOAuthClient({
+        clientId: microsoftCredentials.clientId,
+        ...(microsoftCredentials.clientSecret === undefined
+          ? {}
+          : { clientSecret: microsoftCredentials.clientSecret }),
+        redirectUri: `${environment.oidcIssuer}/interaction/microsoft/callback`,
+      }),
+      new VerificationResolver(verification, verifiedUsers, players),
     );
     const oauth = createOAuthRuntime(
       {
@@ -80,6 +96,7 @@ async function main(): Promise<void> {
         issuer: environment.oidcIssuer,
         jwks: credentials.jwks,
         logger,
+        microsoftVerificationEnabled: true,
         renderError: renderAuthorizationError,
         skinVerification,
       },
@@ -114,6 +131,10 @@ async function main(): Promise<void> {
       logger,
       minecraft: { avatars, players, skins },
       minecraftBaseDomain: environment.minecraftBaseDomain,
+      microsoftOAuth: {
+        clientId: microsoftCredentials.clientId,
+        verification: microsoftVerification,
+      },
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),
       rateLimitRedis: redis,

@@ -64,6 +64,11 @@ export interface ApiInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<OAuthInteractionCompletion>;
+  prepareMicrosoft?(
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<{ readonly interactionId: string }>;
   checkSkin?(
     request: IncomingMessage,
     response: ServerResponse,
@@ -141,6 +146,9 @@ export function registerInteractionRoutes(
           ...(interaction.allowsOnlineVerification === undefined
             ? {}
             : { allowsOnlineVerification: interaction.allowsOnlineVerification }),
+          ...(interaction.allowsMicrosoftVerification === undefined
+            ? {}
+            : { allowsMicrosoftVerification: interaction.allowsMicrosoftVerification }),
         }),
       );
     },

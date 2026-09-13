@@ -37,11 +37,16 @@ async function generate(): Promise<void> {
     interactions: {
       abort: unavailable,
       complete: unavailable,
+      prepareMicrosoft: unavailable,
       start: unavailable,
       status: unavailable,
     },
     issuer: 'https://craftlogin.com',
     minecraftBaseDomain: 'craftlogin.com',
+    microsoftOAuth: {
+      clientId: '7f143b3d-bf80-4896-86ee-bd902f90ca63',
+      verification: { createAuthorizationUrl: unavailable, verify: unavailable },
+    },
     minecraft: {
       avatars: { findRawSkin: unavailable, render: unavailable },
       players: { findProfileById: unavailable, findProfileByName: unavailable },

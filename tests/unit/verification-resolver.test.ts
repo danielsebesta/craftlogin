@@ -17,6 +17,7 @@ const verifiedAt = new Date('2026-09-06T12:00:00.000Z');
 
 class SingleWinnerStore {
   public completed = 0;
+  public method: string | undefined;
   public released = 0;
   private claimed = false;
 
@@ -35,8 +36,18 @@ class SingleWinnerStore {
     });
   }
 
-  public complete(): Promise<boolean> {
+  public claimInteraction(): Promise<VerificationClaim | null> {
+    return this.claim('ABCDEFGH');
+  }
+
+  public complete(
+    _claim: VerificationClaim,
+    _player: AuthenticatedMinecraftPlayer,
+    _verifiedAt: Date,
+    method?: string,
+  ): Promise<boolean> {
     this.completed += 1;
+    this.method = method;
     return Promise.resolve(true);
   }
 
@@ -115,5 +126,21 @@ describe('VerificationResolver', (): void => {
 
     await expect(resolver.resolve('ABCDEFGH', player, verifiedAt)).resolves.toBe('resolved');
     expect(profiles.lookups).toEqual([player.uuid]);
+  });
+
+  it('resolves Microsoft identity through the same atomic interaction claim', async (): Promise<void> => {
+    const store = new SingleWinnerStore();
+    const users = new RecordingUsers();
+    const resolver = new VerificationResolver(store, users);
+
+    await expect(
+      resolver.resolveInteraction(
+        'interaction-id',
+        { ...player, verifiedVia: 'microsoft-oauth' },
+        verifiedAt,
+      ),
+    ).resolves.toBe('resolved');
+    expect(users.writes).toEqual([{ player, verifiedAt }]);
+    expect(store.method).toBe('microsoft_oauth');
   });
 });

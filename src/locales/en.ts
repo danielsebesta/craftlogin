@@ -75,6 +75,16 @@ export const english = {
           description: 'Read verification state for the active signed OIDC interaction.',
           summary: 'Check Minecraft verification',
         },
+        microsoftOAuthCallback: {
+          description:
+            'Complete one-shot Microsoft, Xbox Live, and Minecraft Services verification without persisting Microsoft-side tokens or account data.',
+          summary: 'Complete Microsoft verification',
+        },
+        microsoftOAuthStart: {
+          description:
+            'Begin one-shot Microsoft OAuth verification with S256 PKCE and only the XboxLive.signin scope.',
+          summary: 'Start Microsoft verification',
+        },
         skinVerificationDownload: { summary: 'Download the marked Minecraft skin' },
         skinVerificationStart: {
           description:
@@ -131,6 +141,10 @@ export const english = {
       minecraftPlayerNotFound: 'That Minecraft Java player could not be found.',
       minecraftProfileUnavailable: 'The Minecraft profile service is temporarily unavailable.',
       minecraftSkinUnavailable: 'The Minecraft skin service is temporarily unavailable.',
+      microsoftSignInRejected: 'Microsoft sign-in could not continue. Start again and retry.',
+      microsoftSignInUnavailable:
+        'Microsoft account verification is temporarily unavailable. Try again shortly.',
+      microsoftStateInvalid: 'This Microsoft sign-in attempt expired or is invalid. Start again.',
       insufficientScope: 'The access token does not grant access to the requested identity.',
       notFound: 'The requested resource was not found.',
       rateLimited: 'Too many requests. Wait a moment and try again.',
@@ -363,7 +377,7 @@ export const english = {
     noJavaScript:
       'Automatic status checks need JavaScript. You can still connect in Minecraft, then use the continue button.',
     securityNote:
-      'Minecraft online mode or a fresh Mojang-signed skin profile verifies the account. CraftLogin never asks for a Microsoft password.',
+      'Verify through Minecraft online mode, a fresh Mojang-signed skin, or one-shot Microsoft sign-in. CraftLogin never receives your Microsoft password or stores Microsoft tokens.',
     status: {
       expired: 'This code expired. Return to the app and start again.',
       networkError: 'The status check was interrupted. Retrying shortly.',
@@ -378,6 +392,26 @@ export const english = {
     ],
     stepsHeading: 'How to connect',
     title: 'Verify with Minecraft',
+    microsoft: {
+      continueButton: 'Continue',
+      editionLabel: 'Ownership',
+      heading: 'Or sign in with Microsoft',
+      hint: 'Use Microsoft, Xbox Live, and Minecraft Services to confirm Java Edition ownership without opening the game. CraftLogin stores none of the Microsoft-side tokens or account data.',
+      javaEdition: 'Java Edition owner',
+      otherMethodButton: 'Use another method',
+      ownershipHeading: 'Java Edition ownership not found',
+      ownershipLead:
+        'This Microsoft account did not provide a qualifying Minecraft Java Edition entitlement.',
+      ownershipTitle: 'Java Edition required',
+      privacyNote:
+        'Microsoft, Xbox Live, XSTS, and Minecraft access tokens were used only for this verification request and were not stored.',
+      retryButton: 'Try Microsoft sign-in again',
+      startButton: 'Sign in with Microsoft',
+      successHeading: 'Minecraft account verified',
+      successLead: 'Microsoft sign-in confirmed this Minecraft Java Edition profile.',
+      successTitle: 'Minecraft account verified',
+      usernameLabel: 'Minecraft username',
+    },
     skin: {
       accountLabel: 'Minecraft Java username',
       accountPlaceholder: 'Player',

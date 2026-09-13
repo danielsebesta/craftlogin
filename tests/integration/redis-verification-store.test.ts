@@ -150,6 +150,29 @@ describe('RedisVerificationStore', (): void => {
     });
   });
 
+  it('carries the Microsoft authentication method into OIDC finalization', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    await verificationStore.allocate(interactionId);
+    const claim = await verificationStore.claimInteraction(interactionId);
+    if (claim === null) throw new Error('Expected an interaction verification claim');
+
+    await expect(
+      verificationStore.complete(
+        claim,
+        {
+          uuid: '123e4567-e89b-42d3-a456-426614174000',
+          username: 'MicrosoftPlayer',
+        },
+        new Date('2026-09-13T12:00:00.000Z'),
+        'microsoft_oauth',
+      ),
+    ).resolves.toBe(true);
+    await expect(verificationStore.claimVerified(interactionId)).resolves.toMatchObject({
+      method: 'microsoft_oauth',
+    });
+  });
+
   it('atomically deletes an authorization code after one consumption and stores no plaintext code', async (): Promise<void> => {
     const redisClient = requireRedis(redis);
     const adapter = new RedisOidcAdapter('AuthorizationCode', redisClient, keyPrefix);

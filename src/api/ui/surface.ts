@@ -94,6 +94,7 @@ export const signInSurfaceStyles = `
 }
 
 .consent-verify,
+.microsoft-verification,
 .skin-verification {
   display: grid;
   gap: var(--s4);

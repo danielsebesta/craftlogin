@@ -151,8 +151,15 @@ describe('page accessibility contract', (): void => {
       expect(html).toContain('<a class="skip-link" href="#main">');
       expect(html).toContain('<header class="page-header">');
       expect(html).toContain('<footer class="page-footer">');
-      expect(html).toContain('<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">');
-      expect(html).toContain('sizes="64x64"');
+      expect(html).toContain(
+        '<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />',
+      );
+      expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
+      expect(html).toContain('<link rel="shortcut icon" href="/favicon.ico" />');
+      expect(html).toContain(
+        '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />',
+      );
+      expect(html).toContain('<link rel="manifest" href="/site.webmanifest" />');
       expect(html).toContain('<meta name="theme-color" content="#0b0e0b">');
     }
 

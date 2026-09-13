@@ -1,10 +1,10 @@
 # CraftLogin
 
 CraftLogin is an open-source OAuth 2.0 and OpenID Connect provider for Minecraft Java Edition
-identities. A player proves ownership either by joining a short-lived subdomain on an online-mode
-Minecraft ghost server or by publishing a short-lived marker in their official Java skin; relying
-applications receive the authenticated Minecraft UUID and current username through standard OIDC
-endpoints. CraftLogin stores no email address or password.
+identities. A player proves ownership by joining a short-lived online-mode ghost server, publishing
+a short-lived marker in their official Java skin, or completing one-shot Microsoft OAuth and
+Minecraft Services verification. Relying applications receive the authenticated Minecraft UUID and
+current username through standard OIDC endpoints. CraftLogin stores no email address or password.
 
 > **CraftLogin is not affiliated with, endorsed by, or sponsored by Mojang or Microsoft.**
 
@@ -28,6 +28,15 @@ therefore preserves the visible base and overlay layers. Both Java layouts are s
 in the UI. Other Minecraft-branded image sizes, including Bedrock/HD textures, are deliberately
 rejected because they are not Java skin upload formats.
 
+The third option signs the player in through Microsoft's personal-account endpoint with S256 PKCE
+and exactly the `XboxLive.signin` scope. CraftLogin exchanges the resulting request-local tokens
+through Xbox Live, XSTS, and Minecraft Services, confirms a `game_minecraft` or `product_minecraft`
+entitlement, and reads the Java profile. It does not request `offline_access`, Microsoft Graph,
+profile, or email scopes. Microsoft access tokens, Xbox Live tokens, XSTS tokens, Minecraft access
+tokens, Xbox user hashes, and Microsoft account identifiers exist only in memory for that request.
+They are never written to Redis, PostgreSQL, logs, or a cache, and no Microsoft account linkage or
+method-specific user history is created.
+
 The server address only ever accepts the exact code shown in the browser. Connecting to the bare
 base domain instead opens a public void lobby where a player can chat; the lobby never reads or
 changes verification state.
@@ -38,8 +47,9 @@ not written to application logs.
 
 The resulting OIDC authentication context identifies the method. Online-mode verification uses
 `urn:craftlogin:minecraft-online-mode` with `amr=minecraft_online_mode`; skin verification uses
-`urn:craftlogin:minecraft-profile-skin` with `amr=minecraft_profile_skin`. A relying party can
-select one through `acr_values`; without that parameter, either method is offered.
+`urn:craftlogin:minecraft-profile-skin` with `amr=minecraft_profile_skin`; Microsoft verification
+uses `urn:craftlogin:microsoft-oauth` with `amr=microsoft_oauth`. A relying party can select one
+through `acr_values`; without that parameter, all available methods are offered.
 
 ## Identity and client integration
 
@@ -110,6 +120,9 @@ local PostgreSQL user `craftlogin` with password `dev`, for example:
 ```sh
 export DATABASE_URL='postgresql://craftlogin:dev@localhost:5432/craftlogin?schema=public'
 export REDIS_URL='redis://localhost:6379'
+export MICROSOFT_OAUTH_CLIENT_ID='your-personal-accounts-application-id'
+# Optional for an app registration configured as a confidential web client:
+export MICROSOFT_OAUTH_CLIENT_SECRET='server-only-secret'
 npm run db:migrate:deploy
 npm start
 ```
@@ -191,7 +204,10 @@ node --input-type=module -e "import { generateKeyPairSync, randomUUID } from 'no
 Treat both outputs as production secrets and store backup copies in a secret manager. Put each value
 on its corresponding single line in `.env`, set a strong PostgreSQL password, set
 `DATABASE_URL=postgresql://craftlogin:<URL-encoded-password>@postgres:5432/craftlogin?schema=public`,
-and set the issuer and Minecraft base domain.
+set the issuer and Minecraft base domain, and configure the personal-accounts-only Microsoft
+application ID. Register `${OIDC_ISSUER}/interaction/microsoft/callback` as its exact redirect URI.
+`MICROSOFT_OAUTH_CLIENT_SECRET` is optional; when present it is sent only by the server during the
+authorization-code exchange.
 
 Build and start the complete topology:
 
@@ -238,6 +254,11 @@ Durable user data is limited to Minecraft UUID, current username, and first/last
 Registered client metadata and hashed refresh-token identifiers are stored in PostgreSQL. Redis
 holds short-lived verification and ephemeral OIDC state. IP address and user agent are anomaly
 signals only and an IP change does not invalidate a session by itself.
+
+Microsoft verification adds no durable data. Its PKCE transaction is held for at most five minutes
+in a signed, `Secure`, `HttpOnly`, `SameSite=Lax` browser cookie. Provider tokens and Microsoft/Xbox
+account identifiers are request-local only; the existing short-lived interaction receives just the
+Minecraft UUID, username, verification time, and authentication-method label needed for OIDC.
 
 Developer access is an explicit PostgreSQL allowlist keyed only by Minecraft UUID. OAuth clients
 record their owning developer; legacy or deliberately unassigned clients remain visible only to an

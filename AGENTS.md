@@ -4,8 +4,9 @@
 
 CraftLogin is an MIT-licensed OAuth 2.0 and OpenID Connect provider for Minecraft Java Edition
 identities. A user proves account ownership by joining a short-lived subdomain on an online-mode
-Minecraft ghost server. The resulting UUID and username become the user's OIDC identity. CraftLogin
-stores no email address or password.
+Minecraft ghost server, publishing a short-lived signed skin marker, or completing one-shot
+Microsoft OAuth verification. The resulting UUID and username become the user's OIDC identity.
+CraftLogin stores no email address or password.
 
 This file is authoritative for agents and contributors working in this repository. Preserve the
 security properties below even when a change appears simpler without them.
@@ -38,6 +39,9 @@ Keep modules small and organized by responsibility:
   authentication, centralized errors, OpenAPI generation, and development-only Swagger UI.
 - `src/developers/` owns the UUID allowlist, developer/admin roles, OAuth-client ownership, the
   first-party Minecraft login handoff, and opaque Redis-backed console sessions.
+- `src/verification/` owns the shared atomic interaction resolution and the one-shot Microsoft, Xbox
+  Live, XSTS, and Minecraft Services verification client. Token-bearing HTTP modules must not import
+  or receive Redis, Prisma, repositories, or caches.
 - Shared infrastructure modules own PostgreSQL/Prisma and Redis clients and their lifecycle. Domain
   modules receive those dependencies rather than constructing extra clients.
 - Translation resources own every user-facing string. English is the default and fallback locale.
@@ -96,6 +100,27 @@ The verification flow is fixed:
    bounded polling, a short starting interval, and exponential backoff.
 9. A resolved interaction resumes `oidc-provider`, which completes the standard authorization code,
    token, and `/api/users/@me` flow.
+
+Microsoft OAuth verification is a third convenience path with these fixed constraints:
+
+- Request exactly `XboxLive.signin` from the personal-accounts endpoint with S256 PKCE. Never
+  request `offline_access`, Graph, profile, or email scopes, and never implement token renewal.
+- Exchange the authorization code through Xbox Live and XSTS using relying party
+  `rp://api.minecraftservices.com/`, then obtain a Minecraft access token.
+- Require a `game_minecraft` or `product_minecraft` entitlement before requesting the Minecraft
+  profile. A missing Java entitlement fails verification and never resolves the OIDC interaction.
+- Microsoft access/refresh tokens, Xbox Live tokens, XSTS tokens, Minecraft access tokens, Xbox user
+  hashes, and Microsoft account identifiers may exist only in request memory. Never write them to
+  Redis, PostgreSQL, logs, files, caches, cookies, or error details.
+- The Microsoft module passes `{ uuid, username, verifiedVia: "microsoft-oauth" }` to shared
+  resolution. Storage receives only the canonical UUID and username; the short-lived interaction may
+  additionally carry `microsoft_oauth` solely to produce OIDC `acr=urn:craftlogin:microsoft-oauth`
+  and `amr=microsoft_oauth`; never persist a provider linkage, edition field, method-specific
+  timestamp, or verification history on `User`.
+- Keep the Microsoft client ID and optional confidential-client secret in the existing environment
+  configuration. A secret is server-only and must never enter browser code.
+- Show Java ownership only in the immediate no-store callback result. Do not add a persisted edition
+  column without explicit approval.
 
 Never log verification codes, authorization codes, access/refresh tokens, client secrets, cookie
 values, or password-equivalent material.

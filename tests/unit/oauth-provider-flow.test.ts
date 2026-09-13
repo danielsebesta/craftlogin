@@ -25,6 +25,7 @@ import {
   type SessionSignal,
 } from '../../src/oauth/session-security.js';
 import type { VerificationFinalizationClaim } from '../../src/verification/redis-verification-store.js';
+import type { VerificationMethod } from '../../src/verification/types.js';
 
 const accountId = '123e4567-e89b-42d3-a456-426614174000';
 const redirectUri = 'https://client.example/callback';
@@ -41,7 +42,11 @@ const identityClaimsSchema = z.object({
   preferred_username: z.literal('VerifiedPlayer'),
   sub: z.literal(accountId),
 });
-const idTokenClaimsSchema = z.object({ sub: z.literal(accountId) });
+const idTokenClaimsSchema = z.object({
+  acr: z.string().optional(),
+  amr: z.array(z.string()).optional(),
+  sub: z.literal(accountId),
+});
 
 interface StoredAdapterState {
   readonly records: Map<string, AdapterPayload>;
@@ -106,6 +111,7 @@ class TestMemoryAdapter implements Adapter {
 
 class VerifiedInteractionStore {
   public interactionId: string | undefined;
+  public method: VerificationMethod = 'microsoft_oauth';
   public verified = false;
   private claimed = false;
 
@@ -124,7 +130,7 @@ class VerifiedInteractionStore {
     return Promise.resolve({
       claimId: 'finalization-claim',
       interactionKey: 'interaction-key',
-      method: 'minecraft_online_mode',
+      method: this.method,
       player: { uuid: accountId, username: 'VerifiedPlayer' },
       resolvedAt: '2026-09-06T12:00:00.000Z',
     });
@@ -227,6 +233,8 @@ describe('CraftLogin OIDC provider', (): void => {
       new ProviderInteractionGateway(provider),
       verification,
       { error: (): void => undefined },
+      undefined,
+      true,
     );
     const accessTokens = new ProviderAccessTokenAuthenticator(provider);
     server = await createApiServer({
@@ -299,7 +307,9 @@ describe('CraftLogin OIDC provider', (): void => {
       'This sign-in request cannot continue.',
     );
 
-    const authorizationResponse = await fetch(authorizationUrl(issuer), {
+    const microsoftAuthorization = authorizationUrl(issuer);
+    microsoftAuthorization.searchParams.set('acr_values', 'urn:craftlogin:microsoft-oauth');
+    const authorizationResponse = await fetch(microsoftAuthorization, {
       headers: proxyHeaders(),
       redirect: 'manual',
     });
@@ -323,7 +333,7 @@ describe('CraftLogin OIDC provider', (): void => {
       headers: proxyHeaders(cookies),
     });
     expect(interactionResponse.status).toBe(200);
-    expect(await interactionResponse.text()).toContain('ABCDEFGH.craftlogin.com');
+    expect(await interactionResponse.text()).toContain('Sign in with Microsoft');
     expect(verification.interactionId).toBe(
       new URL(interactionLocation, issuer).pathname.split('/').at(-1),
     );
@@ -376,7 +386,11 @@ describe('CraftLogin OIDC provider', (): void => {
     const firstTokenResponse = await redeemAuthorizationCode(issuer, authorizationCode);
     expect(firstTokenResponse.status).toBe(200);
     const tokens = tokenResponseSchema.parse(await firstTokenResponse.json());
-    expect(parseJwtPayload(tokens.id_token)).toMatchObject({ sub: accountId });
+    expect(parseJwtPayload(tokens.id_token)).toMatchObject({
+      acr: 'urn:craftlogin:microsoft-oauth',
+      amr: ['microsoft_oauth'],
+      sub: accountId,
+    });
     await expect(accessTokens.authenticate(`Bearer ${tokens.access_token}`)).resolves.toEqual({
       accountId,
       clientId: 'public-client',
@@ -508,6 +522,7 @@ describe('CraftLogin OIDC provider', (): void => {
     expect(discovery.acr_values_supported).toEqual([
       'urn:craftlogin:minecraft-online-mode',
       'urn:craftlogin:minecraft-profile-skin',
+      'urn:craftlogin:microsoft-oauth',
     ]);
 
     const logoutPage = await fetch(new URL('/oauth2/logout', issuer), {

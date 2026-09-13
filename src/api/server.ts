@@ -22,6 +22,7 @@ import type { CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
 import { registerDeveloperRoutes } from './developer-routes.js';
 import { registerErrorHandling } from './errors.js';
+import { registerFaviconAssetRoutes } from './favicon-assets.js';
 import { registerFontAssetRoutes } from './font-assets.js';
 import { registerHealthRoute, type ReadinessCheck } from './health-route.js';
 import {
@@ -31,6 +32,10 @@ import {
 } from './interaction-routes.js';
 import { registerLandingRoutes } from './landing-routes.js';
 import { registerMicrosoftIdentityAssociationRoute } from './microsoft-identity-association-route.js';
+import {
+  registerMicrosoftOAuthRoutes,
+  type MicrosoftOAuthRoutesOptions,
+} from './microsoft-oauth-routes.js';
 import { registerOidcHttpRoutes, type OidcHttpHandler } from './oauth-http-routes.js';
 import { registerOpenApi } from './openapi.js';
 import { registerRateLimiting } from './rate-limit.js';
@@ -59,6 +64,10 @@ export interface ApiServerOptions {
     readonly skins: SkinStore;
   };
   readonly minecraftBaseDomain: string;
+  readonly microsoftOAuth?: {
+    readonly clientId: string;
+    readonly verification: MicrosoftOAuthRoutesOptions['verification'];
+  };
   readonly nodeEnvironment: 'development' | 'production' | 'test';
   readonly oidcHandler: OidcHttpHandler;
   readonly rateLimitNamespace?: string;
@@ -93,8 +102,11 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerErrorHandling(server);
   registerFontAssetRoutes(server);
   registerBrandIconAssetRoutes(server);
+  registerFaviconAssetRoutes(server);
   registerBackgroundAssetRoute(server);
-  registerMicrosoftIdentityAssociationRoute(server);
+  if (options.microsoftOAuth !== undefined) {
+    registerMicrosoftIdentityAssociationRoute(server, options.microsoftOAuth.clientId);
+  }
   if (options.minecraft !== undefined) {
     registerAvatarRoutes(server, options.minecraft);
   }
@@ -107,6 +119,14 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     interactions: options.interactions,
     minecraftBaseDomain: options.minecraftBaseDomain,
   });
+  if (options.microsoftOAuth !== undefined && options.interactions.prepareMicrosoft !== undefined) {
+    registerMicrosoftOAuthRoutes(server, {
+      interactions: {
+        prepareMicrosoft: options.interactions.prepareMicrosoft.bind(options.interactions),
+      },
+      verification: options.microsoftOAuth.verification,
+    });
+  }
   registerUserRoutes(server, options.accessTokens, options.users, options.minecraft?.players);
   registerDeveloperRoutes(server, {
     appManager: options.appManager,
