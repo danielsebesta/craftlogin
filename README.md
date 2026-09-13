@@ -54,7 +54,19 @@ can end a session at `/oauth2/logout`. A client may only introspect its own toke
 [`openapi.yaml`](openapi.yaml) documents the introspection endpoint; the logout pages stay out of
 the API reference.
 
-### Public avatar API
+### Public player and avatar APIs
+
+Minecraft Java identities can be resolved anonymously in either direction through one endpoint. The
+identifier may be a current username, canonical UUID, or dashless UUID; the response always contains
+the canonical UUID and current username:
+
+```text
+GET /api/users/Notch
+GET /api/users/069a79f4-44e9-4726-a5be-fca90e38aaf5
+```
+
+Profile lookups allow cross-origin reads, use the shared Mojang profile cache, and return `404` for
+an unknown player or `503` when no current or stale profile is available.
 
 Avatar images can be requested anonymously by canonical or dashless Minecraft UUID. CraftLogin uses
 only the signed Mojang skin descriptor and returns transparent PNGs:

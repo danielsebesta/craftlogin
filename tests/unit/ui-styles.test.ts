@@ -88,6 +88,7 @@ describe('page accessibility contract', (): void => {
       csrfToken: 'csrf-token',
       developers: [],
       role: 'admin',
+      username: 'VerifiedPlayer',
       userUuid: '123e4567-e89b-42d3-a456-426614174000',
     });
 
@@ -96,6 +97,9 @@ describe('page accessibility contract', (): void => {
     expect(html).toContain('<label for="admin-identifier">');
     expect(html).toContain('<label for="admin-role">');
     expect(html).toContain('<h1>Developer Console</h1>');
+    expect(html).toContain('<strong>VerifiedPlayer</strong>');
+    expect(html).toContain('/api/avatars/123e4567-e89b-42d3-a456-426614174000/head');
+    expect(html).not.toContain('<code>123e4567-e89b-42d3-a456-426614174000</code>');
   });
 });
 

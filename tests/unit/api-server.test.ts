@@ -14,6 +14,7 @@ import {
   appRegistrationRateLimit,
   avatarRawRateLimit,
   avatarRenderRateLimit,
+  playerProfileRateLimit,
   tokenRateLimit,
   verificationStatusRateLimit,
 } from '../../src/api/rate-limit.js';
@@ -472,6 +473,7 @@ describe('CraftLogin API server', (): void => {
       })
       .parse(document);
     expect(parsed.paths).toHaveProperty('/api/users/@me');
+    expect(parsed.paths).toHaveProperty('/api/users/{identifier}');
     expect(parsed.paths).toHaveProperty('/api/apps');
     expect(parsed.paths).toHaveProperty('/oauth2/token');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/skin');
@@ -591,6 +593,18 @@ describe('CraftLogin API server', (): void => {
       url: `/api/avatars/${avatarUuid}/skin`,
     });
     expectRateLimited(limitedRaw);
+
+    for (let index = 0; index < playerProfileRateLimit.max; index += 1) {
+      const response = await server.inject({ method: 'GET', url: `/api/users/${avatarUuid}` });
+      expect(response.statusCode).toBe(200);
+    }
+    const limitedProfile = await server.inject({
+      headers: { origin: 'https://attacker.example' },
+      method: 'GET',
+      url: `/api/users/${avatarUuid}`,
+    });
+    expectRateLimited(limitedProfile);
+    expect(limitedProfile.headers['access-control-allow-origin']).toBe('*');
   });
 
   async function buildServer(
@@ -710,8 +724,8 @@ describe('CraftLogin API server', (): void => {
             }),
         },
         players: {
-          findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
-          findProfileByName: (): Promise<undefined> => Promise.resolve(undefined),
+          findProfileById: (uuid) => Promise.resolve({ username: 'VerifiedPlayer', uuid }),
+          findProfileByName: (username) => Promise.resolve({ username, uuid: avatarUuid }),
         },
         skins: { fetchSkin: (): Promise<undefined> => Promise.resolve(undefined) },
       },

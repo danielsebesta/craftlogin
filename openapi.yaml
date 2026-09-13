@@ -1338,6 +1338,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+  /api/users/{identifier}:
+    get:
+      summary: Resolve a Minecraft player
+      tags:
+        - Identity
+      description: Resolve a current Minecraft Java username or UUID to its canonical
+        UUID and username.
+      parameters:
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            type: string
+          in: path
+          name: identifier
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.user-response"
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
   /api/apps:
     get:
       summary: List manageable OAuth clients
@@ -1523,7 +1584,8 @@ tags:
     name: OAuth
   - description: Complete Minecraft account verification.
     name: Interactions
-  - description: Read the Minecraft identity represented by an access token.
+  - description: Resolve public Minecraft identities or read the identity
+      represented by a token.
     name: Identity
   - description: Fetch and render signed Minecraft skins without authentication.
     name: Avatars

@@ -55,6 +55,11 @@ export const english = {
             'Return the Minecraft UUID and current username represented by the access token.',
           summary: 'Get the current Minecraft user',
         },
+        playerProfile: {
+          description:
+            'Resolve a current Minecraft Java username or UUID to its canonical UUID and username.',
+          summary: 'Resolve a Minecraft player',
+        },
         discovery: { summary: 'Get authorization server metadata' },
         interactionPage: {
           description: 'Render the Minecraft account verification interaction.',
@@ -98,7 +103,8 @@ export const english = {
       tags: {
         applications: 'Manage public and confidential OAuth clients as an authenticated developer.',
         avatars: 'Fetch and render signed Minecraft skins without authentication.',
-        identity: 'Read the Minecraft identity represented by an access token.',
+        identity:
+          'Resolve public Minecraft identities or read the identity represented by a token.',
         interactions: 'Complete Minecraft account verification.',
         oauth: 'Standards-based OAuth 2.0 and OpenID Connect endpoints.',
       },
@@ -118,6 +124,7 @@ export const english = {
       interactionExpired: 'This verification request has expired. Return to the app and try again.',
       interactionInvalid: 'This verification request is no longer valid.',
       minecraftPlayerNotFound: 'That Minecraft Java player could not be found.',
+      minecraftProfileUnavailable: 'The Minecraft profile service is temporarily unavailable.',
       minecraftSkinUnavailable: 'The Minecraft skin service is temporarily unavailable.',
       insufficientScope: 'The access token does not grant access to the requested identity.',
       notFound: 'The requested resource was not found.',
@@ -202,6 +209,7 @@ export const english = {
       heading: 'Developer Console',
       lead: 'Register OAuth clients and manage exact redirect URIs tied to your Minecraft UUID.',
       logout: 'Sign out',
+      signedInAs: 'Signed in as',
       uuidLabel: 'Signed in UUID',
     },
     footer:

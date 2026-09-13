@@ -177,6 +177,11 @@ describe('Developer Console', (): void => {
     expect(response.body).toContain('<h1>Developer Console</h1>');
     expect(response.body).toContain('Local map client');
     expect(response.body).toContain('Access registry');
+    expect(response.body).toContain('<strong>VerifiedPlayer</strong>');
+    expect(response.body).toContain(
+      `/api/avatars/${developerSession.userUuid}/head?size=64&amp;layers=all`,
+    );
+    expect(response.body).not.toContain('<span class="console-identity"><code>');
     expect(response.body).toContain(`value="${developerSession.csrfToken}"`);
     expect(response.body).not.toContain('<script');
     expect(response.headers['set-cookie']).toContain('__Host-craftlogin_developer_session=');
@@ -396,7 +401,9 @@ describe('Developer Console', (): void => {
         response.end();
       },
       readiness: { check: unavailable },
-      users: { findCurrentUser: unavailable },
+      users: {
+        findCurrentUser: (uuid) => Promise.resolve({ username: 'VerifiedPlayer', uuid }),
+      },
     });
     servers.push(server);
     await server.ready();

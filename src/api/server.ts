@@ -107,7 +107,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     interactions: options.interactions,
     minecraftBaseDomain: options.minecraftBaseDomain,
   });
-  registerUserRoutes(server, options.accessTokens, options.users);
+  registerUserRoutes(server, options.accessTokens, options.users, options.minecraft?.players);
   registerDeveloperRoutes(server, {
     appManager: options.appManager,
     apps: options.apps,
@@ -116,6 +116,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     logins: options.developerLogins,
     logger: server.log,
     minecraftBaseDomain: options.minecraftBaseDomain,
+    users: options.users,
     ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });
   registerAppRoutes(server, options.apps, options.appManager, options.developerAuthentication);

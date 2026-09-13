@@ -55,6 +55,12 @@ export const avatarRawRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
+export const playerProfileRateLimit = {
+  groupId: 'player-profile',
+  max: 120,
+  timeWindow: 60 * 1_000,
+};
+
 export async function registerRateLimiting(
   server: FastifyInstance,
   redis?: Redis,

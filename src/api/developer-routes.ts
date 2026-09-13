@@ -17,6 +17,7 @@ import {
   SkinVerificationResolutionError,
 } from '../verification/skin-verification-service.js';
 import type { AppRegistrar, AppRegistrationInput } from './app-registration.js';
+import type { CurrentUser, CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
 import { requestSignal } from './developer-authentication.js';
 import { developerStyles } from './developer-assets.js';
@@ -109,6 +110,7 @@ export interface DeveloperRoutesOptions {
   readonly logger: FastifyBaseLogger;
   readonly minecraftBaseDomain: string;
   readonly players?: MinecraftPlayerLookup;
+  readonly users: CurrentUserLookup;
 }
 
 export function registerDeveloperRoutes(
@@ -302,14 +304,16 @@ export function registerDeveloperRoutes(
       if (session === undefined) {
         return;
       }
-      const [apps, developers] = await Promise.all([
+      const [apps, developers, user] = await Promise.all([
         options.appManager.list(session.userUuid, session.role),
         session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
+        options.users.findCurrentUser(session.userUuid),
       ]);
       const dashboard: DeveloperDashboardInput = {
         apps,
         csrfToken: session.csrfToken,
         role: session.role,
+        username: requireDashboardUser(user, session.userUuid).username,
         userUuid: session.userUuid,
         ...(developers === undefined ? {} : { developers }),
         ...(request.query.notice === undefined ? {} : { notice: request.query.notice }),
@@ -529,9 +533,10 @@ async function renderDashboardError(
   session: NonNullable<Awaited<ReturnType<DeveloperAuthentication['authenticate']>>>,
   values: NonNullable<DeveloperDashboardInput['formValues']>,
 ): Promise<void> {
-  const [apps, developers] = await Promise.all([
+  const [apps, developers, user] = await Promise.all([
     options.appManager.list(session.userUuid, session.role),
     session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
+    options.users.findCurrentUser(session.userUuid),
   ]);
   const dashboard: DeveloperDashboardInput = {
     apps,
@@ -539,6 +544,7 @@ async function renderDashboardError(
     formError: english.developer.app.formErrorNotice,
     formValues: values,
     role: session.role,
+    username: requireDashboardUser(user, session.userUuid).username,
     userUuid: session.userUuid,
     ...(developers === undefined ? {} : { developers }),
   };
@@ -547,6 +553,13 @@ async function renderDashboardError(
     .status(400)
     .type('text/html; charset=utf-8')
     .send(renderDeveloperDashboard(dashboard));
+}
+
+function requireDashboardUser(user: CurrentUser | undefined, expectedUuid: string): CurrentUser {
+  if (user?.uuid !== expectedUuid) {
+    throw new ApiError(500, 'internal_error', english.api.errors.internal);
+  }
+  return user;
 }
 
 function parseRedirectUriLines(value: string): string[] {

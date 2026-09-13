@@ -144,6 +144,18 @@ const avatarParamsSchema = {
   required: ['uuid'],
   type: 'object',
 };
+const playerIdentifierParamsSchema = {
+  additionalProperties: false,
+  properties: {
+    identifier: {
+      pattern:
+        '^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$',
+      type: 'string',
+    },
+  },
+  required: ['identifier'],
+  type: 'object',
+};
 const avatarRenderQuerySchema = {
   additionalProperties: false,
   properties: {
@@ -389,6 +401,36 @@ export const currentUserRouteSchema: FastifySchema = {
   security: [{ bearerAuth: [] }],
   summary: operations.currentUser.summary,
   tags: ['Identity'],
+};
+
+export const playerProfileRouteSchema: FastifySchema = {
+  description: operations.playerProfile.description,
+  params: playerIdentifierParamsSchema,
+  querystring: emptyQuerySchema,
+  response: {
+    200: {
+      $ref: `${USER_RESPONSE_SCHEMA_ID}#`,
+      headers: { 'cache-control': { type: 'string' } },
+    },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.playerProfile.summary,
+  tags: ['Identity'],
+};
+
+export const playerProfilePreflightRouteSchema: FastifySchema = {
+  hide: true,
+  params: playerIdentifierParamsSchema,
+  response: {
+    204: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
 };
 
 export const appRegistrationRouteSchema: FastifySchema = {

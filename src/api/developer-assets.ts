@@ -24,9 +24,29 @@ const consoleStyles = `
   color: var(--muted);
 }
 
-.console-identity code {
-  overflow-wrap: anywhere;
+.console-player {
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
   color: var(--text);
+}
+
+.console-player-head {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  overflow: hidden;
+  place-items: center;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+}
+
+.console-player-head img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  object-fit: contain;
 }
 
 .console-identity form {
