@@ -17,6 +17,8 @@ const PROCESSING_TTL_MS = 60 * 1_000;
 const RESOLVED_TTL_MS = 5 * 60 * 1_000;
 const MAX_CODE_ALLOCATION_ATTEMPTS = 12;
 const KEY_ID_PATTERN = /^[0-9a-f]{64}$/u;
+const verificationMethodSchema = z.enum(['minecraft_online_mode', 'minecraft_profile_skin']);
+export type VerificationMethod = z.infer<typeof verificationMethodSchema>;
 
 const createResultSchema = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const scriptBooleanSchema = z.union([z.literal(0), z.literal(1)]);
@@ -27,8 +29,10 @@ const verifiedClaimResultSchema = z.union([
     authenticatedMinecraftPlayerSchema.shape.uuid,
     authenticatedMinecraftPlayerSchema.shape.username,
     z.iso.datetime({ offset: true }),
+    verificationMethodSchema,
   ]),
 ]);
+const interactionClaimResultSchema = z.union([z.tuple([]), z.tuple([verificationCodeSchema])]);
 const storedStateSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('pending'),
@@ -42,12 +46,14 @@ const storedStateSchema = z.discriminatedUnion('status', [
     userUuid: authenticatedMinecraftPlayerSchema.shape.uuid,
     username: authenticatedMinecraftPlayerSchema.shape.username,
     resolvedAt: z.iso.datetime({ offset: true }),
+    method: verificationMethodSchema.optional(),
   }),
   z.object({
     status: z.literal('finalizing'),
     userUuid: authenticatedMinecraftPlayerSchema.shape.uuid,
     username: authenticatedMinecraftPlayerSchema.shape.username,
     resolvedAt: z.iso.datetime({ offset: true }),
+    method: verificationMethodSchema.optional(),
   }),
 ]);
 
@@ -97,6 +103,32 @@ end
 return 1
 `;
 
+const CLAIM_INTERACTION_SCRIPT = `
+if redis.call('HGET', KEYS[1], 'status') ~= 'pending' then
+  return {}
+end
+local code = redis.call('HGET', KEYS[1], 'code')
+if code == false then
+  return {}
+end
+local remainingTtl = redis.call('PTTL', KEYS[1])
+if remainingTtl <= 0 then
+  redis.call('DEL', KEYS[1])
+  return {}
+end
+local codeKey = ARGV[3] .. code
+if redis.call('GET', codeKey) ~= ARGV[1] then
+  return {}
+end
+redis.call('DEL', codeKey)
+redis.call('HSET', KEYS[1], 'status', 'processing', 'claimId', ARGV[2])
+redis.call('HDEL', KEYS[1], 'code')
+if remainingTtl < tonumber(ARGV[4]) then
+  redis.call('PEXPIRE', KEYS[1], ARGV[4])
+end
+return { code }
+`;
+
 const COMPLETE_SCRIPT = `
 if redis.call('HGET', KEYS[2], 'status') ~= 'processing' then
   return 0
@@ -113,10 +145,11 @@ redis.call(
   'status', 'verified',
   'userUuid', ARGV[3],
   'username', ARGV[4],
-  'resolvedAt', ARGV[5]
+  'resolvedAt', ARGV[5],
+  'method', ARGV[6]
 )
 redis.call('HDEL', KEYS[2], 'claimId', 'expiresAt')
-redis.call('PEXPIRE', KEYS[2], ARGV[6])
+redis.call('PEXPIRE', KEYS[2], ARGV[7])
 return 1
 `;
 
@@ -160,11 +193,15 @@ end
 local userUuid = redis.call('HGET', KEYS[1], 'userUuid')
 local username = redis.call('HGET', KEYS[1], 'username')
 local resolvedAt = redis.call('HGET', KEYS[1], 'resolvedAt')
+local method = redis.call('HGET', KEYS[1], 'method')
+if method == false then
+  method = 'minecraft_online_mode'
+end
 if userUuid == false or username == false or resolvedAt == false then
   return {}
 end
 redis.call('HSET', KEYS[1], 'status', 'finalizing', 'finishClaimId', ARGV[1])
-return { userUuid, username, resolvedAt }
+return { userUuid, username, resolvedAt, method }
 `;
 
 const COMPLETE_FINALIZATION_SCRIPT = `
@@ -203,6 +240,7 @@ export interface VerificationFinalizationClaim {
   readonly interactionKey: string;
   readonly player: AuthenticatedMinecraftPlayer;
   readonly resolvedAt: string;
+  readonly method: VerificationMethod;
 }
 
 export class VerificationStateError extends Error {
@@ -317,10 +355,39 @@ export class RedisVerificationStore {
     };
   }
 
+  public async claimInteraction(interactionIdInput: string): Promise<VerificationClaim | null> {
+    const interactionId = interactionIdSchema.parse(interactionIdInput);
+    const keyId = this.interactionKeyId(interactionId);
+    const interactionKey = this.interactionKey(keyId);
+    const claimId = randomUUID();
+    const result = interactionClaimResultSchema.parse(
+      await this.redis.eval(
+        CLAIM_INTERACTION_SCRIPT,
+        1,
+        interactionKey,
+        keyId,
+        claimId,
+        `${this.keyPrefix}:code:`,
+        PROCESSING_TTL_MS,
+      ),
+    );
+    const code = result[0];
+    return code === undefined
+      ? null
+      : {
+          claimId,
+          code,
+          codeKey: this.codeKey(code),
+          interactionKey,
+          keyId,
+        };
+  }
+
   public async complete(
     claim: VerificationClaim,
     playerInput: AuthenticatedMinecraftPlayer,
     resolvedAt: Date,
+    method: VerificationMethod = 'minecraft_online_mode',
   ): Promise<boolean> {
     const player = authenticatedMinecraftPlayerSchema.parse(playerInput);
     const result = scriptBooleanSchema.parse(
@@ -334,6 +401,7 @@ export class RedisVerificationStore {
         player.uuid,
         player.username,
         resolvedAt.toISOString(),
+        verificationMethodSchema.parse(method),
         RESOLVED_TTL_MS,
       ),
     );
@@ -371,12 +439,13 @@ export class RedisVerificationStore {
       return null;
     }
 
-    const [uuid, username, resolvedAt] = result;
+    const [uuid, username, resolvedAt, method] = result;
     return {
       claimId,
       interactionKey,
       player: { uuid, username },
       resolvedAt,
+      method,
     };
   }
 

@@ -260,6 +260,66 @@ export const interactionStatusRouteSchema: FastifySchema = {
   tags: ['Interactions'],
 };
 
+const skinVerificationBodySchema = {
+  additionalProperties: false,
+  properties: {
+    username: {
+      maxLength: 16,
+      minLength: 3,
+      pattern: '^[A-Za-z0-9_]+$',
+      type: 'string',
+    },
+  },
+  required: ['username'],
+  type: 'object',
+};
+
+export const skinVerificationStartRouteSchema: FastifySchema = {
+  body: skinVerificationBodySchema,
+  description: operations.skinVerificationStart.description,
+  params: interactionParamsSchema,
+  response: {
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.skinVerificationStart.summary,
+  tags: ['Interactions'],
+};
+
+export const skinVerificationStatusRouteSchema: FastifySchema = {
+  description: operations.skinVerificationStatus.description,
+  params: interactionParamsSchema,
+  response: {
+    200: verificationStatusSchema,
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.skinVerificationStatus.summary,
+  tags: ['Interactions'],
+};
+
+export const skinVerificationDownloadRouteSchema: FastifySchema = {
+  params: interactionParamsSchema,
+  response: {
+    200: {
+      content: { 'image/png': { schema: { format: 'binary', type: 'string' } } },
+      description: operations.skinVerificationDownload.summary,
+    },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.skinVerificationDownload.summary,
+  tags: ['Interactions'],
+};
+
 export const interactionCompleteRouteSchema: FastifySchema = {
   description: operations.completeInteraction.description,
   params: interactionParamsSchema,

@@ -174,6 +174,30 @@ describe('HttpMojangClient', (): void => {
     });
   });
 
+  it('bypasses cached profiles and never falls back to stale identity during verification', async (): Promise<void> => {
+    const cache = new MemoryMinecraftCache();
+    await cache.write(
+      `profile-by-id:${playerUuid}`,
+      {
+        texture: { hash: textureHash, model: 'classic' },
+        username: 'CachedPlayer',
+        uuid: playerUuid,
+      },
+      60,
+    );
+    const { calls, fetch } = stubFetch(() => ({ body: { error: 'rate limited' }, status: 429 }));
+    const client = new HttpMojangClient({ cache, fetch, logger: silentLogger() });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toMatchObject({
+      username: 'CachedPlayer',
+    });
+    await expect(client.findFreshProfileById(playerUuid)).rejects.toThrow(
+      'Minecraft service returned HTTP 429',
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain(`${playerUuid.replaceAll('-', '')}?unsigned=false`);
+  });
+
   it('reads the slim model only from a signed Minecraft texture URL', async (): Promise<void> => {
     const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
     const textures = signedTextures(privateKey, { model: 'slim' });

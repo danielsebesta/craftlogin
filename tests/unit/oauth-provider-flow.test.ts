@@ -124,6 +124,7 @@ class VerifiedInteractionStore {
     return Promise.resolve({
       claimId: 'finalization-claim',
       interactionKey: 'interaction-key',
+      method: 'minecraft_online_mode',
       player: { uuid: accountId, username: 'VerifiedPlayer' },
       resolvedAt: '2026-09-06T12:00:00.000Z',
     });
@@ -491,10 +492,18 @@ describe('CraftLogin OIDC provider', (): void => {
 
     const discoveryResponse = await fetch(new URL('/.well-known/openid-configuration', issuer));
     const discovery = z
-      .object({ end_session_endpoint: z.string(), introspection_endpoint: z.string() })
+      .object({
+        acr_values_supported: z.array(z.string()),
+        end_session_endpoint: z.string(),
+        introspection_endpoint: z.string(),
+      })
       .parse(await discoveryResponse.json());
     expect(discovery.end_session_endpoint).toBe(`${issuer}/oauth2/logout`);
     expect(discovery.introspection_endpoint).toBe(`${issuer}/oauth2/introspect`);
+    expect(discovery.acr_values_supported).toEqual([
+      'urn:craftlogin:minecraft-online-mode',
+      'urn:craftlogin:minecraft-profile-skin',
+    ]);
 
     const logoutPage = await fetch(new URL('/oauth2/logout', issuer), {
       headers: proxyHeaders(responseCookies(secondResume)),

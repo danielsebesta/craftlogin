@@ -23,6 +23,7 @@ import type {
   OAuthInteractionCompletion,
 } from '../../src/oauth/interaction-service.js';
 import type { VerificationStatus } from '../../src/verification/types.js';
+import type { SkinVerificationChallenge } from '../../src/verification/redis-skin-verification-store.js';
 
 const errorResponseSchema = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
@@ -34,6 +35,8 @@ class InteractionStub implements ApiInteractionService {
   public completion: OAuthInteractionCompletion = { status: 'pending' };
   public statusValue: VerificationStatus = { status: 'pending', code: 'ABCDEFGH' };
   public expectedIds: (string | undefined)[] = [];
+  public skinChallenge: SkinVerificationChallenge | undefined;
+  public skinUsername: string | undefined;
 
   public abort(
     _request: IncomingMessage,
@@ -48,14 +51,64 @@ class InteractionStub implements ApiInteractionService {
     _request: IncomingMessage,
     _response: ServerResponse,
     expectedInteractionId?: string,
-  ): Promise<{ clientId: string; code: string; interactionId: string; scope: string }> {
+  ): Promise<{
+    clientId: string;
+    code: string;
+    interactionId: string;
+    kind: 'login';
+    scope: string;
+    skinChallenge?: { height: 32 | 64; model: 'classic' | 'slim'; username: string };
+    allowsSkinVerification: boolean;
+    allowsOnlineVerification: boolean;
+  }> {
     this.expectedIds.push(expectedInteractionId);
     return Promise.resolve({
       clientId: 'client-id',
       code: 'ABCDEFGH',
       interactionId: 'interaction-id',
+      kind: 'login',
       scope: 'openid profile',
+      allowsOnlineVerification: true,
+      allowsSkinVerification: true,
+      ...(this.skinChallenge === undefined
+        ? {}
+        : {
+            skinChallenge: {
+              height: this.skinChallenge.height,
+              model: this.skinChallenge.model,
+              username: this.skinChallenge.username,
+            },
+          }),
     });
+  }
+
+  public startSkin(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    username: string,
+    expectedInteractionId?: string,
+  ): Promise<void> {
+    this.expectedIds.push(expectedInteractionId);
+    this.skinUsername = username;
+    return Promise.resolve();
+  }
+
+  public getSkinChallenge(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<SkinVerificationChallenge | undefined> {
+    this.expectedIds.push(expectedInteractionId);
+    return Promise.resolve(this.skinChallenge);
+  }
+
+  public checkSkin(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<VerificationStatus> {
+    this.expectedIds.push(expectedInteractionId);
+    return Promise.resolve(this.statusValue);
   }
 
   public status(
@@ -171,6 +224,57 @@ describe('CraftLogin API server', (): void => {
     expect(denied.statusCode).toBe(303);
     expect(denied.headers.location).toBe('/oauth2/error?error=access_denied');
     expect(interactions.expectedIds).toEqual(['interaction-id']);
+  });
+
+  it('starts, downloads, and checks a skin verification challenge bound to the interaction', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    const server = await buildServer('test', interactions);
+
+    const malformed = await server.inject({
+      method: 'POST',
+      payload: { username: 'not a minecraft name' },
+      url: '/interaction/interaction-id/skin/start',
+    });
+    expect(malformed.statusCode).toBe(400);
+
+    const started = await server.inject({
+      method: 'POST',
+      payload: { username: 'VerifiedPlayer' },
+      url: '/interaction/interaction-id/skin/start',
+    });
+    expect(started.statusCode).toBe(303);
+    expect(started.headers.location).toBe('/interaction/interaction-id');
+    expect(interactions.skinUsername).toBe('VerifiedPlayer');
+
+    interactions.skinChallenge = {
+      body: Buffer.from('png-body'),
+      height: 64,
+      markerHash: 'a'.repeat(64),
+      model: 'slim',
+      status: 'pending',
+      username: 'VerifiedPlayer',
+      userUuid: avatarUuid,
+    };
+    const page = await server.inject({ method: 'GET', url: '/interaction/interaction-id' });
+    expect(page.body).toContain('Download verification skin');
+    expect(page.body).toContain('modern 64×64');
+    expect(page.body).toContain('slim arms');
+    expect(page.body).toContain('data-status-url="/interaction/interaction-id/skin/status"');
+
+    const download = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/skin/download',
+    });
+    expect(download.statusCode).toBe(200);
+    expect(download.headers['content-type']).toContain('image/png');
+    expect(download.headers['content-disposition']).toContain('craftlogin-VerifiedPlayer.png');
+    expect(download.rawPayload).toEqual(Buffer.from('png-body'));
+
+    const status = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/skin/status',
+    });
+    expect(status.json()).toEqual({ status: 'pending' });
   });
 
   it('returns only verification state and redirects native completion safely', async (): Promise<void> => {

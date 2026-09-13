@@ -4,10 +4,7 @@ import { developerStyles } from '../../src/api/developer-assets.js';
 import { renderDeveloperDashboard } from '../../src/api/developer-pages.js';
 import { swaggerTypographyStyles } from '../../src/api/font-assets.js';
 import { interactionStyles } from '../../src/api/interaction-assets.js';
-import {
-  permissionsForScope,
-  renderInteractionPage,
-} from '../../src/api/interaction-page.js';
+import { permissionsForScope, renderInteractionPage } from '../../src/api/interaction-page.js';
 import { landingStyles } from '../../src/api/landing-assets.js';
 import { uiBaseStyles } from '../../src/api/ui/base.js';
 import { uiControlStyles } from '../../src/api/ui/controls.js';
@@ -65,6 +62,7 @@ describe('page accessibility contract', (): void => {
       code: 'ABCDEFGH',
       interactionId: 'interaction-id',
       minecraftBaseDomain: 'craftlogin.com',
+      kind: 'login',
       scope: 'openid profile offline_access',
     });
 

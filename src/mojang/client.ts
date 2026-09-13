@@ -59,6 +59,10 @@ export interface MinecraftPlayerLookup {
   findProfileById(uuid: string): Promise<MinecraftPlayerProfileWithSkin | undefined>;
 }
 
+export interface FreshMinecraftPlayerLookup {
+  findFreshProfileById(uuid: string): Promise<MinecraftPlayerProfileWithSkin | undefined>;
+}
+
 export interface MojangLogger {
   warn(details: Record<string, unknown>, message: string): void;
 }
@@ -85,7 +89,7 @@ export interface HttpMojangClientOptions {
   readonly timeoutMs?: number;
 }
 
-export class HttpMojangClient implements MinecraftPlayerLookup {
+export class HttpMojangClient implements MinecraftPlayerLookup, FreshMinecraftPlayerLookup {
   private readonly cache: MinecraftCache;
   private readonly fetchImplementation: typeof globalThis.fetch;
   private readonly freshTtlMs: number;
@@ -171,6 +175,23 @@ export class HttpMojangClient implements MinecraftPlayerLookup {
     } catch (error: unknown) {
       return this.staleFallback(cached, error, 'profile-by-id');
     }
+  }
+
+  public async findFreshProfileById(
+    uuid: string,
+  ): Promise<MinecraftPlayerProfileWithSkin | undefined> {
+    const canonical = canonicalMinecraftUuid(uuid);
+    if (canonical === undefined) {
+      return undefined;
+    }
+
+    const payload = await this.fetchJson(
+      `${this.profileByIdUrl}${stripMinecraftUuidDashes(canonical)}?unsigned=false`,
+      true,
+    );
+    return payload === undefined
+      ? undefined
+      : await this.profileFromSessionPayload(payload, canonical);
   }
 
   private async profileFromSessionPayload(
@@ -305,11 +326,16 @@ export class HttpMojangClient implements MinecraftPlayerLookup {
     return Date.now() - cached.fetchedAt <= this.freshTtlMs;
   }
 
-  private async fetchJson(url: string): Promise<unknown> {
+  private async fetchJson(url: string, requireFresh = false): Promise<unknown> {
     let response: Response;
     try {
       response = await this.fetchImplementation(url, {
-        headers: { accept: 'application/json', 'user-agent': USER_AGENT },
+        ...(requireFresh ? { cache: 'no-store' } : {}),
+        headers: {
+          accept: 'application/json',
+          ...(requireFresh ? { 'cache-control': 'no-cache' } : {}),
+          'user-agent': USER_AGENT,
+        },
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error: unknown) {

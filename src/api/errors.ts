@@ -5,6 +5,7 @@ import { english } from '../locales/en.js';
 import { getErrorKind } from '../logging/error-kind.js';
 import { OAuthInteractionStateError } from '../oauth/interaction-gateway.js';
 import { VerificationStateError } from '../verification/redis-verification-store.js';
+import { SkinVerificationStateError } from '../verification/redis-skin-verification-store.js';
 
 export type ApiErrorCode =
   | 'bad_request'
@@ -55,7 +56,11 @@ export function registerErrorHandling(server: FastifyInstance): void {
         return;
       }
 
-      if (error instanceof OAuthInteractionStateError || error instanceof VerificationStateError) {
+      if (
+        error instanceof OAuthInteractionStateError ||
+        error instanceof VerificationStateError ||
+        error instanceof SkinVerificationStateError
+      ) {
         await sendError(reply, 409, 'interaction_invalid', english.api.errors.interactionInvalid);
         return;
       }

@@ -16,10 +16,53 @@ export const signInSurfaceStyles = `
   gap: var(--s5);
 }
 
+.consent-only {
+  width: min(30rem, 100% - (2 * var(--s4)));
+  padding-block: 5rem var(--s6);
+}
+
+.consent-only .card {
+  border-color: var(--line);
+  border-radius: 0;
+}
+
+.consent-only .consent-avatars {
+  justify-content: center;
+  width: 100%;
+}
+
+.consent-only .consent-avatar {
+  width: 4rem;
+  aspect-ratio: 1;
+  clip-path: circle(50%);
+}
+
+.consent-only .consent-title {
+  width: 100%;
+  text-align: center;
+}
+
 .consent-identity {
   display: flex;
   gap: var(--s4);
   align-items: flex-start;
+  flex-direction: column;
+}
+
+.consent-avatars {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 4rem;
+}
+
+.consent-connector {
+  color: var(--muted);
+  letter-spacing: 0.16em;
+}
+
+.consent-avatar-account {
+  border-color: var(--accent);
 }
 
 .consent-avatar {
@@ -67,7 +110,12 @@ export const signInSurfaceStyles = `
 
 .consent-check {
   font-family: var(--font-mono);
-  color: var(--muted);
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--bg);
+  text-align: center;
+  background: var(--accent);
+  clip-path: circle(50%);
 }
 
 .consent-verify {
@@ -75,6 +123,32 @@ export const signInSurfaceStyles = `
   gap: var(--s4);
   padding-top: var(--s5);
   border-top: 1px solid var(--line);
+}
+
+.skin-verification {
+  display: grid;
+  gap: var(--s3);
+  padding-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.skin-start-form {
+  display: grid;
+  gap: var(--s2);
+}
+
+.skin-start-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.skin-start-controls input {
+  flex: 1 1 12rem;
+}
+
+.skin-download {
+  justify-self: start;
 }
 
 .consent-actions {

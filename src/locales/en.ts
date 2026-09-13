@@ -65,6 +65,16 @@ export const english = {
           description: 'Read verification state for the active signed OIDC interaction.',
           summary: 'Check Minecraft verification',
         },
+        skinVerificationDownload: { summary: 'Download the marked Minecraft skin' },
+        skinVerificationStart: {
+          description:
+            'Create a short-lived marked skin for a Minecraft Java player in the active interaction.',
+          summary: 'Start skin verification',
+        },
+        skinVerificationStatus: {
+          description: 'Check a fresh signed Minecraft profile for the short-lived skin marker.',
+          summary: 'Check skin verification',
+        },
         introspection: {
           description: 'Inspect an access or refresh token issued to the authenticated client.',
           summary: 'Introspect a token',
@@ -107,6 +117,8 @@ export const english = {
       internal: 'Something went wrong. Please try again.',
       interactionExpired: 'This verification request has expired. Return to the app and try again.',
       interactionInvalid: 'This verification request is no longer valid.',
+      minecraftPlayerNotFound: 'That Minecraft Java player could not be found.',
+      minecraftSkinUnavailable: 'The Minecraft skin service is temporarily unavailable.',
       insufficientScope: 'The access token does not grant access to the requested identity.',
       notFound: 'The requested resource was not found.',
       rateLimited: 'Too many requests. Wait a moment and try again.',
@@ -308,7 +320,7 @@ export const english = {
     },
     security: {
       heading: 'Security model',
-      text: 'Minecraft online mode is the identity boundary. CraftLogin stores no email address or password, requires PKCE on every client, and matches redirect URIs exactly.',
+      text: 'CraftLogin verifies account control through Minecraft online mode or a fresh Mojang-signed skin profile. It stores no email address or password, requires PKCE on every client, and matches redirect URIs exactly.',
     },
   },
   interaction: {
@@ -316,6 +328,7 @@ export const english = {
     allowsHeading: 'This app will receive:',
     brand: 'CraftLogin',
     cancelButton: 'Cancel',
+    changeAccount: 'Use a different account',
     continueButton: 'Allow',
     copied: 'Copied',
     copyAddress: 'Copy address',
@@ -326,10 +339,12 @@ export const english = {
     scopeProfile: 'Your current username and avatar',
     interactionRequired: 'Minecraft account verification is required',
     lead: 'Confirm your Minecraft account below to continue.',
+    signedInAs: 'Signed in as',
+    consentLead: 'Review what this application is requesting.',
     noJavaScript:
       'Automatic status checks need JavaScript. You can still connect in Minecraft, then use the continue button.',
     securityNote:
-      'Minecraft online mode verifies the account. CraftLogin never asks for a Microsoft password.',
+      'Minecraft online mode or a fresh Mojang-signed skin profile verifies the account. CraftLogin never asks for a Microsoft password.',
     status: {
       expired: 'This code expired. Return to the app and start again.',
       networkError: 'The status check was interrupted. Retrying shortly.',
@@ -344,6 +359,26 @@ export const english = {
     ],
     stepsHeading: 'How to connect',
     title: 'Verify with Minecraft',
+    skin: {
+      accountLabel: 'Minecraft Java username',
+      accountPlaceholder: 'Player',
+      downloadButton: 'Download verification skin',
+      formatLegacy: 'legacy 64×32',
+      formatModern: 'modern 64×64',
+      heading: 'Or verify by changing your skin',
+      modelClassic: 'classic / wide arms',
+      modelSlim: 'slim arms',
+      startButton: 'Create verification skin',
+      startHint:
+        'CraftLogin adds a one-time marker to an unused 8×8 area. Existing custom skins keep every visible base and overlay pixel; accounts using only a default skin receive a temporary template.',
+      statusPending: 'Waiting for the marked skin to appear on your Minecraft profile.',
+      steps: [
+        'Download the marked PNG below.',
+        'Upload it as your skin in the Minecraft Launcher or on Minecraft.net. Keep the shown arm model.',
+        'Wait here while CraftLogin checks the signed Minecraft profile.',
+      ],
+      verificationFor: 'Verification skin for',
+    },
   },
   logout: {
     body: 'You will be signed out of this browser session.',

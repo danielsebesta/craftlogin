@@ -1013,7 +1013,7 @@ paths:
   /interaction/{uid}/abort:
     post:
       summary: Deny Minecraft verification
-      tags:
+      tags: &a3
         - Interactions
       description: Deny the pending request and return a standard access_denied error
         to the client.
@@ -1036,6 +1036,172 @@ paths:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
         "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/skin/start:
+    post:
+      summary: Start skin verification
+      tags:
+        - Interactions
+      description: Create a short-lived marked skin for a Minecraft Java player in the
+        active interaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              properties:
+                username:
+                  maxLength: 16
+                  minLength: 3
+                  pattern: ^[A-Za-z0-9_]+$
+                  type: string
+              required:
+                - username
+              type: object
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "303":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/skin/download:
+    get:
+      summary: Download the marked Minecraft skin
+      tags:
+        - Interactions
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "200":
+          description: Download the marked Minecraft skin
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/skin/status:
+    get:
+      summary: Check skin verification
+      tags:
+        - Interactions
+      description: Check a fresh signed Minecraft profile for the short-lived skin marker.
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  status:
+                    enum:
+                      - expired
+                      - pending
+                      - verified
+                    type: string
+                required:
+                  - status
+                type: object
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
           description: Default Response
           content:
             application/json:
@@ -1073,6 +1239,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
         "410":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/switch:
+    post:
+      summary: Deny Minecraft verification
+      tags: *a3
+      description: Deny the pending request and return a standard access_denied error
+        to the client.
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "303":
+          description: Default Response
+        "409":
           description: Default Response
           content:
             application/json:

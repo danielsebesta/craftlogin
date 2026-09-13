@@ -1,9 +1,10 @@
 # CraftLogin
 
 CraftLogin is an open-source OAuth 2.0 and OpenID Connect provider for Minecraft Java Edition
-identities. A player proves ownership by joining a short-lived subdomain on an online-mode Minecraft
-ghost server; relying applications receive the authenticated Minecraft UUID and current username
-through standard OIDC endpoints. CraftLogin stores no email address or password.
+identities. A player proves ownership either by joining a short-lived subdomain on an online-mode
+Minecraft ghost server or by publishing a short-lived marker in their official Java skin; relying
+applications receive the authenticated Minecraft UUID and current username through standard OIDC
+endpoints. CraftLogin stores no email address or password.
 
 > **CraftLogin is not affiliated with, endorsed by, or sponsored by Mojang or Microsoft.**
 
@@ -18,6 +19,15 @@ through standard OIDC endpoints. CraftLogin stores no email address or password.
    then disconnects the player with a play-state kick that shows a success message.
 5. The browser interaction resumes and `oidc-provider` issues the standard authorization response.
 
+As an alternative to joining the ghost server, the interaction can generate a marked copy of the
+player's current skin. The player uploads that PNG through the Minecraft Launcher or Minecraft.net.
+CraftLogin then fetches a fresh session-server profile, verifies Mojang's signature, and compares
+the marker in the current texture. The marker occupies only the unused top-left 8×8 pixels and
+therefore preserves the visible base and overlay layers. Both Java layouts are supported: historical
+64×32 and modern 64×64; modern classic (four-pixel) and slim (three-pixel) arm selection is retained
+in the UI. Other Minecraft-branded image sizes, including Bedrock/HD textures, are deliberately
+rejected because they are not Java skin upload formats.
+
 The server address only ever accepts the exact code shown in the browser. Connecting to the bare
 base domain instead opens a public void lobby where a player can chat; the lobby never reads or
 changes verification state.
@@ -25,6 +35,11 @@ changes verification state.
 Verification, authorization-code consumption, and refresh-token rotation use atomic Redis or
 PostgreSQL operations so concurrent redemption has one winner. Raw secrets, codes, and tokens are
 not written to application logs.
+
+The resulting OIDC authentication context identifies the method. Online-mode verification uses
+`urn:craftlogin:minecraft-online-mode` with `amr=minecraft_online_mode`; skin verification uses
+`urn:craftlogin:minecraft-profile-skin` with `amr=minecraft_profile_skin`. A relying party can
+select one through `acr_values`; without that parameter, either method is offered.
 
 ## Identity and client integration
 

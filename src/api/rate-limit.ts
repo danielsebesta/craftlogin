@@ -32,6 +32,12 @@ export const verificationStatusRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
+export const skinVerificationStartRateLimit = {
+  groupId: 'skin-verification-start',
+  max: 10,
+  timeWindow: 60 * 60 * 1_000,
+};
+
 export const avatarRenderRateLimit = {
   groupId: 'avatar-render',
   max: 60,

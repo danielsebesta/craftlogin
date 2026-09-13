@@ -9,7 +9,10 @@ import type {
 } from '../../src/oauth/interaction-gateway.js';
 import { OAuthInteractionService } from '../../src/oauth/interaction-service.js';
 import type { OAuthInteractionLogger } from '../../src/oauth/interaction-service.js';
-import type { VerificationFinalizationClaim } from '../../src/verification/redis-verification-store.js';
+import type {
+  VerificationFinalizationClaim,
+  VerificationMethod,
+} from '../../src/verification/redis-verification-store.js';
 import type { AuthenticatedMinecraftPlayer } from '../../src/verification/types.js';
 
 const player: AuthenticatedMinecraftPlayer = {
@@ -21,10 +24,11 @@ const resolvedAt = '2026-09-06T12:00:00.000Z';
 class RecordingGateway implements OAuthInteractionGateway {
   public fail = false;
   public persisted = 0;
-  public readonly context: OAuthInteractionContext = {
+  public context: OAuthInteractionContext = {
     clientId: 'test-client',
     interactionId: 'interaction-id',
     promptName: 'login',
+    promptDetails: {},
     scope: 'openid profile',
   };
 
@@ -42,14 +46,52 @@ class RecordingGateway implements OAuthInteractionGateway {
     expectedInteractionId: string,
     authenticatedPlayer: AuthenticatedMinecraftPlayer,
     verificationTime: string,
+    method: VerificationMethod,
   ): Promise<string> {
     expect(expectedInteractionId).toBe(this.context.interactionId);
     expect(authenticatedPlayer).toEqual(player);
     expect(verificationTime).toBe(resolvedAt);
+    expect(method).toBe('minecraft_online_mode');
     this.persisted += 1;
     return this.fail
       ? Promise.reject(new Error('OIDC persistence failed'))
       : Promise.resolve('/oauth2/resume');
+  }
+}
+
+class SkinVerificationStub {
+  public starts: { interactionId: string; username: string }[] = [];
+
+  public check(): Promise<{ status: 'pending'; code: string }> {
+    return Promise.resolve({ code: 'ABCDEFGH', status: 'pending' });
+  }
+
+  public getChallenge(): Promise<{
+    body: Buffer;
+    height: 64;
+    markerHash: string;
+    model: 'slim';
+    status: 'pending';
+    username: string;
+    userUuid: string;
+  }> {
+    return Promise.resolve({
+      body: Buffer.from('skin'),
+      height: 64,
+      markerHash: 'a'.repeat(64),
+      model: 'slim',
+      status: 'pending',
+      username: 'VerifiedPlayer',
+      userUuid: player.uuid,
+    });
+  }
+
+  public async start(
+    interactionId: string,
+    username: string,
+  ): ReturnType<SkinVerificationStub['getChallenge']> {
+    this.starts.push({ interactionId, username });
+    return await this.getChallenge();
   }
 }
 
@@ -75,6 +117,7 @@ class FinalizationStore {
     return Promise.resolve({
       claimId: 'claim-id',
       interactionKey: 'interaction-key',
+      method: 'minecraft_online_mode',
       player,
       resolvedAt,
     });
@@ -121,9 +164,12 @@ describe('OAuthInteractionService', (): void => {
     const { request, response } = createTransport();
 
     await expect(service.start(request, response)).resolves.toEqual({
+      allowsOnlineVerification: true,
+      allowsSkinVerification: false,
       clientId: 'test-client',
       code: 'ABCDEFGH',
       interactionId: 'interaction-id',
+      kind: 'login',
       scope: 'openid profile',
     });
     expect(store.allocations).toEqual(['interaction-id']);
@@ -140,6 +186,39 @@ describe('OAuthInteractionService', (): void => {
     await expect(service.start(request, response, 'different-interaction')).rejects.toThrow(
       'does not match the active session',
     );
+  });
+
+  it('offers skin verification unless acr_values requires online mode only', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const skin = new SkinVerificationStub();
+    const store = new FinalizationStore();
+    const service = new OAuthInteractionService(gateway, store, new RecordingLogger(), skin);
+    const first = createTransport();
+
+    await expect(service.start(first.request, first.response)).resolves.toMatchObject({
+      allowsOnlineVerification: true,
+      allowsSkinVerification: true,
+      skinChallenge: { height: 64, model: 'slim', username: 'VerifiedPlayer' },
+    });
+    const second = createTransport();
+    await expect(
+      service.startSkin(second.request, second.response, 'VerifiedPlayer'),
+    ).resolves.toMatchObject({ username: 'VerifiedPlayer' });
+    expect(skin.starts).toEqual([{ interactionId: 'interaction-id', username: 'VerifiedPlayer' }]);
+
+    gateway.context = {
+      ...gateway.context,
+      acrValues: 'urn:craftlogin:minecraft-online-mode',
+    };
+    const restricted = createTransport();
+    await expect(service.start(restricted.request, restricted.response)).resolves.toMatchObject({
+      allowsOnlineVerification: true,
+      allowsSkinVerification: false,
+    });
+    const denied = createTransport();
+    await expect(
+      service.startSkin(denied.request, denied.response, 'VerifiedPlayer'),
+    ).rejects.toThrow('requires a different authentication method');
   });
 
   it('denies the pending request without persisting an OIDC login', async (): Promise<void> => {

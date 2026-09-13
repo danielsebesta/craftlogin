@@ -13,6 +13,7 @@ const player = {
 const claim: VerificationFinalizationClaim = {
   claimId: 'claim-id',
   interactionKey: 'interaction-key',
+  method: 'minecraft_online_mode',
   player,
   resolvedAt: '2026-09-07T12:00:00.000Z',
 };

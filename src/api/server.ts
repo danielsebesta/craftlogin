@@ -96,6 +96,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerHealthRoute(server, options.readiness);
   registerOidcHttpRoutes(server, options.oidcHandler);
   registerInteractionRoutes(server, {
+    accounts: options.users,
     clients: options.clients,
     interactions: options.interactions,
     minecraftBaseDomain: options.minecraftBaseDomain,

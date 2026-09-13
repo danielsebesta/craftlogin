@@ -22,6 +22,9 @@ import { HttpSkinStore } from '../mojang/skin-store.js';
 import { createOAuthRuntime } from '../oauth/runtime.js';
 import { installSessionSignalLogging } from '../oauth/session-security.js';
 import { RedisVerificationStore } from '../verification/redis-verification-store.js';
+import { RedisSkinVerificationStore } from '../verification/redis-skin-verification-store.js';
+import { SkinVerificationService } from '../verification/skin-verification-service.js';
+import { PrismaVerifiedUserRepository } from '../users/verified-user-repository.js';
 import { ProviderAccessTokenAuthenticator } from './access-token-authenticator.js';
 import { PrismaAppRegistrar } from './app-registration.js';
 import { renderAuthorizationError } from './authorization-error-page.js';
@@ -46,19 +49,6 @@ async function main(): Promise<void> {
   let server: Awaited<ReturnType<typeof createApiServer>> | null = null;
   try {
     await Promise.all([database.$connect(), redis.connect()]);
-    const oauth = createOAuthRuntime(
-      {
-        cookieKeys: credentials.cookieKeys,
-        issuer: environment.oidcIssuer,
-        jwks: credentials.jwks,
-        logger,
-        renderError: renderAuthorizationError,
-      },
-      database,
-      redis,
-    );
-    oauth.provider.proxy = environment.httpTrustProxy;
-    installSessionSignalLogging(oauth.provider, logger, credentials.cookieKeys);
     const [developerSessionKey] = credentials.cookieKeys;
     if (developerSessionKey === undefined) {
       throw new TypeError('A cookie key is required for developer sessions');
@@ -76,6 +66,28 @@ async function main(): Promise<void> {
     const mojangCache = new RedisMinecraftCache(redis);
     const players = new HttpMojangClient({ cache: mojangCache });
     const skins = new HttpSkinStore({ cache: mojangCache, logger });
+    const skinVerification = new SkinVerificationService(
+      new RedisSkinVerificationStore(redis),
+      verification,
+      players,
+      skins,
+      new PrismaVerifiedUserRepository(database),
+      logger,
+    );
+    const oauth = createOAuthRuntime(
+      {
+        cookieKeys: credentials.cookieKeys,
+        issuer: environment.oidcIssuer,
+        jwks: credentials.jwks,
+        logger,
+        renderError: renderAuthorizationError,
+        skinVerification,
+      },
+      database,
+      redis,
+    );
+    oauth.provider.proxy = environment.httpTrustProxy;
+    installSessionSignalLogging(oauth.provider, logger, credentials.cookieKeys);
     const avatars = new CachedAvatarService({
       cache: mojangCache,
       logger,

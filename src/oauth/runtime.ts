@@ -4,6 +4,7 @@ import type { Configuration, JWKS } from 'oidc-provider';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import type { MinecraftUsernameResolver } from '../users/username-resolver.js';
 import { RedisVerificationStore } from '../verification/redis-verification-store.js';
+import type { SkinVerificationService } from '../verification/skin-verification-service.js';
 import { createOidcAdapterFactory } from './adapter-factory.js';
 import { createAccountLookup, PrismaAccountUserStore } from './account-lookup.js';
 import { ProviderInteractionGateway } from './interaction-gateway.js';
@@ -23,6 +24,7 @@ export interface OAuthRuntimeConfig {
   readonly logoutSource?: LogoutSourceRenderer;
   readonly postLogoutSuccessSource?: PostLogoutSuccessRenderer;
   readonly renderError: NonNullable<Configuration['renderError']>;
+  readonly skinVerification?: SkinVerificationService;
   readonly usernames?: MinecraftUsernameResolver;
 }
 
@@ -56,6 +58,7 @@ export function createOAuthRuntime(
       new ProviderInteractionGateway(provider),
       verification,
       config.logger,
+      config.skinVerification,
     ),
     provider,
   };

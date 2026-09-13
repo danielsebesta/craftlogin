@@ -34,6 +34,8 @@ import { installSessionSignalLogging } from './oauth/session-security.js';
 import { PrismaVerifiedUserRepository } from './users/verified-user-repository.js';
 import { MojangUsernameResolver, PrismaUsernameStore } from './users/username-resolver.js';
 import { RedisVerificationStore } from './verification/redis-verification-store.js';
+import { RedisSkinVerificationStore } from './verification/redis-skin-verification-store.js';
+import { SkinVerificationService } from './verification/skin-verification-service.js';
 import { VerificationResolver } from './verification/verification-resolver.js';
 
 const bootstrapLogger = createLogger('info');
@@ -71,6 +73,14 @@ async function main(): Promise<void> {
       skins,
     });
     const usernames = new MojangUsernameResolver(players, new PrismaUsernameStore(database));
+    const skinVerification = new SkinVerificationService(
+      new RedisSkinVerificationStore(redis),
+      verification,
+      players,
+      skins,
+      verifiedUsers,
+      logger,
+    );
     minecraft = await startGhostServer(
       {
         baseDomain: environment.minecraftBaseDomain,
@@ -94,6 +104,7 @@ async function main(): Promise<void> {
         logoutSource: renderLogoutPage,
         postLogoutSuccessSource: renderLogoutSuccessPage,
         renderError: renderAuthorizationError,
+        skinVerification,
         usernames,
       },
       database,

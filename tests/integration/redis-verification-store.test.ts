@@ -112,6 +112,44 @@ describe('RedisVerificationStore', (): void => {
     expect(await verificationStore.getStatus(interactionId)).toEqual({ status: 'pending', code });
   });
 
+  it('allows exactly one winner between server-join and skin verification', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    const code = await verificationStore.allocate(interactionId);
+
+    const claims = await Promise.all([
+      verificationStore.claim(code),
+      verificationStore.claimInteraction(interactionId),
+    ]);
+    const winners = claims.filter((claim): claim is VerificationClaim => claim !== null);
+    expect(winners).toHaveLength(1);
+    expect(await verificationStore.hasPendingCode(code)).toBe(false);
+  });
+
+  it('carries the skin authentication method into OIDC finalization', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    await verificationStore.allocate(interactionId);
+    const claim = await verificationStore.claimInteraction(interactionId);
+    if (claim === null) throw new Error('Expected an interaction verification claim');
+    const verifiedAt = new Date('2026-09-12T12:00:00.000Z');
+    await expect(
+      verificationStore.complete(
+        claim,
+        {
+          uuid: '123e4567-e89b-42d3-a456-426614174000',
+          username: 'SkinPlayer',
+        },
+        verifiedAt,
+        'minecraft_profile_skin',
+      ),
+    ).resolves.toBe(true);
+
+    await expect(verificationStore.claimVerified(interactionId)).resolves.toMatchObject({
+      method: 'minecraft_profile_skin',
+    });
+  });
+
   it('atomically deletes an authorization code after one consumption and stores no plaintext code', async (): Promise<void> => {
     const redisClient = requireRedis(redis);
     const adapter = new RedisOidcAdapter('AuthorizationCode', redisClient, keyPrefix);
