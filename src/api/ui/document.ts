@@ -1,8 +1,6 @@
 import { english } from '../../locales/en.js';
 import { escapeHtml } from '../html.js';
-import { BRAND_ICON_ROUTE } from '../brand-icon-asset.js';
 
-/** Mirrors the `--bg` token so the browser chrome matches the page canvas everywhere. */
 export const THEME_COLOR = '#0b0e0b';
 
 export interface DocumentNavigationItem {
@@ -13,12 +11,10 @@ export interface DocumentNavigationItem {
 
 export interface DocumentHeader {
   readonly brand: string;
-  /** The brand links home when set. Interaction surfaces keep it plain text. */
   readonly brandHref?: string;
   readonly navigation?: {
     readonly label: string;
     readonly items: readonly DocumentNavigationItem[];
-    /** Pre-escaped markup appended to the navigation, such as an identity block. */
     readonly trailing?: string;
   };
 }
@@ -27,8 +23,8 @@ export interface PageDocument {
   readonly content: string;
   readonly description?: string;
   readonly footer: readonly string[];
+  readonly headExtra?: string;
   readonly header: DocumentHeader;
-  /** 42rem single column for transaction surfaces; wide otherwise. */
   readonly layout?: 'narrow' | 'wide';
   readonly mainAttributes?: string;
   readonly mainClass: string;
@@ -37,7 +33,7 @@ export interface PageDocument {
   readonly title: string;
 }
 
-const brandMark = `<img class="brand-mark" src="${BRAND_ICON_ROUTE}" alt="" width="20" height="20">`;
+const brandMark = '<img class="brand-mark" src="/favicon.svg" alt="" width="20" height="20">';
 
 export function renderPageDocument(page: PageDocument): string {
   const description =
@@ -48,6 +44,7 @@ export function renderPageDocument(page: PageDocument): string {
     page.script === undefined
       ? ''
       : `\n    <script src="${escapeHtml(page.script)}" defer></script>`;
+  const headExtra = page.headExtra === undefined ? '' : `\n    ${page.headExtra}`;
   const brandText = `${brandMark}${escapeHtml(page.header.brand)}`;
   const brand =
     page.header.brandHref === undefined
@@ -66,7 +63,9 @@ ${page.header.navigation.items
   .join('\n')}
 ${page.header.navigation.trailing ?? ''}
       </nav>`;
-  const footer = page.footer.map((line): string => `<p>${escapeHtml(line)}</p>`).join('\n        ');
+  const footer = [...page.footer, english.common.legalDisclaimer, english.common.operator]
+    .map((line): string => `<p>${escapeHtml(line)}</p>`)
+    .join('\n        ');
 
   return `<!doctype html>
 <html lang="en">
@@ -82,7 +81,7 @@ ${page.header.navigation.trailing ?? ''}
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="CraftLogin" />
     <link rel="manifest" href="/site.webmanifest" />
-    <link rel="stylesheet" href="${escapeHtml(page.stylesheet)}">${script}
+    <link rel="stylesheet" href="${escapeHtml(page.stylesheet)}">${script}${headExtra}
   </head>
   <body${page.layout === 'narrow' ? ' class="page-narrow"' : ''}>
     <a class="skip-link" href="#main">${escapeHtml(english.common.skipToContent)}</a>

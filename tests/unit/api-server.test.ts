@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { Writable } from 'node:stream';
 
-import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, LightMyRequestResponse } from 'fastify';
+import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -25,7 +27,10 @@ import type {
 } from '../../src/oauth/interaction-service.js';
 import type { VerificationStatus } from '../../src/verification/types.js';
 import type { SkinVerificationChallenge } from '../../src/verification/redis-skin-verification-store.js';
-import { MicrosoftJavaOwnershipRequiredError } from '../../src/verification/microsoft-oauth-client.js';
+import {
+  MicrosoftJavaOwnershipRequiredError,
+  MicrosoftOAuthHttpError,
+} from '../../src/verification/microsoft-oauth-client.js';
 import type { MicrosoftMinecraftIdentity } from '../../src/verification/microsoft-oauth-client.js';
 
 const errorResponseSchema = z.object({
@@ -93,7 +98,7 @@ class InteractionStub implements ApiInteractionService {
     expectedInteractionId?: string,
   ): Promise<{ readonly interactionId: string }> {
     this.expectedIds.push(expectedInteractionId);
-    return Promise.resolve({ interactionId: 'interaction-id' });
+    return Promise.resolve({ interactionId: expectedInteractionId ?? 'interaction-id' });
   }
 
   public startSkin(
@@ -199,7 +204,9 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-security-policy']).toContain("manifest-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
     expect(response.body).toContain('<main id="main" class="container">');
-    expect(response.body).toContain('<h1 id="hero-heading">Add Minecraft login to your app</h1>');
+    expect(response.body).toContain(
+      '<h1 id="hero-heading">Account verification for Java Edition</h1>',
+    );
     expect(response.body).toContain('class="landing-steps"');
     expect(response.body).toContain('K7MPQ4RX.craftlogin.com');
     expect(response.body).toContain('href="/docs/"');
@@ -210,6 +217,11 @@ describe('CraftLogin API server', (): void => {
       '<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />',
     );
     expect(response.body).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
+    expect(response.body).toContain('class="brand-mark" src="/favicon.svg"');
+    expect(response.body).toContain(
+      'NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
+    );
+    expect(response.body).toContain('Contact: contact@craftlogin.com.');
     expect(response.body).toContain('<link rel="shortcut icon" href="/favicon.ico" />');
     expect(response.body).toContain(
       '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />',
@@ -246,17 +258,6 @@ describe('CraftLogin API server', (): void => {
     expect(background.headers['content-type']).toContain('image/svg+xml');
     expect(background.headers['cache-control']).toBe('public, max-age=31536000, immutable');
     expect(background.body).toContain('<svg');
-
-    const icon = await server.inject({ method: 'GET', url: '/assets/icon.svg' });
-    expect(icon.statusCode).toBe(200);
-    expect(icon.headers['content-type']).toContain('image/svg+xml');
-    expect(icon.headers['cache-control']).toBe('public, max-age=31536000, immutable');
-    expect(icon.body).toContain('<svg');
-
-    const iconPng = await server.inject({ method: 'GET', url: '/assets/icon.png' });
-    expect(iconPng.statusCode).toBe(200);
-    expect(iconPng.headers['content-type']).toContain('image/png');
-    expect(iconPng.rawPayload.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
 
     const faviconSvg = await server.inject({ method: 'GET', url: '/favicon.svg' });
     expect(faviconSvg.statusCode).toBe(200);
@@ -313,8 +314,8 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('Your Minecraft identity (stable UUID)');
     expect(response.body).toContain('Your current username and avatar');
     expect(response.body).toContain('action="/interaction/interaction-id/abort"');
-    expect(response.body).toContain('action="/interaction/interaction-id/microsoft/start"');
-    expect(response.body).toContain('>Sign in with Microsoft</button>');
+    expect(response.body).toContain('href="/interaction/interaction-id/microsoft/start"');
+    expect(response.body).toContain('>Sign in with Microsoft</a>');
     expect(response.body).toContain('>Allow</button>');
     expect(interactions.expectedIds).toEqual(['interaction-id']);
   });
@@ -325,7 +326,7 @@ describe('CraftLogin API server', (): void => {
     const server = await buildServer('test', interactions, [], undefined, undefined, microsoft);
 
     const started = await server.inject({
-      method: 'POST',
+      method: 'GET',
       url: '/interaction/interaction-id/microsoft/start',
     });
     expect(started.statusCode).toBe(303);
@@ -363,8 +364,96 @@ describe('CraftLogin API server', (): void => {
       method: 'POST',
       url: '/interaction/interaction-id/complete',
     });
-    expect(completed.statusCode).toBe(303);
-    expect(completed.headers.location).toBe('/oauth2/authorize/resume-id');
+    expect(completed.statusCode).toBe(200);
+    expect(completed.headers['content-type']).toContain('text/html');
+    expect(completed.body).toContain('http-equiv="refresh"');
+    expect(completed.body).toContain('/oauth2/authorize/resume-id');
+  });
+
+  it('returns console logins to the Developer Console from the shared Microsoft callback', async (): Promise<void> => {
+    const loginId = `dl_${'c'.repeat(43)}`;
+    const interactions = new InteractionStub();
+    const microsoft = new MicrosoftVerificationStub();
+    const server = await buildServer('test', interactions, [], undefined, undefined, microsoft);
+
+    const started = await server.inject({
+      method: 'GET',
+      url: `/interaction/${loginId}/microsoft/start`,
+    });
+    expect(started.statusCode).toBe(303);
+    const state = new URL(requiredHeader(started, 'location')).searchParams.get('state');
+    const transactionCookie = requiredHeader(started, 'set-cookie').split(';', 1)[0];
+
+    const callback = await server.inject({
+      headers: { cookie: transactionCookie },
+      method: 'GET',
+      url: `/interaction/microsoft/callback?code=microsoft-code&state=${encodeURIComponent(state ?? '')}`,
+    });
+    expect(callback.statusCode).toBe(200);
+    expect(callback.body).toContain('VerifiedPlayer');
+    expect(callback.body).toContain('href="/developers/login"');
+    expect(callback.body).not.toContain(`/interaction/${loginId}/complete`);
+    expect(microsoft.verificationInput).toMatchObject({
+      authorizationCode: 'microsoft-code',
+      interactionId: loginId,
+    });
+    expect(interactions.expectedIds).toEqual([loginId, loginId]);
+  });
+
+  it('reports upstream Microsoft failures as unavailable and logs the failed stage', async (): Promise<void> => {
+    const lines: string[] = [];
+    const sink = new Writable({
+      write(
+        chunk: Buffer,
+        _encoding: BufferEncoding,
+        callback: (error?: Error | null) => void,
+      ): void {
+        lines.push(chunk.toString());
+        callback();
+      },
+    });
+    const interactions = new InteractionStub();
+    const microsoft = new MicrosoftVerificationStub();
+    microsoft.error = new MicrosoftOAuthHttpError(
+      400,
+      'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
+    );
+    const server = await buildServer(
+      'test',
+      interactions,
+      [],
+      undefined,
+      undefined,
+      microsoft,
+      pino({ level: 'warn' }, sink),
+    );
+
+    const started = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/microsoft/start',
+    });
+    const state = new URL(requiredHeader(started, 'location')).searchParams.get('state');
+    const transactionCookie = requiredHeader(started, 'set-cookie').split(';', 1)[0];
+    const callback = await server.inject({
+      headers: { cookie: transactionCookie },
+      method: 'GET',
+      url: `/interaction/microsoft/callback?code=microsoft-code&state=${encodeURIComponent(state ?? '')}`,
+    });
+
+    expect(callback.statusCode).toBe(503);
+    expect(callback.headers['content-type']).toContain('text/html');
+    expect(callback.body).toContain('Microsoft verification is unavailable right now');
+    expect(callback.body).toContain('/interaction/interaction-id/microsoft/start');
+    expect(
+      lines.some(
+        (line) =>
+          line.includes('"msg":"Microsoft verification step failed"') &&
+          line.includes('"upstreamStatusCode":400') &&
+          line.includes(
+            '"endpoint":"https://login.microsoftonline.com/consumers/oauth2/v2.0/token"',
+          ),
+      ),
+    ).toBe(true);
   });
 
   it('rejects invalid Microsoft state and gives Java ownership failures a retry path', async (): Promise<void> => {
@@ -377,10 +466,11 @@ describe('CraftLogin API server', (): void => {
       url: `/interaction/microsoft/callback?code=microsoft-code&state=${'a'.repeat(43)}`,
     });
     expect(invalidState.statusCode).toBe(400);
-    expect(errorResponseSchema.parse(invalidState.json()).error.code).toBe('bad_request');
+    expect(invalidState.headers['content-type']).toContain('text/html');
+    expect(invalidState.body).toContain('This sign-in attempt expired');
 
     const cancellationStarted = await server.inject({
-      method: 'POST',
+      method: 'GET',
       url: '/interaction/interaction-id/microsoft/start',
     });
     const cancellationAuthorization = new URL(requiredHeader(cancellationStarted, 'location'));
@@ -395,7 +485,7 @@ describe('CraftLogin API server', (): void => {
     expect(cancelled.headers.location).toBe('/interaction/interaction-id');
 
     const started = await server.inject({
-      method: 'POST',
+      method: 'GET',
       url: '/interaction/interaction-id/microsoft/start',
     });
     const authorization = new URL(requiredHeader(started, 'location'));
@@ -410,7 +500,7 @@ describe('CraftLogin API server', (): void => {
     });
     expect(callback.statusCode).toBe(403);
     expect(callback.body).toContain('Java Edition ownership not found');
-    expect(callback.body).toContain('action="/interaction/interaction-id/microsoft/start"');
+    expect(callback.body).toContain('href="/interaction/interaction-id/microsoft/start"');
     expect(callback.body).toContain('Microsoft, Xbox Live, XSTS, and Minecraft access tokens');
   });
 
@@ -422,8 +512,10 @@ describe('CraftLogin API server', (): void => {
       method: 'POST',
       url: '/interaction/interaction-id/abort',
     });
-    expect(denied.statusCode).toBe(303);
-    expect(denied.headers.location).toBe('/oauth2/error?error=access_denied');
+    expect(denied.statusCode).toBe(200);
+    expect(denied.headers['content-type']).toContain('text/html');
+    expect(denied.body).toContain('http-equiv="refresh"');
+    expect(denied.body).toContain('/oauth2/error?error=access_denied');
     expect(interactions.expectedIds).toEqual(['interaction-id']);
   });
 
@@ -501,8 +593,9 @@ describe('CraftLogin API server', (): void => {
       method: 'POST',
       url: '/interaction/interaction-id/complete',
     });
-    expect(complete.statusCode).toBe(303);
-    expect(complete.headers.location).toBe('/oauth2/authorize/resume-id');
+    expect(complete.statusCode).toBe(200);
+    expect(complete.body).toContain('http-equiv="refresh"');
+    expect(complete.body).toContain('/oauth2/authorize/resume-id');
 
     interactions.completion = { status: 'expired' };
     const expired = await server.inject({
@@ -823,6 +916,7 @@ describe('CraftLogin API server', (): void => {
     },
     readinessCheck: () => Promise<void> = (): Promise<void> => Promise.resolve(),
     microsoftVerification: MicrosoftVerificationStub = new MicrosoftVerificationStub(),
+    logger?: FastifyBaseLogger,
   ): Promise<FastifyInstance> {
     const developerSession = {
       csrfToken: 'test-csrf-token',
@@ -935,8 +1029,9 @@ describe('CraftLogin API server', (): void => {
       minecraftBaseDomain: 'craftlogin.com',
       microsoftOAuth: {
         clientId: '7f143b3d-bf80-4896-86ee-bd902f90ca63',
-        verification: microsoftVerification,
       },
+      microsoftVerification: microsoftVerification,
+      ...(logger === undefined ? {} : { logger }),
       nodeEnvironment,
       oidcHandler,
       readiness: { check: readinessCheck },

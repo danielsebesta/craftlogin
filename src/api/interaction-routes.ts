@@ -14,6 +14,7 @@ import {
   SkinVerificationPlayerNotFoundError,
   SkinVerificationResolutionError,
 } from '../verification/skin-verification-service.js';
+import { renderAutoForwardPage } from './auto-forward-page.js';
 import { ApiError } from './errors.js';
 import { interactionScript, interactionStyles } from './interaction-assets.js';
 import { renderInteractionPage } from './interaction-page.js';
@@ -193,7 +194,8 @@ export function registerInteractionRoutes(
     { schema: interactionAbortRouteSchema },
     async (request, reply): Promise<void> => {
       const abortion = await options.interactions.abort(request.raw, reply.raw, request.params.uid);
-      await reply.redirect(abortion.redirectTo, 303);
+      setInteractionHeaders(reply);
+      await reply.type('text/html; charset=utf-8').send(renderAutoForwardPage(abortion.redirectTo));
     },
   );
 
@@ -372,12 +374,14 @@ export function registerInteractionRoutes(
       if (completion.status === 'expired') {
         throw new ApiError(410, 'interaction_expired', english.api.errors.interactionExpired);
       }
-
-      const destination =
-        completion.status === 'complete'
-          ? completion.redirectTo
-          : `/interaction/${encodeURIComponent(request.params.uid)}`;
-      await reply.redirect(destination, 303);
+      if (completion.status === 'complete') {
+        setInteractionHeaders(reply);
+        await reply
+          .type('text/html; charset=utf-8')
+          .send(renderAutoForwardPage(completion.redirectTo));
+        return;
+      }
+      await reply.redirect(`/interaction/${encodeURIComponent(request.params.uid)}`, 303);
     },
   );
 
@@ -393,7 +397,8 @@ export function registerInteractionRoutes(
         reply.raw,
         request.params.uid,
       );
-      await reply.redirect(result.redirectTo, 303);
+      setInteractionHeaders(reply);
+      await reply.type('text/html; charset=utf-8').send(renderAutoForwardPage(result.redirectTo));
     },
   );
 

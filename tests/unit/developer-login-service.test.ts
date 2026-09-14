@@ -139,6 +139,24 @@ describe('DeveloperLoginService', (): void => {
     expect(sessions.revoked).toEqual([sessions.session.sessionId]);
   });
 
+  it('exposes only pending console logins as shared verification interactions', async (): Promise<void> => {
+    const verification = new VerificationStub();
+    verification.statusValue = { code: 'ABCDEFGH', status: 'pending' };
+    const service = new DeveloperLoginService(
+      verification,
+      { find: (): Promise<undefined> => Promise.resolve(undefined) },
+      new SessionStub(),
+    );
+
+    await expect(service.inspectConsoleLogin(validLoginId())).resolves.toEqual({
+      interactionId: validLoginId(),
+    });
+
+    verification.statusValue = { player, resolvedAt: claim.resolvedAt, status: 'verified' };
+    await expect(service.inspectConsoleLogin(validLoginId())).resolves.toBeUndefined();
+    await expect(service.inspectConsoleLogin('interaction-id')).resolves.toBeUndefined();
+  });
+
   it('resumes pending attempts and creates replacements for expired attempts', async (): Promise<void> => {
     const verification = new VerificationStub();
     verification.statusValue = { code: 'ABCDEFGH', status: 'pending' };

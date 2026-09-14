@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
+import type { ConsoleLoginInteractionSource } from '../oauth/interaction-service.js';
+
 import {
   type RedisVerificationStore,
   VerificationStateError,
@@ -40,7 +42,7 @@ export type DeveloperLoginCompletion =
   | { readonly status: 'expired' }
   | { readonly status: 'pending' };
 
-export class DeveloperLoginService {
+export class DeveloperLoginService implements ConsoleLoginInteractionSource {
   public constructor(
     private readonly verification: Pick<
       RedisVerificationStore,
@@ -87,6 +89,20 @@ export class DeveloperLoginService {
 
   public async status(loginIdInput: string): Promise<VerificationStatus> {
     return await this.verification.getStatus(developerLoginIdSchema.parse(loginIdInput));
+  }
+
+  public async inspectConsoleLogin(
+    loginIdInput: string,
+  ): Promise<{ readonly interactionId: string } | undefined> {
+    const parsed = developerLoginIdSchema.safeParse(loginIdInput);
+    if (!parsed.success) {
+      return undefined;
+    }
+    const status = await this.verification.getStatus(parsed.data);
+    if (status.status !== 'pending') {
+      return undefined;
+    }
+    return { interactionId: parsed.data };
   }
 
   public async startSkin(loginIdInput: string, username: string): Promise<DeveloperSkinChallenge> {

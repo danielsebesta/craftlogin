@@ -263,9 +263,7 @@ function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefi
           <h2 id="microsoft-verification-heading">${escapeHtml(input.heading)}</h2>
           <p class="field-hint">${escapeHtml(input.hint)}</p>
           ${input.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(input.error)}</p>`}
-          <form action="${escapeHtml(input.startAction)}" method="post">
-            <button class="button button-secondary" type="submit">${escapeHtml(input.startLabel)}</button>
-          </form>
+          <a class="button button-secondary" href="${escapeHtml(input.startAction)}">${escapeHtml(input.startLabel)}</a>
         </section>`;
 }
 

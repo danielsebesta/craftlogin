@@ -358,9 +358,10 @@ describe('CraftLogin OIDC provider', (): void => {
         redirect: 'manual',
       },
     );
-    expect(completionResponse.status).toBe(303);
+    expect(completionResponse.status).toBe(200);
+    const forwardTarget = forwardTargetUrl(await completionResponse.text());
 
-    const resumeResponse = await fetch(localTestUrl(requiredLocation(completionResponse), issuer), {
+    const resumeResponse = await fetch(localTestUrl(forwardTarget, issuer), {
       headers: proxyHeaders(cookies),
       redirect: 'manual',
     });
@@ -493,8 +494,9 @@ describe('CraftLogin OIDC provider', (): void => {
         redirect: 'manual',
       },
     );
-    expect(secondCompletion.status).toBe(303);
-    const secondResume = await fetch(localTestUrl(requiredLocation(secondCompletion), issuer), {
+    expect(secondCompletion.status).toBe(200);
+    const secondForwardTarget = forwardTargetUrl(await secondCompletion.text());
+    const secondResume = await fetch(localTestUrl(secondForwardTarget, issuer), {
       headers: proxyHeaders(secondInteractionCookies),
       redirect: 'manual',
     });
@@ -661,6 +663,14 @@ function interactionChildUrl(location: string, child: string, issuer: string): U
 function redirectError(response: Response): string | null {
   expect(response.status).toBe(303);
   return new URL(requiredLocation(response)).searchParams.get('error');
+}
+
+function forwardTargetUrl(body: string): string {
+  const target = /http-equiv="refresh" content="0;url=([^"]+)"/u.exec(body)?.[1];
+  if (target === undefined) {
+    throw new Error('Expected an auto-forward page with a refresh target');
+  }
+  return target.replace(/&amp;/gu, '&');
 }
 
 function requiredLocation(response: Response): string {

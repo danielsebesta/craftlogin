@@ -1,12 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
+import { developerLoginIdSchema } from '../developers/login-service.js';
 import { english } from '../locales/en.js';
+import { getErrorKind } from '../logging/error-kind.js';
 import {
   MicrosoftJavaOwnershipRequiredError,
+  MicrosoftOAuthHttpError,
   MicrosoftOAuthUnavailableError,
 } from '../verification/microsoft-oauth-client.js';
 import {
@@ -14,7 +17,10 @@ import {
   MicrosoftVerificationResolutionError,
 } from '../verification/microsoft-oauth-verification-service.js';
 import { ApiError } from './errors.js';
-import { renderMicrosoftOAuthResultPage } from './microsoft-oauth-result-page.js';
+import {
+  renderMicrosoftOAuthResultPage,
+  type MicrosoftOAuthResultPageInput,
+} from './microsoft-oauth-result-page.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import { microsoftVerificationRateLimit } from './rate-limit.js';
 import { microsoftOAuthCallbackRouteSchema, microsoftOAuthStartRouteSchema } from './schemas.js';
@@ -52,13 +58,17 @@ export interface MicrosoftOAuthRoutesOptions {
     MicrosoftOAuthVerificationService,
     'createAuthorizationUrl' | 'verify'
   >;
+  readonly logger: FastifyBaseLogger;
 }
 
 export function registerMicrosoftOAuthRoutes(
   server: FastifyInstance,
   options: MicrosoftOAuthRoutesOptions,
 ): void {
-  server.post<{ Params: InteractionParams }>(
+  // A plain link (GET) starts verification: the server answers with a 303 redirect
+  // to the Microsoft authorize endpoint, and GET navigations are not restricted
+  // by form-action. A POST form would have its cross-origin redirect blocked.
+  server.get<{ Params: InteractionParams }>(
     '/interaction/:uid/microsoft/start',
     {
       config: { rateLimit: microsoftVerificationRateLimit },
@@ -94,11 +104,20 @@ export function registerMicrosoftOAuthRoutes(
       schema: microsoftOAuthCallbackRouteSchema,
     },
     async (request, reply): Promise<void> => {
-      const transaction = readTransaction(
-        request.cookies,
-        request.query.state,
-        (value): ReturnType<typeof request.unsignCookie> => request.unsignCookie(value),
-      );
+      let transaction: StoredMicrosoftOAuthTransaction;
+      try {
+        transaction = readTransaction(
+          request.cookies,
+          request.query.state,
+          (value): ReturnType<typeof request.unsignCookie> => request.unsignCookie(value),
+        );
+      } catch (error: unknown) {
+        if (error instanceof ApiError) {
+          await sendResultPage(reply, 400, { kind: 'expired' });
+          return;
+        }
+        throw error;
+      }
       clearTransactionCookie(reply, transaction.cookieName);
       await options.interactions.prepareMicrosoft(
         request.raw,
@@ -106,19 +125,27 @@ export function registerMicrosoftOAuthRoutes(
         transaction.interactionId,
       );
 
+      const homeUrl = homeUrlForInteraction(transaction.interactionId);
       if (request.query.error !== undefined) {
         if (request.query.error === 'access_denied') {
-          await reply.redirect(
-            `/interaction/${encodeURIComponent(transaction.interactionId)}`,
-            303,
-          );
+          await reply.redirect(homeUrl, 303);
           return;
         }
-        throw new ApiError(400, 'bad_request', english.api.errors.microsoftSignInRejected);
+        await sendResultPage(reply, 400, {
+          homeUrl,
+          interactionId: transaction.interactionId,
+          kind: 'rejected',
+        });
+        return;
       }
       const authorizationCode = request.query.code;
       if (authorizationCode === undefined) {
-        throw new ApiError(400, 'bad_request', english.api.errors.badRequest);
+        await sendResultPage(reply, 400, {
+          homeUrl,
+          interactionId: transaction.interactionId,
+          kind: 'rejected',
+        });
+        return;
       }
 
       try {
@@ -130,6 +157,7 @@ export function registerMicrosoftOAuthRoutes(
         setResultHeaders(reply);
         await reply.type('text/html; charset=utf-8').send(
           renderMicrosoftOAuthResultPage({
+            homeUrl,
             interactionId: transaction.interactionId,
             kind: 'success',
             username: identity.player.username,
@@ -143,6 +171,7 @@ export function registerMicrosoftOAuthRoutes(
             .type('text/html; charset=utf-8')
             .send(
               renderMicrosoftOAuthResultPage({
+                homeUrl,
                 interactionId: transaction.interactionId,
                 kind: 'ownership-required',
               }),
@@ -150,22 +179,40 @@ export function registerMicrosoftOAuthRoutes(
           return;
         }
         if (error instanceof MicrosoftVerificationResolutionError) {
-          throw new ApiError(409, 'interaction_invalid', english.api.errors.interactionInvalid, {
-            cause: error,
-          });
+          await sendResultPage(reply, 409, { homeUrl, kind: 'expired' });
+          return;
         }
         if (error instanceof MicrosoftOAuthUnavailableError) {
-          throw new ApiError(
-            503,
-            'service_unavailable',
-            english.api.errors.microsoftSignInUnavailable,
-            { cause: error },
+          // The message carries only the failed stage (for example which
+          // token endpoint rejected the request) and never token material.
+          options.logger.warn(
+            {
+              errorKind: getErrorKind(error),
+              reason: error.message,
+              ...(error instanceof MicrosoftOAuthHttpError
+                ? { endpoint: error.endpoint, upstreamStatusCode: error.statusCode }
+                : {}),
+            },
+            'Microsoft verification step failed',
           );
+          await sendResultPage(reply, 503, {
+            homeUrl,
+            interactionId: transaction.interactionId,
+            kind: 'temporarily-unavailable',
+          });
+          return;
         }
         throw error;
       }
     },
   );
+}
+
+function homeUrlForInteraction(interactionId: string): string {
+  if (developerLoginIdSchema.safeParse(interactionId).success) {
+    return '/developers/login';
+  }
+  return `/interaction/${encodeURIComponent(interactionId)}`;
 }
 
 interface MicrosoftOAuthTransaction {
@@ -247,6 +294,18 @@ function clearTransactionCookie(reply: FastifyReply, cookieName: string): void {
     sameSite: 'lax',
     secure: true,
   });
+}
+
+async function sendResultPage(
+  reply: FastifyReply,
+  statusCode: 400 | 409 | 503,
+  input: MicrosoftOAuthResultPageInput,
+): Promise<void> {
+  setResultHeaders(reply);
+  await reply
+    .status(statusCode)
+    .type('text/html; charset=utf-8')
+    .send(renderMicrosoftOAuthResultPage(input));
 }
 
 function setResultHeaders(reply: FastifyReply): void {

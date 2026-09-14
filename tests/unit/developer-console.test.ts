@@ -44,6 +44,7 @@ describe('Developer Console', (): void => {
     // The developer login has no online-mode path, so the skin heading loses its "Or".
     expect(response.body).toContain('Verify by changing your skin');
     expect(response.body).toContain('action="/developers/login/skin/start"');
+    expect(response.body).not.toContain('/microsoft/start');
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['content-security-policy']).toContain("form-action 'self'");
     const loginCookie = response.headers['set-cookie'];
@@ -280,11 +281,25 @@ describe('Developer Console', (): void => {
     ]);
   });
 
+  it('links console Microsoft verification to the shared interaction endpoint', async (): Promise<void> => {
+    const server = await buildServer({
+      authenticated: false,
+      microsoftOAuth: { clientId: '7f143b3d-bf80-4896-86ee-bd902f90ca63' },
+    });
+    const response = await server.inject({ method: 'GET', url: '/developers/login' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('>Sign in with Microsoft</a>');
+    expect(response.body).toContain(`href="/interaction/dl_${'b'.repeat(43)}/microsoft/start"`);
+    expect(response.body).not.toContain('/developers/login/microsoft/');
+  });
+
   async function buildServer(options: {
     readonly authenticated: boolean;
     readonly denyLogin?: boolean;
     readonly grantCalls?: { role: DeveloperRole; uuid: string }[];
     readonly loginCreations?: string[];
+    readonly microsoftOAuth?: { clientId: string };
     readonly players?: MinecraftPlayerLookup;
     readonly skinChallenge?: SkinVerificationChallenge;
     readonly skinStartCalls?: { loginId: string; username: string }[];
@@ -389,6 +404,7 @@ describe('Developer Console', (): void => {
       },
       issuer: 'https://craftlogin.com',
       minecraftBaseDomain: 'craftlogin.com',
+      ...(options.microsoftOAuth === undefined ? {} : { microsoftOAuth: options.microsoftOAuth }),
       ...(options.players === undefined
         ? {}
         : {

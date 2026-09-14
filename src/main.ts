@@ -101,7 +101,6 @@ async function main(): Promise<void> {
         baseDomain: environment.minecraftBaseDomain,
         host: environment.minecraftHost,
         port: environment.minecraftPort,
-        protocolTrace: environment.minecraftProtocolTrace,
       },
       {
         logger,
@@ -110,8 +109,26 @@ async function main(): Promise<void> {
       },
     );
 
+    const [developerSessionKey] = credentials.cookieKeys;
+    if (developerSessionKey === undefined) {
+      throw new TypeError('A cookie key is required for developer sessions');
+    }
+    const developers = new PrismaDeveloperAccessRepository(database);
+    const developerSessions = new DeveloperSessionService(
+      new RedisDeveloperSessionStore(redis),
+      developers,
+      logger,
+      developerSessionKey,
+    );
+    const developerLogins = new DeveloperLoginService(
+      verification,
+      developers,
+      developerSessions,
+      skinVerification,
+    );
     const oauth = createOAuthRuntime(
       {
+        consoleLogins: developerLogins,
         cookieKeys: credentials.cookieKeys,
         issuer: environment.oidcIssuer,
         jwks: credentials.jwks,
@@ -128,17 +145,6 @@ async function main(): Promise<void> {
     );
     oauth.provider.proxy = environment.httpTrustProxy;
     installSessionSignalLogging(oauth.provider, logger, credentials.cookieKeys);
-    const [developerSessionKey] = credentials.cookieKeys;
-    if (developerSessionKey === undefined) {
-      throw new TypeError('A cookie key is required for developer sessions');
-    }
-    const developers = new PrismaDeveloperAccessRepository(database);
-    const developerSessions = new DeveloperSessionService(
-      new RedisDeveloperSessionStore(redis),
-      developers,
-      logger,
-      developerSessionKey,
-    );
     const developerAuthentication = new DeveloperRequestAuthenticator(developerSessions);
     const clients = new PrismaClientDirectory(database);
     api = await createApiServer({
@@ -148,12 +154,7 @@ async function main(): Promise<void> {
       clients,
       cookieKeys: credentials.cookieKeys,
       developerAuthentication,
-      developerLogins: new DeveloperLoginService(
-        verification,
-        developers,
-        developerSessions,
-        skinVerification,
-      ),
+      developerLogins,
       developers,
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,
@@ -162,8 +163,8 @@ async function main(): Promise<void> {
       minecraftBaseDomain: environment.minecraftBaseDomain,
       microsoftOAuth: {
         clientId: microsoftCredentials.clientId,
-        verification: microsoftVerification,
       },
+      microsoftVerification,
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),
       rateLimitRedis: redis,

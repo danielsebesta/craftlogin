@@ -90,8 +90,15 @@ async function main(): Promise<void> {
       }),
       new VerificationResolver(verification, verifiedUsers, players),
     );
+    const developerLogins = new DeveloperLoginService(
+      verification,
+      developers,
+      developerSessions,
+      skinVerification,
+    );
     const oauth = createOAuthRuntime(
       {
+        consoleLogins: developerLogins,
         cookieKeys: credentials.cookieKeys,
         issuer: environment.oidcIssuer,
         jwks: credentials.jwks,
@@ -119,12 +126,7 @@ async function main(): Promise<void> {
       clients,
       cookieKeys: credentials.cookieKeys,
       developerAuthentication,
-      developerLogins: new DeveloperLoginService(
-        verification,
-        developers,
-        developerSessions,
-        skinVerification,
-      ),
+      developerLogins,
       developers,
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,
@@ -133,8 +135,8 @@ async function main(): Promise<void> {
       minecraftBaseDomain: environment.minecraftBaseDomain,
       microsoftOAuth: {
         clientId: microsoftCredentials.clientId,
-        verification: microsoftVerification,
       },
+      microsoftVerification,
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),
       rateLimitRedis: redis,

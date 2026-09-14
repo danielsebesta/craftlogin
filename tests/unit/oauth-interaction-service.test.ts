@@ -255,6 +255,79 @@ describe('OAuthInteractionService', (): void => {
     );
   });
 
+  it('resolves pending console logins through the shared Microsoft preparation path', async (): Promise<void> => {
+    const loginId = `dl_${'c'.repeat(43)}`;
+    const gateway = new RecordingGateway();
+    gateway.inspect = (): Promise<never> =>
+      Promise.reject(new Error('provider must not be consulted'));
+    const store = new FinalizationStore();
+    const source = new ConsoleLoginSource(new Set([loginId]));
+    const service = new OAuthInteractionService(
+      gateway,
+      store,
+      new RecordingLogger(),
+      undefined,
+      true,
+      source,
+    );
+    const prepared = createTransport();
+
+    await expect(
+      service.prepareMicrosoft(prepared.request, prepared.response, loginId),
+    ).resolves.toEqual({ interactionId: loginId });
+    expect(source.inspected).toEqual([loginId]);
+    expect(store.allocations).toEqual([loginId]);
+  });
+
+  it('falls back to the provider gateway for identifiers outside console logins', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    const source = new ConsoleLoginSource(new Set());
+    const service = new OAuthInteractionService(
+      gateway,
+      store,
+      new RecordingLogger(),
+      undefined,
+      true,
+      source,
+    );
+    const { request, response } = createTransport();
+
+    await expect(service.prepareMicrosoft(request, response)).resolves.toEqual({
+      interactionId: 'interaction-id',
+    });
+    expect(source.inspected).toEqual([]);
+  });
+
+  it('keeps OIDC-only operations away from console logins', async (): Promise<void> => {
+    const loginId = `dl_${'c'.repeat(43)}`;
+    const gateway = new RecordingGateway();
+    gateway.inspect = (): Promise<never> =>
+      Promise.reject(new Error('provider must not be consulted'));
+    const source = new ConsoleLoginSource(new Set([loginId]));
+    const service = new OAuthInteractionService(
+      gateway,
+      new FinalizationStore(),
+      new RecordingLogger(),
+      undefined,
+      true,
+      source,
+    );
+
+    const started = createTransport();
+    await expect(service.start(started.request, started.response, loginId)).rejects.toThrow(
+      'Developer Console',
+    );
+    const completed = createTransport();
+    await expect(service.complete(completed.request, completed.response, loginId)).rejects.toThrow(
+      'Developer Console',
+    );
+    const aborted = createTransport();
+    await expect(service.abort(aborted.request, aborted.response, loginId)).rejects.toThrow(
+      'Developer Console',
+    );
+  });
+
   it('denies the pending request without persisting an OIDC login', async (): Promise<void> => {
     const gateway = new RecordingGateway();
     const service = new OAuthInteractionService(
@@ -364,6 +437,19 @@ describe('OAuthInteractionService', (): void => {
     expect(logger.errorKinds).toEqual(['VerificationFinalizationClaimLost']);
   });
 });
+
+class ConsoleLoginSource {
+  public inspected: string[] = [];
+
+  public constructor(private readonly pending: ReadonlySet<string>) {}
+
+  public inspectConsoleLogin(
+    loginId: string,
+  ): Promise<{ readonly interactionId: string } | undefined> {
+    this.inspected.push(loginId);
+    return Promise.resolve(this.pending.has(loginId) ? { interactionId: loginId } : undefined);
+  }
+}
 
 function createTransport(): { request: IncomingMessage; response: ServerResponse } {
   const request = new IncomingMessage(new Socket());

@@ -41,6 +41,10 @@ export interface OAuthInteractionLogger {
   error(bindings: { readonly errorKind: string }, message: string): void;
 }
 
+export interface ConsoleLoginInteractionSource {
+  inspectConsoleLogin(loginId: string): Promise<{ readonly interactionId: string } | undefined>;
+}
+
 export interface PendingOAuthInteraction {
   readonly clientId: string;
   readonly interactionId: string;
@@ -77,6 +81,7 @@ export class OAuthInteractionService {
     private readonly logger: OAuthInteractionLogger,
     private readonly skinVerification?: SkinInteractionVerification,
     private readonly microsoftVerificationEnabled = false,
+    private readonly consoleLogins?: ConsoleLoginInteractionSource,
   ) {}
 
   public async start(
@@ -84,11 +89,16 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<PendingOAuthInteraction> {
-    const interaction = await this.requireActiveInteraction(
+    const { context: interaction, consoleLogin } = await this.requireActiveInteraction(
       request,
       response,
       expectedInteractionId,
     );
+    if (consoleLogin) {
+      throw new OAuthInteractionStateError(
+        'The Developer Console login continues in the Developer Console',
+      );
+    }
     if (interaction.promptName === 'consent') {
       if (interaction.sessionAccountId === undefined) {
         throw new OAuthInteractionStateError(
@@ -134,7 +144,7 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<{ readonly interactionId: string }> {
-    const interaction = await this.requireLoginInteraction(
+    const { context: interaction } = await this.requireLoginInteraction(
       request,
       response,
       expectedInteractionId,
@@ -157,7 +167,7 @@ export class OAuthInteractionService {
     username: string,
     expectedInteractionId?: string,
   ): Promise<SkinInteractionChallenge> {
-    const interaction = await this.requireLoginInteraction(
+    const { context: interaction } = await this.requireLoginInteraction(
       request,
       response,
       expectedInteractionId,
@@ -182,15 +192,12 @@ export class OAuthInteractionService {
     username: string,
     expectedInteractionId?: string,
   ): Promise<SkinVerificationLookup | undefined> {
-    const interaction = await this.requireLoginInteraction(
+    const { context: interaction } = await this.requireLoginInteraction(
       request,
       response,
       expectedInteractionId,
     );
-    if (
-      this.skinVerification?.lookup === undefined ||
-      !this.allowsSkinVerification(interaction)
-    ) {
+    if (this.skinVerification?.lookup === undefined || !this.allowsSkinVerification(interaction)) {
       throw new OAuthInteractionStateError('Skin verification is not available');
     }
     return await this.skinVerification.lookup(username);
@@ -201,7 +208,7 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<SkinVerificationChallenge | undefined> {
-    const interaction = await this.requireLoginInteraction(
+    const { context: interaction } = await this.requireLoginInteraction(
       request,
       response,
       expectedInteractionId,
@@ -214,7 +221,7 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<VerificationStatus> {
-    const interaction = await this.requireLoginInteraction(
+    const { context: interaction } = await this.requireLoginInteraction(
       request,
       response,
       expectedInteractionId,
@@ -230,7 +237,16 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<OAuthInteractionAbortion> {
-    await this.requireActiveInteraction(request, response, expectedInteractionId);
+    const { consoleLogin } = await this.requireActiveInteraction(
+      request,
+      response,
+      expectedInteractionId,
+    );
+    if (consoleLogin) {
+      throw new OAuthInteractionStateError(
+        'The Developer Console login cannot be aborted as an OIDC interaction',
+      );
+    }
     const redirectTo = await this.gateway.abort(request, response);
     return { redirectTo };
   }
@@ -240,11 +256,16 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<OAuthInteractionAbortion> {
-    const interaction = await this.requireActiveInteraction(
+    const { context: interaction, consoleLogin } = await this.requireActiveInteraction(
       request,
       response,
       expectedInteractionId,
     );
+    if (consoleLogin) {
+      throw new OAuthInteractionStateError(
+        'The Developer Console login cannot switch accounts as an OIDC interaction',
+      );
+    }
     if (interaction.promptName !== 'consent' || this.gateway.switchAccount === undefined) {
       throw new OAuthInteractionStateError(
         'The account switch is not available for this interaction',
@@ -258,7 +279,7 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<VerificationStatus> {
-    const interaction = await this.requireActiveInteraction(
+    const { context: interaction } = await this.requireActiveInteraction(
       request,
       response,
       expectedInteractionId,
@@ -276,11 +297,16 @@ export class OAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<OAuthInteractionCompletion> {
-    const interaction = await this.requireActiveInteraction(
+    const { context: interaction, consoleLogin } = await this.requireActiveInteraction(
       request,
       response,
       expectedInteractionId,
     );
+    if (consoleLogin) {
+      throw new OAuthInteractionStateError(
+        'The Developer Console login is completed in the Developer Console',
+      );
+    }
     if (interaction.promptName === 'consent') {
       if (this.gateway.persistConsent === undefined) {
         throw new OAuthInteractionStateError('The OIDC consent interaction is not supported');
@@ -335,7 +361,22 @@ export class OAuthInteractionService {
     request: IncomingMessage,
     response: ServerResponse,
     expectedInteractionId?: string,
-  ): Promise<OAuthInteractionContext> {
+  ): Promise<{ readonly context: OAuthInteractionContext; readonly consoleLogin: boolean }> {
+    if (expectedInteractionId !== undefined) {
+      const consoleLogin = await this.consoleLogins?.inspectConsoleLogin(expectedInteractionId);
+      if (consoleLogin !== undefined) {
+        return {
+          consoleLogin: true,
+          context: {
+            clientId: 'developers',
+            interactionId: consoleLogin.interactionId,
+            promptDetails: {},
+            promptName: 'login',
+            scope: 'openid profile',
+          },
+        };
+      }
+    }
     const interaction = await this.gateway.inspect(request, response);
     if (interaction.promptName !== 'login' && interaction.promptName !== 'consent') {
       throw new OAuthInteractionStateError('The OIDC interaction prompt is not supported');
@@ -346,23 +387,19 @@ export class OAuthInteractionService {
     ) {
       throw new OAuthInteractionStateError('The interaction URL does not match the active session');
     }
-    return interaction;
+    return { consoleLogin: false, context: interaction };
   }
 
   private async requireLoginInteraction(
     request: IncomingMessage,
     response: ServerResponse,
     expectedInteractionId?: string,
-  ): Promise<OAuthInteractionContext> {
-    const interaction = await this.requireActiveInteraction(
-      request,
-      response,
-      expectedInteractionId,
-    );
-    if (interaction.promptName !== 'login') {
+  ): Promise<{ readonly context: OAuthInteractionContext; readonly consoleLogin: boolean }> {
+    const resolved = await this.requireActiveInteraction(request, response, expectedInteractionId);
+    if (resolved.context.promptName !== 'login') {
       throw new OAuthInteractionStateError('Verification requires a login interaction');
     }
-    return interaction;
+    return resolved;
   }
 
   private async readSkinChallenge(

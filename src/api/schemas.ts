@@ -375,17 +375,51 @@ export const microsoftOAuthStartRouteSchema: FastifySchema = {
   tags: ['Interactions'],
 };
 
+export const developerLoginSkinLookupRouteSchema: FastifySchema = {
+  hide: true,
+  querystring: skinVerificationLookupQuerySchema,
+  response: {
+    200: {
+      oneOf: [
+        {
+          additionalProperties: false,
+          properties: { found: { const: false, type: 'boolean' } },
+          required: ['found'],
+          type: 'object',
+        },
+        {
+          additionalProperties: false,
+          properties: {
+            found: { const: true, type: 'boolean' },
+            hasSkin: { type: 'boolean' },
+            model: { enum: ['classic', 'slim'], type: 'string' },
+            username: { maxLength: 16, minLength: 3, type: 'string' },
+            uuid: { format: 'uuid', type: 'string' },
+          },
+          required: ['found', 'hasSkin', 'model', 'username', 'uuid'],
+          type: 'object',
+        },
+      ],
+    },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
 export const microsoftOAuthCallbackRouteSchema: FastifySchema = {
   description: operations.microsoftOAuthCallback.description,
   querystring: microsoftOAuthCallbackQuerySchema,
   response: {
     200: htmlResponseSchema,
     303: { type: 'null' },
-    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    400: htmlResponseSchema,
     403: htmlResponseSchema,
-    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    409: htmlResponseSchema,
     429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: htmlResponseSchema,
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
   summary: operations.microsoftOAuthCallback.summary,
@@ -426,6 +460,7 @@ export const interactionCompleteRouteSchema: FastifySchema = {
   description: operations.completeInteraction.description,
   params: interactionParamsSchema,
   response: {
+    200: htmlResponseSchema,
     303: { type: 'null' },
     410: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
@@ -440,7 +475,7 @@ export const interactionAbortRouteSchema: FastifySchema = {
   description: operations.abortInteraction.description,
   params: interactionParamsSchema,
   response: {
-    303: { type: 'null' },
+    200: htmlResponseSchema,
     409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
@@ -790,15 +825,6 @@ export const developerAssetRouteSchema: FastifySchema = {
 };
 
 export const fontAssetRouteSchema: FastifySchema = {
-  hide: true,
-  response: {
-    200: { type: 'string' },
-    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-  },
-};
-
-export const brandIconRouteSchema: FastifySchema = {
   hide: true,
   response: {
     200: { type: 'string' },

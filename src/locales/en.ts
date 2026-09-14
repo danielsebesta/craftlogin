@@ -7,6 +7,9 @@ export const english = {
     title: 'Sign-in request failed',
   },
   common: {
+    legalDisclaimer:
+      'NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
+    operator: 'Operated independently by Daniel Šebesta. Contact: contact@craftlogin.com.',
     skipToContent: 'Skip to main content',
   },
   api: {
@@ -254,7 +257,8 @@ export const english = {
     },
   },
   landing: {
-    affiliation: 'Not affiliated with Mojang or Microsoft.',
+    affiliation:
+      'NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
     callToAction: {
       heading: 'Ready to add it?',
       text: 'Register a client in the Console, then send your first authorization request.',
@@ -332,8 +336,8 @@ export const english = {
       consoleAction: 'Open the Console',
       documentationAction: 'Read the API docs',
       githubAction: 'View source',
-      heading: 'Add Minecraft login to your app',
-      lead: 'An OpenID Connect provider for Minecraft Java Edition. The player joins a short server address to prove the account is theirs, and your app receives the UUID and username.',
+      heading: 'Account verification for Java Edition',
+      lead: 'An OpenID Connect provider for Minecraft: Java Edition accounts. The player joins a short server address to prove the account is theirs, and your app receives the UUID and username.',
       request:
         'GET /oauth2/authorize\n  ?response_type=code\n  &client_id=cl_your_client\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &scope=openid%20profile\n  &state=<random>\n  &code_challenge=<S256>\n  &code_challenge_method=S256',
     },
@@ -366,6 +370,10 @@ export const english = {
     copied: 'Copied',
     copyAddress: 'Copy address',
     footer: 'CraftLogin verifies only the Minecraft UUID and username.',
+    forwardAction: 'Continue',
+    forwardHeading: 'Continuing…',
+    forwardHint: 'If you are not redirected automatically, continue manually.',
+    forwardTitle: 'Continuing',
     heading: 'Sign in to',
     scopeIdentity: 'Your Minecraft identity (stable UUID)',
     scopeOffline: 'Stay signed in between visits',
@@ -410,6 +418,8 @@ export const english = {
     microsoft: {
       continueButton: 'Continue',
       editionLabel: 'Ownership',
+      expiredHeading: 'This sign-in attempt expired',
+      expiredTitle: 'Sign-in attempt expired',
       heading: 'Or sign in with Microsoft',
       hint: 'Use Microsoft, Xbox Live, and Minecraft Services to confirm Java Edition ownership without opening the game. CraftLogin stores none of the Microsoft-side tokens or account data.',
       javaEdition: 'Java Edition owner',
@@ -420,11 +430,16 @@ export const english = {
       ownershipTitle: 'Java Edition required',
       privacyNote:
         'Microsoft, Xbox Live, XSTS, and Minecraft access tokens were used only for this verification request and were not stored.',
+      homeButton: 'Back to CraftLogin start',
+      rejectedHeading: 'Microsoft sign-in could not continue',
+      rejectedTitle: 'Microsoft sign-in failed',
       retryButton: 'Try Microsoft sign-in again',
       startButton: 'Sign in with Microsoft',
       successHeading: 'Minecraft account verified',
       successLead: 'Microsoft sign-in confirmed this Minecraft Java Edition profile.',
       successTitle: 'Minecraft account verified',
+      unavailableHeading: 'Microsoft verification is unavailable right now',
+      unavailableTitle: 'Verification unavailable',
       usernameLabel: 'Minecraft username',
     },
     skin: {

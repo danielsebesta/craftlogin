@@ -246,7 +246,7 @@ export class HttpMicrosoftOAuthClient {
       throw new MicrosoftOAuthUnavailableError('A Microsoft authentication service is unavailable');
     }
     if (!response.ok) {
-      throw new MicrosoftOAuthHttpError(response.status);
+      throw new MicrosoftOAuthHttpError(response.status, url);
     }
     try {
       const payload: unknown = await response.json();
@@ -261,8 +261,14 @@ export class HttpMicrosoftOAuthClient {
   }
 }
 
-class MicrosoftOAuthHttpError extends MicrosoftOAuthUnavailableError {
-  public constructor(public readonly statusCode: number) {
+// Carries only the upstream HTTP status, the fixed service endpoint, and a
+// static stage message, never token material, so instances are safe for
+// structured logs.
+export class MicrosoftOAuthHttpError extends MicrosoftOAuthUnavailableError {
+  public constructor(
+    public readonly statusCode: number,
+    public readonly endpoint: string,
+  ) {
     super('A Microsoft authentication service rejected the request');
   }
 }

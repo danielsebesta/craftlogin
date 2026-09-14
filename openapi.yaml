@@ -1100,7 +1100,7 @@ paths:
   /interaction/{uid}/abort:
     post:
       summary: Deny Minecraft verification
-      tags: &a3
+      tags: &a4
         - Interactions
       description: Deny the pending request and return a standard access_denied error
         to the client.
@@ -1114,8 +1114,12 @@ paths:
           name: uid
           required: true
       responses:
-        "303":
+        "200":
           description: Default Response
+          content:
+            text/html:
+              schema:
+                type: string
         "409":
           description: Default Response
           content:
@@ -1201,8 +1205,47 @@ paths:
   /interaction/{uid}/skin/download:
     get:
       summary: Download the marked Minecraft skin
-      tags:
+      tags: &a3
         - Interactions
+      parameters:
+        - schema:
+            maxLength: 512
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+            type: string
+          in: path
+          name: uid
+          required: true
+      responses:
+        "200":
+          description: Download the marked Minecraft skin
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "409":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /interaction/{uid}/skin/original-download:
+    get:
+      summary: Download the marked Minecraft skin
+      tags: *a3
       parameters:
         - schema:
             maxLength: 512
@@ -1317,6 +1360,12 @@ paths:
           name: uid
           required: true
       responses:
+        "200":
+          description: Default Response
+          content:
+            text/html:
+              schema:
+                type: string
         "303":
           description: Default Response
         "409":
@@ -1346,7 +1395,7 @@ paths:
   /interaction/{uid}/switch:
     post:
       summary: Deny Minecraft verification
-      tags: *a3
+      tags: *a4
       description: Deny the pending request and return a standard access_denied error
         to the client.
       parameters:
@@ -1359,8 +1408,12 @@ paths:
           name: uid
           required: true
       responses:
-        "303":
+        "200":
           description: Default Response
+          content:
+            text/html:
+              schema:
+                type: string
         "409":
           description: Default Response
           content:
@@ -1380,7 +1433,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
   /interaction/{uid}/microsoft/start:
-    post:
+    get:
       summary: Start Microsoft verification
       tags:
         - Interactions
@@ -1468,9 +1521,9 @@ paths:
         "400":
           description: Default Response
           content:
-            application/json:
+            text/html:
               schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
+                type: string
         "403":
           description: Default Response
           content:
@@ -1480,9 +1533,9 @@ paths:
         "409":
           description: Default Response
           content:
-            application/json:
+            text/html:
               schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
+                type: string
         "429":
           description: Default Response
           content:
@@ -1492,9 +1545,9 @@ paths:
         "503":
           description: Default Response
           content:
-            application/json:
+            text/html:
               schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
+                type: string
         default:
           description: Default Response
           content:

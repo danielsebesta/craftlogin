@@ -16,7 +16,6 @@ import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
 import { registerAvatarRoutes } from './avatar-routes.js';
 import { registerBackgroundAssetRoute } from './background-asset.js';
-import { registerBrandIconAssetRoutes } from './brand-icon-asset.js';
 import type { RegisteredOriginLookup } from './client-directory.js';
 import type { CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
@@ -68,8 +67,8 @@ export interface ApiServerOptions {
   readonly minecraftBaseDomain: string;
   readonly microsoftOAuth?: {
     readonly clientId: string;
-    readonly verification: MicrosoftOAuthRoutesOptions['verification'];
   };
+  readonly microsoftVerification?: MicrosoftOAuthRoutesOptions['verification'];
   readonly nodeEnvironment: 'development' | 'production' | 'test';
   readonly oidcHandler: OidcHttpHandler;
   readonly rateLimitNamespace?: string;
@@ -103,7 +102,6 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerSharedSchemas(server);
   registerErrorHandling(server);
   registerFontAssetRoutes(server);
-  registerBrandIconAssetRoutes(server);
   registerFaviconAssetRoutes(server);
   registerBackgroundAssetRoute(server);
   if (options.microsoftOAuth !== undefined) {
@@ -121,12 +119,16 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     interactions: options.interactions,
     minecraftBaseDomain: options.minecraftBaseDomain,
   });
-  if (options.microsoftOAuth !== undefined && options.interactions.prepareMicrosoft !== undefined) {
+  if (
+    options.microsoftVerification !== undefined &&
+    options.interactions.prepareMicrosoft !== undefined
+  ) {
     registerMicrosoftOAuthRoutes(server, {
       interactions: {
         prepareMicrosoft: options.interactions.prepareMicrosoft.bind(options.interactions),
       },
-      verification: options.microsoftOAuth.verification,
+      logger: server.log,
+      verification: options.microsoftVerification,
     });
   }
   registerUserRoutes(server, options.accessTokens, options.users, options.minecraft?.players);

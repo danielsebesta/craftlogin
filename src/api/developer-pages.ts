@@ -29,7 +29,6 @@ export function renderDeveloperLoginPage(
   attempt: DeveloperLoginAttempt,
   minecraftBaseDomain: string,
   skinError?: 'not-found' | 'unavailable',
-  microsoftError?: 'ownership' | 'unavailable',
   microsoftEnabled = false,
 ): string {
   const developer = english.developer;
@@ -85,14 +84,9 @@ export function renderDeveloperLoginPage(
     ...(microsoftEnabled
       ? {
           microsoftVerification: {
-            ...(microsoftError === 'ownership'
-              ? { error: interaction.microsoft.ownershipLead }
-              : microsoftError === 'unavailable'
-                ? { error: english.api.errors.microsoftSignInUnavailable }
-                : {}),
             heading: interaction.microsoft.heading,
             hint: interaction.microsoft.hint,
-            startAction: '/developers/login/microsoft/start',
+            startAction: `/interaction/${encodeURIComponent(attempt.loginId)}/microsoft/start`,
             startLabel: interaction.microsoft.startButton,
           },
         }
