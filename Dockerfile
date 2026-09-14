@@ -1,6 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-bookworm-slim AS dependencies
+FROM node:24-bookworm-slim AS base
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS dependencies
 WORKDIR /app
 
 COPY package.json package-lock.json prisma.config.ts ./
@@ -15,7 +20,7 @@ RUN npm run build
 FROM build AS production-dependencies
 RUN npm prune --omit=dev && npm cache clean --force
 
-FROM node:24-bookworm-slim AS runtime
+FROM base AS runtime
 ENV NODE_ENV=production \
     NODE_OPTIONS=--enable-source-maps
 WORKDIR /app
