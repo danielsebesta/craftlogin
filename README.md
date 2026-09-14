@@ -1,5 +1,9 @@
 # CraftLogin
 
+> [!WARNING] **Work in progress.** CraftLogin is under active development and is not ready for
+> production use. APIs, configuration, database migrations, and security behavior may change without
+> notice.
+
 CraftLogin is an open-source OAuth 2.0 and OpenID Connect provider for Minecraft Java Edition
 identities. A player proves ownership by joining a short-lived online-mode ghost server, publishing
 a short-lived marker in their current Java skin, or completing one-shot Microsoft OAuth and
