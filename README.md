@@ -105,8 +105,9 @@ failures return the shared JSON error envelope.
 - Node.js 24 (the active LTS line selected by `.nvmrc`)
 - PostgreSQL 18 and Redis 8, or Docker with the Compose plugin
 - A public HTTPS origin for production
-- Wildcard DNS `*.craftlogin.com` pointing to the Minecraft listener
+- Wildcard DNS for the configured `MC_BASE_DOMAIN` pointing to the Minecraft listener
 - TCP port 25565 reachable by Minecraft clients
+- A Microsoft Entra application approved for the Minecraft: Java Edition Game Service APIs
 
 ## Local development
 
@@ -117,11 +118,11 @@ nvm use
 npm install
 ```
 
-Start PostgreSQL and Redis, then export connection strings that match your local credentials. For a
-local PostgreSQL user `craftlogin` with password `dev`, for example:
+Start PostgreSQL and Redis, then export the matching local connection strings:
 
 ```sh
-export DATABASE_URL='postgresql://craftlogin:dev@localhost:5432/craftlogin?schema=public'
+POSTGRES_PASSWORD='craftlogin-dev-only' docker compose up -d postgres redis
+export DATABASE_URL='postgresql://craftlogin:craftlogin-dev-only@localhost:5432/craftlogin?schema=public'
 export REDIS_URL='redis://localhost:6379'
 export MICROSOFT_OAUTH_CLIENT_ID='your-personal-accounts-application-id'
 # Optional for an app registration configured as a confidential web client:
@@ -165,12 +166,11 @@ npm run admin:grant -- Notch
 npm run admin:grant -- 123e4567-e89b-42d3-a456-426614174000
 ```
 
-Then open <https://localhost:3443/developers>. The administrator proves ownership of that UUID by
-joining the displayed online-mode Minecraft address. Administrators can grant or revoke developer
-UUIDs and roles; the access registry accepts a Minecraft name or a canonical UUID. Registered
-developers can create and remove their own public or confidential OAuth clients. Confidential
-secrets are displayed once. Role changes are checked on every request and rotate or revoke active
-console sessions.
+Then open <https://localhost:3443/developers>. The administrator proves ownership of that UUID
+through an available verification method. Administrators can grant or revoke developer UUIDs and
+roles; the access registry accepts a Minecraft name or a canonical UUID. Registered developers can
+create and remove their own public or confidential OAuth clients. Confidential secrets are displayed
+once. Role changes are checked on every request and rotate or revoke active console sessions.
 
 For a built production image, run the compiled bootstrap command inside the application container:
 
@@ -207,6 +207,11 @@ application ID. Register `${OIDC_ISSUER}/interaction/microsoft/callback` as its 
 `MICROSOFT_OAUTH_CLIENT_SECRET` is optional; when present it is sent only by the server during the
 authorization-code exchange.
 
+New application IDs must pass the Minecraft: Java Edition Game Service
+[AppID review](https://aka.ms/AppRegInfo). Microsoft sign-in can complete through Xbox Live and XSTS
+but Minecraft Services returns `403` until the application ID is allowlisted. CraftLogin serves the
+required `/.well-known/microsoft-identity-association.json` document from the configured client ID.
+
 Build and start the complete topology:
 
 ```sh
@@ -233,11 +238,12 @@ Run the complete deterministic unit and static gate:
 npm run check
 ```
 
-Run the atomic integration suites against isolated local services:
+Run the atomic integration suites against isolated local services. The PostgreSQL URL must point to
+a disposable database with the project migrations applied, not a development or production database:
 
 ```sh
 TEST_REDIS_URL='redis://localhost:6379' npm run test:integration:redis
-TEST_DATABASE_URL="$DATABASE_URL" npm run test:integration:postgres
+TEST_DATABASE_URL='<isolated-test-database-url>' npm run test:integration:postgres
 ```
 
 Regenerate the committed API document after changing a route schema:
