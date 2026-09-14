@@ -2,11 +2,14 @@
 
 CraftLogin is an open-source OAuth 2.0 and OpenID Connect provider for Minecraft Java Edition
 identities. A player proves ownership by joining a short-lived online-mode ghost server, publishing
-a short-lived marker in their official Java skin, or completing one-shot Microsoft OAuth and
+a short-lived marker in their current Java skin, or completing one-shot Microsoft OAuth and
 Minecraft Services verification. Relying applications receive the authenticated Minecraft UUID and
 current username through standard OIDC endpoints. CraftLogin stores no email address or password.
 
-> **CraftLogin is not affiliated with, endorsed by, or sponsored by Mojang or Microsoft.**
+> **NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
+>
+> CraftLogin is independently developed and operated by Daniel Šebesta. Contact:
+> [contact@craftlogin.com](mailto:contact@craftlogin.com).
 
 ## How verification works
 
@@ -132,11 +135,6 @@ development they can instead be run separately with `npm run start:api` and `npm
 developer landing page is available at <http://localhost:3000/>. Swagger UI is available at
 <http://localhost:3000/docs> outside production. The generated OpenAPI 3.1 reference is committed as
 [`openapi.yaml`](openapi.yaml).
-
-For Minecraft protocol diagnostics, run `npm run start:trace` (or `npm run start:mc:trace` for the
-isolated listener). The trace logs connection states, negotiated versions, packet names, directions,
-and sanitized protocol errors. Packet payloads are deliberately omitted so verification codes and
-other credentials cannot enter logs.
 
 OAuth interactions and the Developer Console use `Secure` cookies and therefore require HTTPS even
 in local development. A local reverse proxy such as Caddy can terminate a trusted development
@@ -266,20 +264,16 @@ administrator. Developer Console sessions are opaque Redis records with signed `
 `SameSite=Lax` cookies, sliding expiration, an absolute lifetime, CSRF protection, and rotation
 after role changes.
 
-## Interface
+## Acceptable use
 
-The web interface is dark only, uses one accent color, and shares a single component vocabulary
-across the developer landing page, the Developer Console, the end-user Minecraft sign-in surface,
-and the API reference. It has no CSS framework and no asset build step: the styles live in
-`src/api/ui/` and are served as generated stylesheets, the brand cube is one SVG with a raster copy
-that doubles as the Minecraft server icon, and the document head, header, and footer come from one
-shared shell. Every control is at least 44px tall with a visible keyboard focus ring, every input
-has a visible label, every text pairing meets WCAG 2.2 AA, and status messages combine a shape with
-the text announced in a live region.
+CraftLogin may not be used to impersonate Mojang or Microsoft, imply their approval, bypass
+authentication or license checks, phish users, distribute malware, facilitate gambling, or support
+unlawful, deceptive, harmful, or abusive services. Integrators are responsible for their own user
+disclosures, data protection obligations, and compliance with the Minecraft EULA and
+[Usage Guidelines](https://www.minecraft.net/usage-guidelines).
 
-[`PRODUCT.md`](PRODUCT.md) records audiences and interface principles. [`DESIGN.md`](DESIGN.md)
-records the color, typography, spacing, and component rules. A unit test enforces the flat, dark,
-shadow-free, rounded-free contract.
+Questions about privacy, stored data, security, or acceptable use can be sent to
+[contact@craftlogin.com](mailto:contact@craftlogin.com).
 
 ## Typography
 

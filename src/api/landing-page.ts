@@ -122,6 +122,7 @@ export function renderLandingPage(input: LandingPageInput): string {
     content: `      <section class="landing-hero" aria-labelledby="hero-heading">
         <h1 id="hero-heading">${escapeHtml(strings.hero.heading)}</h1>
         <p class="landing-lead">${escapeHtml(strings.hero.lead)}</p>
+        <p class="notice">${escapeHtml(strings.affiliation)}</p>
         <div class="button-row landing-actions">
           <a class="button" href="/developers">${escapeHtml(strings.hero.consoleAction)}</a>
           ${secondaryAction}
@@ -149,7 +150,7 @@ ${sections
         </div>
       </section>`,
     description: strings.hero.lead,
-    footer: [`${strings.navigation.brand} · ${strings.footer.license}`, strings.affiliation],
+    footer: [`${strings.navigation.brand} · ${strings.footer.license}`],
     header: {
       brand: strings.navigation.brand,
       brandHref: '/',
