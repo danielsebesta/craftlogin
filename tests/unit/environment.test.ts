@@ -16,7 +16,6 @@ describe('loadEnvironment', (): void => {
       MC_HOST: '::',
       MC_PORT: '25570',
       MC_BASE_DOMAIN: 'login.example.com',
-      MC_PROTOCOL_TRACE: 'true',
     });
 
     expect(environment).toEqual({
@@ -31,16 +30,7 @@ describe('loadEnvironment', (): void => {
       minecraftHost: '::',
       minecraftPort: 25_570,
       minecraftBaseDomain: 'login.example.com',
-      minecraftProtocolTrace: true,
     });
-  });
-
-  it('keeps Minecraft protocol tracing opt-in', (): void => {
-    expect(loadEnvironment().minecraftProtocolTrace).toBe(false);
-    expect(loadEnvironment({ MC_PROTOCOL_TRACE: 'true' }).minecraftProtocolTrace).toBe(true);
-    expect((): void => {
-      loadEnvironment({ MC_PROTOCOL_TRACE: 'yes' });
-    }).toThrow();
   });
 
   it('requires an explicit issuer in production', (): void => {

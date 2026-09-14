@@ -28,7 +28,7 @@ describe('Minecraft ghost server advertisement', (): void => {
   it('advertises the formatted MOTD and a PNG favicon in the status ping', async (): Promise<void> => {
     const port = await findAvailablePort();
     ghostServer = await startGhostServer(
-      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port, protocolTrace: false },
+      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port },
       {
         logger: createLogger('silent'),
         pendingCodes: {

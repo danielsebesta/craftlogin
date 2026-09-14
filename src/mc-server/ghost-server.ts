@@ -22,7 +22,6 @@ import type {
 import { disconnect, isLoggedIn, markLoggedIn, markWorldReady } from './disconnect.js';
 import { extractVerificationCode, isLobbyHost } from './hostname.js';
 import { MinecraftLobby } from './lobby.js';
-import { getProtocolErrorDetails, installProtocolTrace } from './protocol-trace.js';
 import { installVersionedRegistryCodec } from './registry-codec.js';
 import { presentVoidWorld, sendVoidMessage } from './void-world.js';
 
@@ -68,7 +67,6 @@ export interface GhostServerConfig {
   readonly baseDomain: string;
   readonly host: string;
   readonly port: number;
-  readonly protocolTrace: boolean;
 }
 
 interface PendingCodeLookup {
@@ -159,10 +157,7 @@ export async function startGhostServer(
       : { favicon: serverIcon, beforePing: createPingIconHook(serverIcon) }),
     errorHandler: (client, error): void => {
       dependencies.logger.warn(
-        {
-          errorKind: getErrorKind(error),
-          ...(config.protocolTrace ? getProtocolErrorDetails(error) : {}),
-        },
+        { errorKind: getErrorKind(error) },
         'Minecraft client connection failed',
       );
       void disconnect(client, english.minecraft.temporaryFailure);
@@ -171,10 +166,6 @@ export async function startGhostServer(
   const server = minecraftProtocol.createServer(options);
 
   server.on('connection', (client): void => {
-    if (config.protocolTrace) {
-      installProtocolTrace(client, dependencies.logger);
-    }
-    // Install after tracing so only the version-correct replacement packets appear in diagnostics.
     installVersionedRegistryCodec(client);
 
     client.once('set_protocol', (packet: unknown): void => {
@@ -235,10 +226,7 @@ export async function startGhostServer(
       });
     } catch (error: unknown) {
       dependencies.logger.warn(
-        {
-          errorKind: getErrorKind(error),
-          ...(config.protocolTrace ? getProtocolErrorDetails(error) : {}),
-        },
+        { errorKind: getErrorKind(error) },
         'Minecraft void world could not be presented',
       );
     }
