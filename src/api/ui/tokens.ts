@@ -36,7 +36,6 @@ export const uiTokenStyles = `
   --t-3xl: 2.1rem;
   --measure: 68ch;
   --container: 72rem;
-  /* Widest content column for the current page: narrow surfaces narrow it. */
   --page-width: var(--container);
 }
 `;

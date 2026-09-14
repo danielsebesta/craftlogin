@@ -1,11 +1,6 @@
 import { uiBaseStyles } from './ui/base.js';
 import { uiControlStyles } from './ui/controls.js';
 
-/**
- * The landing page is one centered rail. The hero, section headings, and section
- * intros are centered; code, tables, and lists keep their text left-aligned so
- * they stay scannable.
- */
 const landingPageStyles = `
 .landing-hero {
   display: grid;

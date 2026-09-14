@@ -53,7 +53,6 @@ export const signInSurfaceStyles = `
   min-width: 0;
 }
 
-/* The verified Minecraft account, rendered from its signed skin. */
 .account-chip {
   display: inline-flex;
   flex-wrap: wrap;

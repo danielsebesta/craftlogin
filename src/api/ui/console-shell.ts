@@ -1,10 +1,6 @@
 import { english } from '../../locales/en.js';
 import { renderPageDocument, type DocumentNavigationItem } from '../ui/document.js';
 
-/**
- * The console keeps one shared header: brand, the console link, then the signed
- * in developer and the single session action.
- */
 export function renderConsoleShell(
   title: string,
   main: { readonly attributes?: string; readonly className: string; readonly content: string },

@@ -71,7 +71,6 @@ export const uiControlStyles = `
   background: var(--surface-raised);
 }
 
-/* Row-level destructive navigation stays quiet until it is pointed at. */
 .table-actions .button-quiet:hover {
   color: var(--danger-strong);
 }

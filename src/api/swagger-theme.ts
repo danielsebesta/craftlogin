@@ -1,11 +1,6 @@
 import { fontFaceStyles } from './ui/fonts.js';
 import { uiTokenStyles } from './ui/tokens.js';
 
-/**
- * Swagger UI ships a light theme. Its dark counterpart is derived here from the
- * shared tokens so the API reference matches every other surface. Only the
- * families, colors, borders, and radii the stock stylesheet sets are overridden.
- */
 const swaggerTheme = `
 html {
   background: var(--bg);
@@ -65,7 +60,6 @@ body {
   background: var(--surface);
 }
 
-/* Stock styles give each method its own hue; the method chip is one neutral control. */
 .swagger-ui .opblock.opblock-get,
 .swagger-ui .opblock.opblock-post,
 .swagger-ui .opblock.opblock-put,
@@ -298,7 +292,6 @@ body {
   color: var(--muted);
 }
 
-/* Type keywords sit next to the property name, so they stay neutral. */
 .swagger-ui .json-schema-2020-12__attribute,
 .swagger-ui .json-schema-2020-12__attribute--primary,
 .swagger-ui .json-schema-2020-12__attribute--warning {
@@ -306,7 +299,6 @@ body {
   font-family: var(--font-mono);
 }
 
-/* The version stamp is the only chip in the document header. */
 .swagger-ui .info .title small pre,
 .swagger-ui .info .title small.version-stamp,
 .swagger-ui .version-stamp,
@@ -322,7 +314,6 @@ body {
   border-color: var(--line);
 }
 
-/* Controls keep the same 44px floor as the rest of the product. */
 .swagger-ui .btn,
 .swagger-ui select,
 .swagger-ui input,

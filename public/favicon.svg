@@ -1,3 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><metadata><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/"><rdf:Description><dc:creator>RealFaviconGenerator</dc:creator><dc:source>https://realfavicongenerator.net</dc:source></rdf:Description></rdf:RDF></metadata><path d="M70 0v20.002h60V0Zm60 20.002v40H70v-40H50v40H30v20h140v-20h-20v-40zm40 60V180h19.999V80.002ZM170 180H30v20h140Zm-140 0V80.002H10.002V180Zm22.814-24.807H42.737v-50.385h10.077V94.73h40.309v10.078H103.2v10.077H83.046v-10.077H62.89v50.385h20.155v-10.077H103.2v10.077H93.123v10.077H52.814Zm57.235 10.077V94.73h16.09v55.343h31.124v15.197z"></path><style>@media (prefers-color-scheme: light) { :root { filter: none; } }
-@media (prefers-color-scheme: dark) { :root { filter: invert(100%); } }
-</style></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <path d="M70 0v20.002h60V0Zm60 20.002v40H70v-40H50v40H30v20h140v-20h-20v-40zm40 60V180h19.999V80.002ZM170 180H30v20h140Zm-140 0V80.002H10.002V180Zm22.814-24.807H42.737v-50.385h10.077V94.73h40.309v10.078H103.2v10.077H83.046v-10.077H62.89v50.385h20.155v-10.077H103.2v10.077H93.123v10.077H52.814Zm57.235 10.077V94.73h16.09v55.343h31.124v15.197z"/>
+  <style>
+    @media (prefers-color-scheme: dark) { :root { filter: invert(100%); } }
+  </style>
+</svg>
