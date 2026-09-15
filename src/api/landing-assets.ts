@@ -14,12 +14,12 @@ const landingPageStyles = `
   text-align: center;
 }
 
-/* Decorative grid glow behind the hero: full-bleed across the hero width with a
-   radial mask that melts every edge into the page background. The asset itself
-   already fades downward; the mask adds the horizontal melt. Content stays
-   legible because the layer sits behind the text at reduced opacity. */
-.landing-hero::before {
-  position: absolute;
+/* Ambient grid glow across the whole landing page: a fixed full-viewport layer
+   behind all content. The asset itself fades downward and the mask melts the
+   lower edge plus both sides into the page background. Content stays legible
+   because the layer sits behind everything at reduced opacity. */
+main.container::before {
+  position: fixed;
   inset: 0;
   z-index: -1;
   content: "";
@@ -27,14 +27,19 @@ const landingPageStyles = `
   background-repeat: no-repeat;
   background-position: top center;
   background-size: 100% auto;
-  opacity: 0.35;
-  -webkit-mask-image: radial-gradient(ellipse 105% 95% at 50% 0%, black 25%, transparent 78%);
-  mask-image: radial-gradient(ellipse 105% 95% at 50% 0%, black 25%, transparent 78%);
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 25%,
+    transparent 72%
+  );
+  mask-image: linear-gradient(to bottom, black 0%, black 25%, transparent 72%);
   pointer-events: none;
 }
 
 @media (forced-colors: active) {
-  .landing-hero::before {
+  main.container::before {
     display: none;
   }
 }
