@@ -14,6 +14,16 @@ const landingPageStyles = `
   text-align: center;
 }
 
+/* Landing drops the app-shell chrome (the repeating cube texture and the
+   single-color center rail with its side borders) for a clean edge-free page
+   floating over the grid glow. */
+@media (min-width: 74.01rem) {
+  body::before,
+  body::after {
+    display: none;
+  }
+}
+
 /* Ambient grid glow across the whole landing page: a fixed full-viewport layer
    behind all content. The asset itself fades downward and the mask melts the
    lower edge plus both sides into the page background. Content stays legible
