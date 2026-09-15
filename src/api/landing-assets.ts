@@ -2,6 +2,33 @@ import { uiBaseStyles } from './ui/base.js';
 import { uiControlStyles } from './ui/controls.js';
 
 const landingPageStyles = `
+/* Landing header: no rule line below it; navigation links sit apart from each
+   other as quiet chips on the raised surface instead of bare text links. */
+.page-header {
+  border-bottom: 0;
+}
+
+.page-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.page-nav a {
+  min-height: 2.5rem;
+  padding: 0.25rem var(--s3);
+  color: var(--muted);
+  text-decoration: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+}
+
+.page-nav a:hover {
+  color: var(--text);
+  text-decoration: none;
+  border-color: var(--accent);
+}
+
 .landing-hero {
   position: relative;
   isolation: isolate;
@@ -49,7 +76,7 @@ main.container::before {
   background-repeat: no-repeat;
   background-position: top center;
   background-size: cover;
-  opacity: 0.35;
+  opacity: 0.25;
   -webkit-mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
   mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
   pointer-events: none;
