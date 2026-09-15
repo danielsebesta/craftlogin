@@ -19,7 +19,7 @@ const landingPageStyles = `
   padding: 0.25rem var(--s3);
   color: var(--muted);
   text-decoration: none;
-  background: var(--surface-raised);
+  background: transparent;
   border: 1px solid var(--line);
 }
 
@@ -76,9 +76,15 @@ main.container::before {
   background-repeat: no-repeat;
   background-position: top center;
   background-size: cover;
-  opacity: 0.25;
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
+  opacity: 0.15;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 18%,
+    black 45%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 45%, transparent 100%);
   pointer-events: none;
 }
 
