@@ -368,36 +368,6 @@ describe('CraftLogin API server', (): void => {
     expect(completed.body).toContain('/oauth2/authorize/resume-id');
   });
 
-  it('returns console logins to the Developer Console from the shared Microsoft callback', async (): Promise<void> => {
-    const loginId = `dl_${'c'.repeat(43)}`;
-    const interactions = new InteractionStub();
-    const microsoft = new MicrosoftVerificationStub();
-    const server = await buildServer('test', interactions, [], undefined, undefined, microsoft);
-
-    const started = await server.inject({
-      method: 'GET',
-      url: `/interaction/${loginId}/microsoft/start`,
-    });
-    expect(started.statusCode).toBe(303);
-    const state = new URL(requiredHeader(started, 'location')).searchParams.get('state');
-    const transactionCookie = requiredHeader(started, 'set-cookie').split(';', 1)[0];
-
-    const callback = await server.inject({
-      headers: { cookie: transactionCookie },
-      method: 'GET',
-      url: `/interaction/microsoft/callback?code=microsoft-code&state=${encodeURIComponent(state ?? '')}`,
-    });
-    expect(callback.statusCode).toBe(200);
-    expect(callback.body).toContain('VerifiedPlayer');
-    expect(callback.body).toContain('href="/developers/login"');
-    expect(callback.body).not.toContain(`/interaction/${loginId}/complete`);
-    expect(microsoft.verificationInput).toMatchObject({
-      authorizationCode: 'microsoft-code',
-      interactionId: loginId,
-    });
-    expect(interactions.expectedIds).toEqual([loginId, loginId]);
-  });
-
   it('reports upstream Microsoft failures as unavailable and logs the failed stage', async (): Promise<void> => {
     const lines: string[] = [];
     const sink = new Writable({
@@ -968,18 +938,10 @@ describe('CraftLogin API server', (): void => {
           }
         },
       },
-      developerLogins: {
-        complete: (): never => {
-          throw new Error('Unexpected developer login completion');
-        },
+      consoleClient: { clientId: 'cl_api-server-test-console' },
+      developerSessions: {
         create: (): never => {
-          throw new Error('Unexpected developer login creation');
-        },
-        resume: (): never => {
-          throw new Error('Unexpected developer login resume');
-        },
-        status: (): never => {
-          throw new Error('Unexpected developer login status');
+          throw new Error('Unexpected developer session creation');
         },
       },
       developers: {
@@ -994,6 +956,7 @@ describe('CraftLogin API server', (): void => {
       },
       interactions,
       issuer: 'https://craftlogin.com',
+      httpPort: 3000,
       minecraft: {
         avatars: {
           findCape: (): Promise<never> => Promise.reject(new Error('Unexpected cape lookup')),

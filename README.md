@@ -171,11 +171,14 @@ npm run admin:grant -- Notch
 npm run admin:grant -- 123e4567-e89b-42d3-a456-426614174000
 ```
 
-Then open <https://localhost:3443/developers>. The administrator proves ownership of that UUID
-through an available verification method. Administrators can grant or revoke developer UUIDs and
-roles; the access registry accepts a Minecraft name or a canonical UUID. Registered developers can
-create and remove their own public or confidential OAuth clients. Confidential secrets are displayed
-once. Role changes are checked on every request and rotate or revoke active console sessions.
+Then open <https://localhost:3443/developers>. The Developer Console is a first-party OAuth client:
+the login redirects to the standard authorization endpoint, the administrator verifies with any
+available method on the shared interaction page, and the console callback creates the console
+session. There is no parallel console login flow. Administrators can grant or revoke developer UUIDs
+and roles; the access registry accepts a Minecraft name or a canonical UUID. Registered developers
+can create and remove their own public or confidential OAuth clients. Confidential secrets are
+displayed once. Role changes are checked on every request and rotate or revoke active console
+sessions.
 
 For a built production image, run the compiled bootstrap command inside the application container:
 

@@ -10,8 +10,6 @@ import type { ManagedApp } from '../../src/developers/app-management.js';
 import type { DeveloperRole } from '../../src/developers/developer-repository.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
-import type { SkinVerificationChallenge } from '../../src/verification/redis-skin-verification-store.js';
-import type { VerificationStatus } from '../../src/verification/types.js';
 
 const developerSession: AuthenticatedDeveloperSession = {
   csrfToken: 'developer-csrf-token',
@@ -20,6 +18,8 @@ const developerSession: AuthenticatedDeveloperSession = {
   sessionId: `ds_${'a'.repeat(43)}`,
   userUuid: '123e4567-e89b-42d3-a456-426614174000',
 };
+
+const consoleClientId = 'cl_console-test-client';
 
 describe('Developer Console', (): void => {
   const servers: FastifyInstance[] = [];
@@ -32,278 +32,128 @@ describe('Developer Console', (): void => {
     );
   });
 
-  it('renders progressive Minecraft login and sets only a hardened pre-authentication cookie', async (): Promise<void> => {
+  it('redirects anonymous developers into the standard authorization flow', async (): Promise<void> => {
     const server = await buildServer({ authenticated: false });
     const response = await server.inject({ method: 'GET', url: '/developers/login' });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('<h1 id="verification-heading">');
-    expect(response.body).toContain('ABCDEFGH.craftlogin.com');
-    expect(response.body).toContain('<noscript>');
-    expect(response.body).toContain('/assets/interaction.js');
-    // The developer login has no online-mode path, so the skin heading loses its "Or".
-    expect(response.body).toContain('Verify by changing your skin');
-    expect(response.body).toContain('action="/developers/login/skin/start"');
-    expect(response.body).not.toContain('/microsoft/start');
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.headers['content-security-policy']).toContain("form-action 'self'");
-    const loginCookie = response.headers['set-cookie'];
-    expect(loginCookie).toContain('__Secure-craftlogin_developer_login=');
-    expect(loginCookie).toContain('HttpOnly');
-    expect(loginCookie).toContain('Secure');
-    expect(loginCookie).toContain('SameSite=Lax');
+    expect(response.statusCode).toBe(303);
+    const location = response.headers.location ?? '';
+    expect(location).toContain('https://craftlogin.com/oauth2/authorize?');
+    expect(location).toContain(`client_id=${consoleClientId}`);
+    expect(location).toContain('redirect_uri=https%3A%2F%2Fcraftlogin.com%2Fdevelopers%2Fcallback');
+    expect(location).toContain('code_challenge_method=S256');
+    expect(location).toContain('scope=openid');
+    const cookie = response.headers['set-cookie'] ?? '';
+    expect(cookie).toContain('__Secure-craftlogin_console_oauth=');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Secure');
+    expect(cookie).toContain('SameSite=Lax');
   });
 
-  it('reuses one pending login code across repeated page refreshes', async (): Promise<void> => {
-    const loginCreations: string[] = [];
-    const server = await buildServer({ authenticated: false, loginCreations });
-    const first = await server.inject({ method: 'GET', url: '/developers/login' });
-    const cookie = cookiePair(first.headers['set-cookie']);
+  it('sends authenticated developers straight to the console', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true });
+    const response = await server.inject({ method: 'GET', url: '/developers/login' });
 
-    for (let index = 0; index < 20; index += 1) {
-      const refresh = await server.inject({
-        headers: { cookie },
-        method: 'GET',
-        url: '/developers/login',
-      });
-      expect(refresh.statusCode).toBe(200);
-      expect(refresh.body).toContain('ABCDEFGH.craftlogin.com');
-    }
-
-    expect(loginCreations).toEqual([`dl_${'b'.repeat(43)}`]);
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers');
   });
 
-  it('rate-limits only creation of new developer login attempts', async (): Promise<void> => {
-    const loginCreations: string[] = [];
-    const server = await buildServer({ authenticated: false, loginCreations });
-
-    for (let index = 0; index < 10; index += 1) {
-      const response = await server.inject({ method: 'GET', url: '/developers/login' });
-      expect(response.statusCode).toBe(200);
-    }
-    const limited = await server.inject({ method: 'GET', url: '/developers/login' });
-
-    expect(limited.statusCode).toBe(429);
-    expect(limited.json()).toEqual({
-      error: { code: 'rate_limited', message: 'Too many requests. Wait a moment and try again.' },
-    });
-    expect(limited.headers['retry-after']).toBeTypeOf('string');
-    expect(loginCreations).toHaveLength(10);
-  });
-
-  it('starts skin verification from the signed developer login attempt', async (): Promise<void> => {
-    const skinStartCalls: { loginId: string; username: string }[] = [];
-    const server = await buildServer({ authenticated: false, skinStartCalls });
+  it('completes the standard code flow for an allowlisted developer', async (): Promise<void> => {
+    const fetchCalls: string[] = [];
+    const server = await buildServer({ authenticated: false, allowlisted: true, fetchCalls });
     const login = await server.inject({ method: 'GET', url: '/developers/login' });
+    const state = new URL(login.headers.location ?? '').searchParams.get('state');
+    expect(state).toBeTypeOf('string');
     const response = await server.inject({
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        cookie: cookiePair(login.headers['set-cookie']),
-      },
-      method: 'POST',
-      payload: 'username=BuilderOne',
-      url: '/developers/login/skin/start',
+      headers: { cookie: cookiePair(login.headers['set-cookie']) },
+      method: 'GET',
+      url: `/developers/callback?code=console-code&state=${state ?? ''}`,
     });
 
     expect(response.statusCode).toBe(303);
-    expect(response.headers.location).toBe('/developers/login');
-    expect(skinStartCalls).toEqual([{ loginId: `dl_${'b'.repeat(43)}`, username: 'BuilderOne' }]);
-  });
-
-  it('renders, downloads, and checks an active developer skin challenge', async (): Promise<void> => {
-    const challenge: SkinVerificationChallenge = {
-      body: Buffer.from('marked-skin-png'),
-      height: 64,
-      markerHash: 'marker-hash',
-      model: 'slim',
-      status: 'pending',
-      username: 'BuilderOne',
-      userUuid: developerSession.userUuid,
-    };
-    const server = await buildServer({ authenticated: false, skinChallenge: challenge });
-    const initial = await server.inject({ method: 'GET', url: '/developers/login' });
-    const cookie = cookiePair(initial.headers['set-cookie']);
-    const login = await server.inject({
-      headers: { cookie },
-      method: 'GET',
-      url: '/developers/login',
-    });
-
-    expect(login.body).toContain('Minecraft username');
-    expect(login.body).toContain('BuilderOne');
-    expect(login.body).toContain('slim arms');
-    expect(login.body).toContain('/developers/login/skin/download');
-    expect(login.body).toContain('data-status-url="/developers/login/skin/status"');
-
-    const download = await server.inject({
-      headers: { cookie },
-      method: 'GET',
-      url: '/developers/login/skin/download',
-    });
-    expect(download.statusCode).toBe(200);
-    expect(download.headers['content-type']).toBe('image/png');
-    expect(download.headers['content-disposition']).toBe(
-      'attachment; filename="craftlogin-BuilderOne.png"',
+    expect(response.headers.location).toBe('/developers');
+    expect(setCookies(response.headers['set-cookie'])).toContain(
+      '__Host-craftlogin_developer_session=',
     );
-    expect(download.rawPayload).toEqual(challenge.body);
-
-    const status = await server.inject({
-      headers: { cookie },
-      method: 'GET',
-      url: '/developers/login/skin/status',
-    });
-    expect(status.statusCode).toBe(200);
-    expect(status.json()).toEqual({ status: 'pending' });
+    expect(fetchCalls).toEqual([
+      'http://127.0.0.1:3000/oauth2/token',
+      'http://127.0.0.1:3000/oauth2/userinfo',
+    ]);
   });
 
-  it('consumes an unregistered Minecraft login without creating a console session', async (): Promise<void> => {
-    const server = await buildServer({ authenticated: false, denyLogin: true });
+  it('shows the access-denied page when the Minecraft account is not allowlisted', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: false });
     const login = await server.inject({ method: 'GET', url: '/developers/login' });
-    const cookie = cookiePair(login.headers['set-cookie']);
+    const state = new URL(login.headers.location ?? '').searchParams.get('state');
     const response = await server.inject({
-      headers: { cookie },
-      method: 'POST',
-      url: '/developers/login/complete',
+      headers: { cookie: cookiePair(login.headers['set-cookie']) },
+      method: 'GET',
+      url: `/developers/callback?code=console-code&state=${state ?? ''}`,
     });
 
     expect(response.statusCode).toBe(403);
     expect(response.body).toContain('This account is not on the list.');
-    expect(response.headers['set-cookie']).not.toContain('__Host-craftlogin_developer_session=');
-  });
-
-  it('shows owned applications and the UUID registry to an administrator without JavaScript', async (): Promise<void> => {
-    const server = await buildServer({ authenticated: true });
-    const response = await server.inject({ method: 'GET', url: '/developers' });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('<h1>Developer Console</h1>');
-    expect(response.body).toContain('Local map client');
-    expect(response.body).toContain('Access registry');
-    expect(response.body).toContain('console-session-player');
-    expect(response.body).toContain('VerifiedPlayer');
-    expect(response.body).toContain(
-      `/api/avatars/${developerSession.userUuid}/face?size=32&amp;layers=all`,
+    expect(setCookies(response.headers['set-cookie'])).not.toContain(
+      '__Host-craftlogin_developer_session=',
     );
-    const header = /<header class="page-header">[\s\S]*?<\/header>/u.exec(response.body)?.[0] ?? '';
-    expect(header).not.toContain('<code>');
-    expect(response.body).toContain(`value="${developerSession.csrfToken}"`);
-    expect(response.body).not.toContain('<script');
-    expect(response.headers['set-cookie']).toContain('__Host-craftlogin_developer_session=');
   });
 
-  it('confirms application deletion before the destructive request', async (): Promise<void> => {
-    const server = await buildServer({ authenticated: true });
+  it('restarts the login when the callback state does not match', async (): Promise<void> => {
+    const fetchCalls: string[] = [];
+    const server = await buildServer({ authenticated: false, allowlisted: true, fetchCalls });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
     const response = await server.inject({
+      headers: { cookie: cookiePair(login.headers['set-cookie']) },
       method: 'GET',
-      url: '/developers/apps/123e4567-e89b-42d3-a456-426614174001/delete',
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('Delete this application?');
-    expect(response.body).toContain('value="developer-csrf-token"');
-    expect(response.body).toContain(
-      'action="/developers/apps/123e4567-e89b-42d3-a456-426614174001/delete"',
-    );
-
-    const missing = await server.inject({
-      method: 'GET',
-      url: '/developers/apps/123e4567-e89b-42d3-a456-426614174099/delete',
-    });
-    expect(missing.statusCode).toBe(303);
-    expect(missing.headers.location).toBe('/developers?notice=not-found');
-  });
-
-  it('renders inline HTML errors for invalid form input instead of JSON', async (): Promise<void> => {
-    const server = await buildServer({ authenticated: true });
-    const response = await server.inject({
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      method: 'POST',
-      payload: 'csrfToken=developer-csrf-token&clientType=public&redirectUris=',
-      url: '/developers/apps',
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.headers['content-type']).toContain('text/html');
-    expect(response.body).toContain(
-      'Check the application name and redirect URIs, then try again.',
-    );
-    expect(response.body).toContain('<h1>Developer Console</h1>');
-  });
-
-  it('rejects anonymous client registration before application persistence', async (): Promise<void> => {
-    const server = await buildServer({ authenticated: false });
-    const response = await server.inject({
-      headers: { 'x-csrf-token': 'attacker-token' },
-      method: 'POST',
-      payload: {
-        clientType: 'public',
-        name: 'Unauthorized client',
-        redirectUris: ['https://client.example/callback'],
-      },
-      url: '/api/apps',
-    });
-
-    expect(response.statusCode).toBe(401);
-    expect(response.headers['www-authenticate']).toBeUndefined();
-    expect(response.json()).toEqual({
-      error: {
-        code: 'developer_unauthorized',
-        message: 'Sign in as a registered developer to continue.',
-      },
-    });
-  });
-
-  it('resolves a Minecraft username when granting developer access', async (): Promise<void> => {
-    const grantCalls: { role: DeveloperRole; uuid: string }[] = [];
-    const server = await buildServer({
-      authenticated: true,
-      grantCalls,
-      players: {
-        findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
-        findProfileByName: (name) =>
-          Promise.resolve(
-            name === 'Notch'
-              ? { username: 'Notch', uuid: '069a79f4-44e9-4726-a5be-fca90e38aaf5' }
-              : undefined,
-          ),
-      },
-    });
-    const response = await server.inject({
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      method: 'POST',
-      payload: 'csrfToken=developer-csrf-token&role=developer&uuid=Notch',
-      url: '/developers/admin/developers',
+      url: '/developers/callback?code=console-code&state=tampered-state',
     });
 
     expect(response.statusCode).toBe(303);
-    expect(grantCalls).toEqual([
-      { role: 'developer', uuid: '069a79f4-44e9-4726-a5be-fca90e38aaf5' },
-    ]);
+    expect(response.headers.location).toBe('/developers/login');
+    expect(fetchCalls).toEqual([]);
   });
 
-  it('links console Microsoft verification to the shared interaction endpoint', async (): Promise<void> => {
+  it('restarts the login when the provider reports an error', async (): Promise<void> => {
+    const fetchCalls: string[] = [];
+    const server = await buildServer({ authenticated: false, allowlisted: true, fetchCalls });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
+    const state = new URL(login.headers.location ?? '').searchParams.get('state');
+    const response = await server.inject({
+      headers: { cookie: cookiePair(login.headers['set-cookie']) },
+      method: 'GET',
+      url: `/developers/callback?error=access_denied&state=${state ?? ''}`,
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers/login');
+    expect(fetchCalls).toEqual([]);
+  });
+
+  it('restarts the login when the token exchange fails', async (): Promise<void> => {
     const server = await buildServer({
       authenticated: false,
-      microsoftOAuth: { clientId: '7f143b3d-bf80-4896-86ee-bd902f90ca63' },
+      allowlisted: true,
+      tokenBehavior: 'failure',
     });
-    const response = await server.inject({ method: 'GET', url: '/developers/login' });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
+    const state = new URL(login.headers.location ?? '').searchParams.get('state');
+    const response = await server.inject({
+      headers: { cookie: cookiePair(login.headers['set-cookie']) },
+      method: 'GET',
+      url: `/developers/callback?code=console-code&state=${state ?? ''}`,
+    });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('>Sign in with Microsoft</a>');
-    expect(response.body).toContain(`href="/interaction/dl_${'b'.repeat(43)}/microsoft/start"`);
-    expect(response.body).not.toContain('/developers/login/microsoft/');
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers/login');
   });
 
   async function buildServer(options: {
+    readonly allowlisted?: boolean;
     readonly authenticated: boolean;
-    readonly denyLogin?: boolean;
+    readonly fetchCalls?: string[];
     readonly grantCalls?: { role: DeveloperRole; uuid: string }[];
-    readonly loginCreations?: string[];
-    readonly microsoftOAuth?: { clientId: string };
     readonly players?: MinecraftPlayerLookup;
-    readonly skinChallenge?: SkinVerificationChallenge;
-    readonly skinStartCalls?: { loginId: string; username: string }[];
-    readonly skinStatus?: VerificationStatus;
+    readonly tokenBehavior?: 'failure' | 'ok';
   }): Promise<FastifyInstance> {
     const unavailable = (): never => {
       throw new Error('Unexpected developer console test dependency call');
@@ -318,6 +168,21 @@ describe('Developer Console', (): void => {
       ownerUuid: developerSession.userUuid,
       redirectUris: ['https://client.example/callback'],
     };
+    const fetchImplementation: typeof fetch = (input, init) => {
+      const target =
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      options.fetchCalls?.push(target);
+      if (options.tokenBehavior === 'failure' && target.endsWith('/oauth2/token')) {
+        return Promise.resolve(new Response('unavailable', { status: 500 }));
+      }
+      if (target.endsWith('/oauth2/token')) {
+        expect(init?.method).toBe('POST');
+        return Promise.resolve(
+          Response.json({ access_token: 'console-access-token', token_type: 'Bearer' }),
+        );
+      }
+      return Promise.resolve(Response.json({ sub: developerSession.userUuid }));
+    };
     const server = await createApiServer({
       accessTokens: { authenticate: unavailable },
       appManager: {
@@ -326,62 +191,23 @@ describe('Developer Console', (): void => {
       },
       apps: { register: unavailable },
       clients: { findClientName: unavailable, isAllowedOrigin: unavailable },
+      consoleClient: { clientId: consoleClientId },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
       developerAuthentication: authentication,
-      developerLogins: {
-        complete: () =>
-          Promise.resolve(
-            options.denyLogin === true
-              ? { status: 'denied' }
-              : { session: developerSession, status: 'complete' },
-          ),
-        create: () => {
-          const loginId = `dl_${'b'.repeat(43)}`;
-          options.loginCreations?.push(loginId);
-          return Promise.resolve({
-            code: 'ABCDEFGH',
-            loginId,
-            status: 'pending',
-          });
-        },
-        resume: (loginId) =>
-          loginId === undefined
-            ? Promise.resolve(undefined)
-            : Promise.resolve({
-                code: 'ABCDEFGH',
-                loginId,
-                ...(options.skinChallenge === undefined
-                  ? {}
-                  : {
-                      skinChallenge: {
-                        height: options.skinChallenge.height,
-                        model: options.skinChallenge.model,
-                        username: options.skinChallenge.username,
-                      },
-                    }),
-                status: 'pending',
-              }),
-        startSkin: (loginId, username) => {
-          options.skinStartCalls?.push({ loginId, username });
-          return Promise.resolve(
-            options.skinChallenge ?? {
-              body: Buffer.from('marked-skin-png'),
-              height: 64,
-              markerHash: 'marker-hash',
-              model: 'classic',
-              status: 'pending',
-              username,
-              userUuid: developerSession.userUuid,
-            },
-          );
-        },
-        getSkinChallenge: () => Promise.resolve(options.skinChallenge),
-        checkSkin: () =>
-          Promise.resolve(options.skinStatus ?? { code: 'ABCDEFGH', status: 'pending' }),
-        status: () => Promise.resolve({ code: 'ABCDEFGH', status: 'pending' }),
+      developerSessions: {
+        create: (): Promise<AuthenticatedDeveloperSession> => Promise.resolve(developerSession),
       },
       developers: {
-        find: (): Promise<undefined> => Promise.resolve(undefined),
+        find: (uuid) =>
+          Promise.resolve(
+            options.allowlisted === true && uuid === developerSession.userUuid
+              ? {
+                  createdAt: '2026-09-07T12:00:00.000Z',
+                  role: 'admin' as const,
+                  uuid,
+                }
+              : undefined,
+          ),
         grant: (uuid, role) => {
           options.grantCalls?.push({ role, uuid });
           return Promise.resolve({ createdAt: '2026-09-07T12:00:00.000Z', role, uuid });
@@ -396,6 +222,8 @@ describe('Developer Console', (): void => {
           ]),
         revoke: unavailable,
       },
+      fetchImplementation,
+      httpPort: 3000,
       interactions: {
         abort: unavailable,
         complete: unavailable,
@@ -404,21 +232,6 @@ describe('Developer Console', (): void => {
       },
       issuer: 'https://craftlogin.com',
       minecraftBaseDomain: 'craftlogin.com',
-      ...(options.microsoftOAuth === undefined ? {} : { microsoftOAuth: options.microsoftOAuth }),
-      ...(options.players === undefined
-        ? {}
-        : {
-            minecraft: {
-              avatars: {
-                findCape: unavailable,
-                findProcessedSkin: unavailable,
-                findRawSkin: unavailable,
-                render: unavailable,
-              },
-              players: options.players,
-              skins: { fetchSkin: (): Promise<undefined> => Promise.resolve(undefined) },
-            },
-          }),
       nodeEnvironment: 'test',
       oidcHandler: (_request: IncomingMessage, response: ServerResponse): void => {
         response.statusCode = 404;
@@ -472,4 +285,14 @@ function cookiePair(setCookie: string | string[] | undefined): string {
     throw new Error('Expected a developer login cookie');
   }
   return pair;
+}
+
+function setCookies(setCookie: string | string[] | undefined): string {
+  if (typeof setCookie === 'string') {
+    return setCookie;
+  }
+  if (Array.isArray(setCookie)) {
+    return setCookie.join(';');
+  }
+  return '';
 }

@@ -375,40 +375,6 @@ export const microsoftOAuthStartRouteSchema: FastifySchema = {
   tags: ['Interactions'],
 };
 
-export const developerLoginSkinLookupRouteSchema: FastifySchema = {
-  hide: true,
-  querystring: skinVerificationLookupQuerySchema,
-  response: {
-    200: {
-      oneOf: [
-        {
-          additionalProperties: false,
-          properties: { found: { const: false, type: 'boolean' } },
-          required: ['found'],
-          type: 'object',
-        },
-        {
-          additionalProperties: false,
-          properties: {
-            found: { const: true, type: 'boolean' },
-            hasSkin: { type: 'boolean' },
-            model: { enum: ['classic', 'slim'], type: 'string' },
-            username: { maxLength: 16, minLength: 3, type: 'string' },
-            uuid: { format: 'uuid', type: 'string' },
-          },
-          required: ['found', 'hasSkin', 'model', 'username', 'uuid'],
-          type: 'object',
-        },
-      ],
-    },
-    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-  },
-};
-
 export const microsoftOAuthCallbackRouteSchema: FastifySchema = {
   description: operations.microsoftOAuthCallback.description,
   querystring: microsoftOAuthCallbackQuerySchema,
@@ -606,66 +572,26 @@ export const appDeleteRouteSchema: FastifySchema = {
 
 export const developerLoginPageRouteSchema: FastifySchema = {
   hide: true,
+  response: {
+    303: { type: 'null' },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerCallbackRouteSchema: FastifySchema = {
+  hide: true,
   querystring: {
     additionalProperties: false,
-    properties: { skinError: { enum: ['not-found', 'unavailable'], type: 'string' } },
+    properties: {
+      code: { type: 'string' },
+      error: { type: 'string' },
+      error_description: { type: 'string' },
+      state: { type: 'string' },
+    },
     type: 'object',
   },
-  response: {
-    200: htmlResponseSchema,
-    303: { type: 'null' },
-    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-  },
-};
-
-export const developerLoginSkinStartRouteSchema: FastifySchema = {
-  body: skinVerificationBodySchema,
-  hide: true,
-  response: {
-    303: { type: 'null' },
-    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-  },
-};
-
-export const developerLoginSkinDownloadRouteSchema: FastifySchema = {
-  hide: true,
-  response: {
-    200: pngResponseSchema,
-    303: { type: 'null' },
-    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-  },
-};
-
-export const developerLoginSkinStatusRouteSchema: FastifySchema = {
-  hide: true,
-  response: {
-    200: verificationStatusSchema,
-    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-  },
-};
-
-export const developerLoginStatusRouteSchema: FastifySchema = {
-  hide: true,
-  response: {
-    200: verificationStatusSchema,
-    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
-  },
-};
-
-export const developerLoginCompleteRouteSchema: FastifySchema = {
-  hide: true,
   response: {
     303: { type: 'null' },
     403: htmlResponseSchema,

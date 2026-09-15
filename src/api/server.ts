@@ -8,7 +8,7 @@ import type { Redis } from 'ioredis';
 import type { AvatarService } from '../avatars/service.js';
 import type { AppManager } from '../developers/app-management.js';
 import type { DeveloperAccessRepository } from '../developers/developer-repository.js';
-import type { DeveloperLoginService } from '../developers/login-service.js';
+import type { DeveloperSessionService } from '../developers/session-service.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { SkinStore } from '../mojang/skin-store.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
@@ -46,16 +46,13 @@ export interface ApiServerOptions {
   readonly appManager: AppManager;
   readonly apps: AppRegistrar;
   readonly clients: ClientNameLookup & RegisteredOriginLookup;
+  readonly consoleClient: { readonly clientId: string };
   readonly cookieKeys: readonly string[];
+  readonly fetchImplementation?: typeof fetch;
   readonly developerAuthentication: DeveloperAuthentication;
   readonly developers: DeveloperAccessRepository;
-  readonly developerLogins: Pick<
-    DeveloperLoginService,
-    'complete' | 'create' | 'resume' | 'status'
-  > &
-    Partial<
-      Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'lookupSkin' | 'startSkin'>
-    >;
+  readonly developerSessions: Pick<DeveloperSessionService, 'create'>;
+  readonly httpPort: number;
   readonly interactions: ApiInteractionService;
   readonly issuer: string;
   readonly logger?: FastifyBaseLogger;
@@ -136,11 +133,15 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     appManager: options.appManager,
     apps: options.apps,
     authentication: options.developerAuthentication,
+    consoleClient: options.consoleClient,
     developers: options.developers,
-    logins: options.developerLogins,
+    ...(options.fetchImplementation === undefined
+      ? {}
+      : { fetchImplementation: options.fetchImplementation }),
+    httpPort: options.httpPort,
+    issuer: options.issuer,
     logger: server.log,
-    minecraftBaseDomain: options.minecraftBaseDomain,
-    ...(options.microsoftOAuth === undefined ? {} : { microsoftOAuth: options.microsoftOAuth }),
+    sessions: options.developerSessions,
     users: options.users,
     ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });

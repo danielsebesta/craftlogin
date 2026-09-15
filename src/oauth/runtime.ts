@@ -9,10 +9,7 @@ import { createOidcAdapterFactory } from './adapter-factory.js';
 import { createAccountLookup, PrismaAccountUserStore } from './account-lookup.js';
 import { ProviderInteractionGateway } from './interaction-gateway.js';
 import { OAuthInteractionService } from './interaction-service.js';
-import type {
-  ConsoleLoginInteractionSource,
-  OAuthInteractionLogger,
-} from './interaction-service.js';
+import type { OAuthInteractionLogger } from './interaction-service.js';
 import {
   createCraftLoginProvider,
   type PostLogoutSuccessRenderer,
@@ -29,7 +26,6 @@ export interface OAuthRuntimeConfig {
   readonly postLogoutSuccessSource?: PostLogoutSuccessRenderer;
   readonly renderError: NonNullable<Configuration['renderError']>;
   readonly skinVerification?: SkinVerificationService;
-  readonly consoleLogins?: ConsoleLoginInteractionSource;
   readonly usernames?: MinecraftUsernameResolver;
 }
 
@@ -65,7 +61,6 @@ export function createOAuthRuntime(
       config.logger,
       config.skinVerification,
       config.microsoftVerificationEnabled ?? false,
-      config.consoleLogins,
     ),
     provider,
   };

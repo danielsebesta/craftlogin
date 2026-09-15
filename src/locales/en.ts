@@ -249,14 +249,6 @@ export const english = {
     },
     footer:
       'Developer access is verified by Minecraft online mode. No Microsoft password is collected.',
-    login: {
-      addressPending: 'Preparing secure address…',
-      appName: 'Developer Console',
-      permission: 'Access the Developer Console and manage your applications.',
-      verifiedAddress: 'Minecraft verification complete',
-      skinNotFound: 'That Minecraft Java player could not be found. Check the username.',
-      skinUnavailable: 'Minecraft skin verification is temporarily unavailable. Try again shortly.',
-    },
     navigation: {
       ariaLabel: 'Developer navigation',
       brand: 'CraftLogin',

@@ -8,7 +8,7 @@ import { loadMicrosoftOAuthCredentials } from '../config/microsoft-oauth.js';
 import { loadOAuthCredentials } from '../config/oauth-credentials.js';
 import { PrismaAppManager } from '../developers/app-management.js';
 import { PrismaDeveloperAccessRepository } from '../developers/developer-repository.js';
-import { DeveloperLoginService } from '../developers/login-service.js';
+import { ensureConsoleClient } from '../developers/console-client.js';
 import { DeveloperSessionService } from '../developers/session-service.js';
 import { RedisDeveloperSessionStore } from '../developers/session-store.js';
 import type { PrismaClient } from '../generated/prisma/client.js';
@@ -90,15 +90,9 @@ async function main(): Promise<void> {
       }),
       new VerificationResolver(verification, verifiedUsers, players),
     );
-    const developerLogins = new DeveloperLoginService(
-      verification,
-      developers,
-      developerSessions,
-      skinVerification,
-    );
+    const consoleClient = await ensureConsoleClient(database, environment.oidcIssuer);
     const oauth = createOAuthRuntime(
       {
-        consoleLogins: developerLogins,
         cookieKeys: credentials.cookieKeys,
         issuer: environment.oidcIssuer,
         jwks: credentials.jwks,
@@ -126,7 +120,9 @@ async function main(): Promise<void> {
       clients,
       cookieKeys: credentials.cookieKeys,
       developerAuthentication,
-      developerLogins,
+      consoleClient,
+      developerSessions,
+      httpPort: environment.httpPort,
       developers,
       interactions: oauth.interactions,
       issuer: environment.oidcIssuer,

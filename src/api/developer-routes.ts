@@ -6,61 +6,51 @@ import type {
   DeveloperAccessRepository,
   DeveloperRole,
 } from '../developers/developer-repository.js';
-import { LastAdministratorError } from '../developers/developer-repository.js';
-import type { DeveloperLoginService } from '../developers/login-service.js';
+import { developerUuidSchema, LastAdministratorError } from '../developers/developer-repository.js';
+import type { DeveloperSessionService } from '../developers/session-service.js';
 import { ApiError } from './errors.js';
 import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import { english } from '../locales/en.js';
-import {
-  SkinVerificationPlayerNotFoundError,
-  SkinVerificationResolutionError,
-} from '../verification/skin-verification-service.js';
 import type { AppRegistrar, AppRegistrationInput } from './app-registration.js';
 import type { CurrentUser, CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
 import { requestSignal } from './developer-authentication.js';
 import { developerStyles } from './developer-assets.js';
 import {
-  clearDeveloperLoginCookie,
-  DEVELOPER_LOGIN_COOKIE,
-  readSignedCookie,
-  setDeveloperLoginCookie,
+  clearConsoleOAuthCookie,
+  readConsoleOAuthCookie,
+  setConsoleOAuthCookie,
   setDeveloperSessionCookie,
 } from './developer-cookies.js';
+import {
+  consoleAuthorizeUrl,
+  consoleStatesEqual,
+  createConsoleOidcTransaction,
+  exchangeConsoleCode,
+  fetchConsoleSubject,
+  ConsoleOidcError,
+} from './developer-oidc-login.js';
 import {
   renderCreatedAppPage,
   renderDeleteAppPage,
   renderDeveloperAccessDeniedPage,
   renderDeveloperDashboard,
-  renderDeveloperLoginPage,
   renderRemoveDeveloperPage,
   type DashboardNotice,
   type DeveloperDashboardInput,
 } from './developer-pages.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
-import {
-  appRegistrationRateLimit,
-  developerLoginCreationRateLimit,
-  developerLoginPageRateLimit,
-  skinVerificationLookupRateLimit,
-  skinVerificationStartRateLimit,
-  verificationStatusRateLimit,
-} from './rate-limit.js';
+import { appRegistrationRateLimit, developerLoginPageRateLimit } from './rate-limit.js';
 import {
   developerAppCreateRouteSchema,
   developerAppDeleteConfirmRouteSchema,
   developerAppDeleteRouteSchema,
   developerAssetRouteSchema,
+  developerCallbackRouteSchema,
   developerDashboardRouteSchema,
   developerGrantRouteSchema,
-  developerLoginCompleteRouteSchema,
   developerLoginPageRouteSchema,
-  developerLoginStatusRouteSchema,
-  developerLoginSkinDownloadRouteSchema,
-  developerLoginSkinLookupRouteSchema,
-  developerLoginSkinStartRouteSchema,
-  developerLoginSkinStatusRouteSchema,
   developerLogoutRouteSchema,
   developerRevokeConfirmRouteSchema,
   developerRevokeRouteSchema,
@@ -94,29 +84,25 @@ interface DashboardQuery {
   readonly notice?: DashboardNotice;
 }
 
-interface DeveloperLoginQuery {
-  readonly skinError?: 'not-found' | 'unavailable';
-}
-
-interface SkinVerificationBody {
-  readonly username: string;
+interface DeveloperCallbackQuery {
+  readonly code?: string;
+  readonly error?: string;
+  readonly error_description?: string;
+  readonly state?: string;
 }
 
 export interface DeveloperRoutesOptions {
   readonly appManager: AppManager;
   readonly apps: AppRegistrar;
   readonly authentication: DeveloperAuthentication;
+  readonly consoleClient: { readonly clientId: string };
   readonly developers: DeveloperAccessRepository;
-  readonly logins: Pick<DeveloperLoginService, 'complete' | 'create' | 'resume' | 'status'> &
-    Partial<
-      Pick<DeveloperLoginService, 'checkSkin' | 'getSkinChallenge' | 'lookupSkin' | 'startSkin'>
-    >;
+  readonly fetchImplementation?: typeof fetch;
+  readonly httpPort: number;
+  readonly issuer: string;
   readonly logger: FastifyBaseLogger;
-  readonly minecraftBaseDomain: string;
-  readonly microsoftOAuth?: {
-    readonly clientId: string;
-  };
   readonly players?: MinecraftPlayerLookup;
+  readonly sessions: Pick<DeveloperSessionService, 'create'>;
   readonly users: CurrentUserLookup;
 }
 
@@ -124,13 +110,24 @@ export function registerDeveloperRoutes(
   server: FastifyInstance,
   options: DeveloperRoutesOptions,
 ): void {
-  const checkLoginCreationRateLimit = server.createRateLimit({
-    keyGenerator: (request): string => `developer-login-creation:${request.ip}`,
-    max: developerLoginCreationRateLimit.max,
-    timeWindow: developerLoginCreationRateLimit.timeWindow,
-  });
+  // The console authenticates exactly like any other OAuth client: the login
+  // redirects to the standard authorization endpoint, the player verifies on
+  // the shared interaction page, and this callback consumes the resulting
+  // code. Token exchange and userinfo run against the loopback listener so no
+  // TLS trust is needed for the server-to-server calls.
+  const redirectUri = `${options.issuer}/developers/callback`;
+  const oidcEndpoints = {
+    authorizationEndpoint: `${options.issuer}/oauth2/authorize`,
+    clientId: options.consoleClient.clientId,
+    ...(options.fetchImplementation === undefined
+      ? {}
+      : { fetchImplementation: options.fetchImplementation }),
+    redirectUri,
+    tokenEndpoint: `http://127.0.0.1:${options.httpPort.toString()}/oauth2/token`,
+    userInfoEndpoint: `http://127.0.0.1:${options.httpPort.toString()}/oauth2/userinfo`,
+  };
 
-  server.get<{ Querystring: DeveloperLoginQuery }>(
+  server.get(
     '/developers/login',
     { config: { rateLimit: developerLoginPageRateLimit }, schema: developerLoginPageRouteSchema },
     async (request, reply): Promise<void> => {
@@ -138,230 +135,61 @@ export function registerDeveloperRoutes(
         await reply.redirect('/developers', 303);
         return;
       }
+      const transaction = createConsoleOidcTransaction();
+      setConsoleOAuthCookie(reply, { state: transaction.state, verifier: transaction.verifier });
+      await reply.redirect(
+        consoleAuthorizeUrl(oidcEndpoints, transaction.state, transaction.challenge),
+        303,
+      );
+    },
+  );
 
-      let attempt = await options.logins.resume(readSignedCookie(request, DEVELOPER_LOGIN_COOKIE));
-      if (attempt === undefined) {
-        const limit = await checkLoginCreationRateLimit(request);
-        if (!limit.isAllowed && limit.isExceeded) {
-          void reply.header('retry-after', String(Math.max(1, limit.ttlInSeconds)));
-          throw new ApiError(429, 'rate_limited', english.api.errors.rateLimited);
-        }
-        attempt = await options.logins.create();
+  server.get<{ Querystring: DeveloperCallbackQuery }>(
+    '/developers/callback',
+    { schema: developerCallbackRouteSchema },
+    async (request, reply): Promise<void> => {
+      const stored = readConsoleOAuthCookie(request);
+      clearConsoleOAuthCookie(reply);
+      const { code, error, state } = request.query;
+      if (
+        error !== undefined ||
+        stored === undefined ||
+        state === undefined ||
+        code === undefined ||
+        !consoleStatesEqual(stored.state, state)
+      ) {
+        await reply.redirect('/developers/login', 303);
+        return;
       }
-      setDeveloperLoginCookie(reply, attempt.loginId);
-      setDeveloperPageHeaders(reply);
-      await reply
-        .type('text/html; charset=utf-8')
-        .send(
-          renderDeveloperLoginPage(
-            attempt,
-            options.minecraftBaseDomain,
-            request.query.skinError,
-            options.microsoftOAuth !== undefined,
-          ),
+      try {
+        const accessToken = await exchangeConsoleCode(oidcEndpoints, code, stored.verifier);
+        const subject = await fetchConsoleSubject(oidcEndpoints, accessToken);
+        const parsedUuid = developerUuidSchema.safeParse(subject);
+        if (!parsedUuid.success) {
+          throw new ConsoleOidcError('Console userinfo returned an invalid subject');
+        }
+        const access = await options.developers.find(parsedUuid.data);
+        if (access === undefined) {
+          setDeveloperPageHeaders(reply);
+          await reply
+            .status(403)
+            .type('text/html; charset=utf-8')
+            .send(renderDeveloperAccessDeniedPage());
+          return;
+        }
+        const session = await options.sessions.create(
+          parsedUuid.data,
+          access.role,
+          requestSignal(request),
         );
-    },
-  );
-
-  server.get(
-    '/developers/login/status',
-    {
-      config: { rateLimit: verificationStatusRateLimit },
-      schema: developerLoginStatusRouteSchema,
-    },
-    async (request, reply): Promise<void> => {
-      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
-      void reply.header('cache-control', 'no-store');
-      if (loginId === undefined) {
-        await reply.send({ status: 'expired' });
-        return;
-      }
-      const status = await options.logins.status(loginId);
-      await reply.send({ status: status.status });
-    },
-  );
-
-  server.get<{ Querystring: { readonly username: string } }>(
-    '/developers/login/skin/lookup',
-    {
-      config: { rateLimit: skinVerificationLookupRateLimit },
-      schema: developerLoginSkinLookupRouteSchema,
-    },
-    async (request, reply): Promise<void> => {
-      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
-      if (loginId === undefined || options.logins.lookupSkin === undefined) {
-        void reply.header('cache-control', 'no-store');
-        await reply.send({ found: false });
-        return;
-      }
-      if ((await options.logins.status(loginId)).status !== 'pending') {
-        void reply.header('cache-control', 'no-store');
-        await reply.send({ found: false });
-        return;
-      }
-      const profile = await options.logins.lookupSkin(request.query.username);
-      void reply.header('cache-control', 'no-store');
-      await reply.send(
-        profile === undefined
-          ? { found: false }
-          : {
-              found: true,
-              hasSkin: profile.hasSkin,
-              model: profile.model,
-              username: profile.username,
-              uuid: profile.uuid,
-            },
-      );
-    },
-  );
-
-  server.post<{ Body: SkinVerificationBody }>(
-    '/developers/login/skin/start',
-    {
-      config: { rateLimit: skinVerificationStartRateLimit },
-      schema: developerLoginSkinStartRouteSchema,
-    },
-    async (request, reply): Promise<void> => {
-      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
-      if (loginId === undefined || options.logins.startSkin === undefined) {
+        setDeveloperSessionCookie(reply, session.sessionId, session.expiresInSeconds);
+        await reply.redirect('/developers', 303);
+      } catch {
+        // The access token stays server-side and is never logged; a fresh
+        // login attempt is the safe recovery for every callback failure.
+        options.logger.warn('Developer Console OIDC callback failed');
         await reply.redirect('/developers/login', 303);
-        return;
       }
-      const status = await options.logins.status(loginId);
-      if (status.status !== 'pending') {
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-      try {
-        await options.logins.startSkin(loginId, request.body.username);
-      } catch (error: unknown) {
-        if (error instanceof SkinVerificationPlayerNotFoundError) {
-          await reply.redirect('/developers/login?skinError=not-found', 303);
-          return;
-        }
-        if (error instanceof SkinVerificationResolutionError) {
-          await reply.redirect('/developers/login?skinError=unavailable', 303);
-          return;
-        }
-        throw error;
-      }
-      await reply.redirect('/developers/login', 303);
-    },
-  );
-
-  server.get(
-    '/developers/login/skin/download',
-    { schema: developerLoginSkinDownloadRouteSchema },
-    async (request, reply): Promise<void> => {
-      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
-      if (loginId === undefined || options.logins.getSkinChallenge === undefined) {
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-      const challenge = await options.logins.getSkinChallenge(loginId);
-      if (challenge === undefined) {
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-      void reply.headers({
-        'cache-control': 'no-store',
-        'content-disposition': `attachment; filename="craftlogin-${challenge.username}.png"`,
-        'x-content-type-options': 'nosniff',
-      });
-      await reply.type('image/png').send(challenge.body);
-    },
-  );
-
-  server.get(
-    '/developers/login/skin/original-download',
-    { schema: developerLoginSkinDownloadRouteSchema },
-    async (request, reply): Promise<void> => {
-      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
-      if (loginId === undefined || options.logins.getSkinChallenge === undefined) {
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-      const challenge = await options.logins.getSkinChallenge(loginId);
-      if (challenge?.originalBody === undefined) {
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-      void reply.headers({
-        'cache-control': 'no-store',
-        'content-disposition': `attachment; filename="craftlogin-${challenge.username}-original.png"`,
-        'x-content-type-options': 'nosniff',
-      });
-      await reply.type('image/png').send(challenge.originalBody);
-    },
-  );
-
-  server.get(
-    '/developers/login/skin/status',
-    {
-      config: { rateLimit: verificationStatusRateLimit },
-      schema: developerLoginSkinStatusRouteSchema,
-    },
-    async (request, reply): Promise<void> => {
-      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
-      void reply.header('cache-control', 'no-store');
-      if (loginId === undefined || options.logins.checkSkin === undefined) {
-        await reply.send({ status: 'expired' });
-        return;
-      }
-      try {
-        const status = await options.logins.checkSkin(loginId);
-        await reply.send({ status: status.status });
-      } catch (error: unknown) {
-        if (error instanceof SkinVerificationResolutionError) {
-          throw new ApiError(
-            503,
-            'service_unavailable',
-            english.api.errors.minecraftSkinUnavailable,
-            { cause: error },
-          );
-        }
-        throw error;
-      }
-    },
-  );
-
-  server.post(
-    '/developers/login/complete',
-    { schema: developerLoginCompleteRouteSchema },
-    async (request, reply): Promise<void> => {
-      const loginId = readSignedCookie(request, DEVELOPER_LOGIN_COOKIE);
-      if (loginId === undefined) {
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-
-      const completion = await options.logins.complete(loginId, requestSignal(request));
-      if (completion.status === 'pending') {
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-      if (completion.status === 'expired') {
-        clearDeveloperLoginCookie(reply);
-        await reply.redirect('/developers/login', 303);
-        return;
-      }
-      if (completion.status === 'denied') {
-        clearDeveloperLoginCookie(reply);
-        setDeveloperPageHeaders(reply);
-        await reply
-          .status(403)
-          .type('text/html; charset=utf-8')
-          .send(renderDeveloperAccessDeniedPage());
-        return;
-      }
-
-      clearDeveloperLoginCookie(reply);
-      setDeveloperSessionCookie(
-        reply,
-        completion.session.sessionId,
-        completion.session.expiresInSeconds,
-      );
-      await reply.redirect('/developers', 303);
     },
   );
 

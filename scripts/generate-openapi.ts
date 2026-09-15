@@ -27,13 +27,10 @@ async function generate(): Promise<void> {
       requireAdministrator: unavailable,
       requireCsrf: unavailable,
     },
-    developerLogins: {
-      complete: unavailable,
-      create: unavailable,
-      resume: unavailable,
-      status: unavailable,
-    },
+    consoleClient: { clientId: 'cl_openapi-test-console' },
+    developerSessions: { create: unavailable },
     developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
+    httpPort: 3000,
     interactions: {
       abort: unavailable,
       complete: unavailable,

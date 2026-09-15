@@ -1,11 +1,9 @@
 import type { DeveloperAccess, DeveloperRole } from '../developers/developer-repository.js';
 import type { ManagedApp } from '../developers/app-management.js';
-import type { DeveloperLoginAttempt } from '../developers/login-service.js';
 import { english } from '../locales/en.js';
 import type { RegisteredApp } from './app-registration.js';
 import { escapeHtml } from './html.js';
 import { renderConsoleShell } from './ui/console-shell.js';
-import { renderSignInPage } from './ui/sign-in-page.js';
 
 export type DashboardNotice = 'invalid-form' | 'last-admin' | 'not-found';
 
@@ -23,142 +21,6 @@ export interface DeveloperDashboardInput {
   readonly role: DeveloperRole;
   readonly username: string;
   readonly userUuid: string;
-}
-
-export function renderDeveloperLoginPage(
-  attempt: DeveloperLoginAttempt,
-  minecraftBaseDomain: string,
-  skinError?: 'not-found' | 'unavailable',
-  microsoftEnabled = false,
-): string {
-  const developer = english.developer;
-  const interaction = english.interaction;
-  const skin = interaction.skin;
-  const skinChallenge = attempt.skinChallenge;
-  const address =
-    attempt.code === null
-      ? attempt.status === 'verified'
-        ? developer.login.verifiedAddress
-        : developer.login.addressPending
-      : `${attempt.code}.${minecraftBaseDomain}`;
-  const verified = attempt.status === 'verified';
-  const methodChoices = [
-    {
-      detail: interaction.methods.online.detail,
-      id: 'online',
-      label: interaction.methods.online.label,
-    },
-    ...(microsoftEnabled
-      ? [
-          {
-            detail: interaction.methods.microsoft.detail,
-            id: 'microsoft',
-            label: interaction.methods.microsoft.label,
-          },
-        ]
-      : []),
-    { detail: interaction.methods.skin.detail, id: 'skin', label: interaction.methods.skin.label },
-  ];
-
-  return renderSignInPage({
-    accountLabel: interaction.signedInAs,
-    action: '/developers/login/complete',
-    allowsHeading: interaction.allowsHeading,
-    appName: developer.login.appName,
-    brand: developer.navigation.brand,
-    continueLabel: interaction.continueButton,
-    copiedLabel: interaction.copied,
-    copyLabel: interaction.copyAddress,
-    documentTitle: `${developer.login.appName} · ${interaction.title}`,
-    footer: interaction.footer,
-    heading: interaction.heading,
-    lead: interaction.lead,
-    messages:
-      skinChallenge === undefined
-        ? interaction.status
-        : { ...interaction.status, pending: skin.statusPending },
-    noJavaScript: interaction.noJavaScript,
-    methodChoices,
-    methodHeading: interaction.methodHeading,
-    ...(skinChallenge === undefined ? {} : { selectedMethod: 'skin' }),
-    ...(microsoftEnabled
-      ? {
-          microsoftVerification: {
-            heading: interaction.microsoft.heading,
-            hint: interaction.microsoft.hint,
-            startAction: `/interaction/${encodeURIComponent(attempt.loginId)}/microsoft/start`,
-            startLabel: interaction.microsoft.startButton,
-          },
-        }
-      : {}),
-    permissions: [{ kind: 'text', text: developer.login.permission }],
-    securityNote: interaction.securityNote,
-    skinVerification: {
-      accountLabel: skin.accountLabel,
-      accountPlaceholder: skin.accountPlaceholder,
-      heading: skin.headingAlternative,
-      hint: skin.startHint,
-      lookupFoundMessage: skin.lookupFound,
-      lookupNotFoundMessage: skin.lookupNotFound,
-      lookupSkinMessage: skin.lookupSkin,
-      lookupUnavailableMessage: skin.lookupUnavailable,
-      lookupUrl: '/developers/login/skin/lookup',
-      statusMessages: interaction.status,
-      startAction: '/developers/login/skin/start',
-      startLabel: skin.startButton,
-      ...(skinError === undefined
-        ? {}
-        : {
-            error:
-              skinError === 'not-found'
-                ? developer.login.skinNotFound
-                : developer.login.skinUnavailable,
-          }),
-      ...(skinChallenge === undefined
-        ? {}
-        : {
-            challenge: {
-              changeSkinLabel: skin.changeSkinButton,
-              changeSkinUrl: skin.changeSkinUrl,
-              downloadLabel: skin.downloadButton,
-              downloadUrl: '/developers/login/skin/download',
-              originalDownloadLabel: skin.originalDownloadButton,
-              originalDownloadUrl: '/developers/login/skin/original-download',
-              format: skinChallenge.height === 32 ? skin.formatLegacy : skin.formatModern,
-              formatLabel: skin.formatLabel,
-              model: skinChallenge.model === 'slim' ? skin.modelSlim : skin.modelClassic,
-              modelLabel: skin.modelLabel,
-              steps: skin.steps,
-              username: skinChallenge.username,
-              usernameLabel: skin.usernameLabel,
-            },
-          }),
-      ...(skinChallenge === undefined
-        ? {}
-        : {
-            status: {
-              initialStatus: skin.statusPending,
-              initialStatusState: 'pending',
-              method: 'skin' as const,
-              statusUrl: '/developers/login/skin/status',
-            },
-          }),
-    },
-    verification: {
-      address,
-      addressLabel: interaction.addressLabel,
-      initialStatus: verified
-        ? interaction.status.verified
-        : skinChallenge === undefined
-          ? interaction.status.pending
-          : skin.statusPending,
-      initialStatusState: verified ? 'verified' : 'pending',
-      statusUrl: '/developers/login/status',
-      method: 'online',
-      steps: interaction.steps,
-      stepsHeading: interaction.stepsHeading,
-    },
-  });
 }
 
 export function renderDeveloperAccessDeniedPage(): string {

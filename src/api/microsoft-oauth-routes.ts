@@ -4,7 +4,6 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
-import { developerLoginIdSchema } from '../developers/login-service.js';
 import { english } from '../locales/en.js';
 import { getErrorKind } from '../logging/error-kind.js';
 import {
@@ -209,9 +208,6 @@ export function registerMicrosoftOAuthRoutes(
 }
 
 function homeUrlForInteraction(interactionId: string): string {
-  if (developerLoginIdSchema.safeParse(interactionId).success) {
-    return '/developers/login';
-  }
   return `/interaction/${encodeURIComponent(interactionId)}`;
 }
 

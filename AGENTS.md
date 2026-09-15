@@ -38,7 +38,9 @@ Keep modules small and organized by responsibility:
 - `src/api/` owns Fastify setup, schemas, HTTP routes, the verification page/status endpoint, API
   authentication, centralized errors, OpenAPI generation, and development-only Swagger UI.
 - `src/developers/` owns the UUID allowlist, developer/admin roles, OAuth-client ownership, the
-  first-party Minecraft login handoff, and opaque Redis-backed console sessions.
+  seeded first-party Developer Console OAuth client, and opaque Redis-backed console sessions. The
+  console authenticates through the standard authorization flow like any other client; parallel
+  console login routes or interaction hooks are forbidden.
 - `src/verification/` owns the shared atomic interaction resolution and the one-shot Microsoft, Xbox
   Live, XSTS, and Minecraft Services verification client. Token-bearing HTTP modules must not import
   or receive Redis, Prisma, repositories, or caches.
