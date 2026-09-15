@@ -199,8 +199,8 @@ export const signInSurfaceStyles = `
 }
 
 /* Sign-in pages share the landing look: no app-shell rails, an ambient grid
-   glow, and content floating without boxes or divider rules. The card gaps
-   carry the rhythm, so blocks and actions need no separating borders. */
+   glow, and no divider rules. The consent card keeps its window so the page
+   feels official, just with a lighter one-pixel frame. */
 @media (min-width: 74.01rem) {
   body.page-narrow::before,
   body.page-narrow::after {
@@ -261,8 +261,6 @@ body.page-narrow main.page-column::before {
 }
 
 .consent-card {
-  background: transparent;
-  border: 0;
-  padding: var(--s6) 0;
+  border-width: 1px;
 }
 `;
