@@ -31,19 +31,25 @@ main.container {
   position: relative;
 }
 
+/* Full-bleed guard: the glow below escapes the centered content column to
+   cover the whole viewport width without causing horizontal scrolling. */
+body {
+  overflow-x: clip;
+}
+
 main.container::before {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
   z-index: -1;
-  height: min(calc(100vw * 530 / 690), 64rem);
+  height: clamp(24rem, calc(100vw * 530 / 690), 64rem);
   content: "";
   background-image: url("/assets/grid-fade.svg");
   background-repeat: no-repeat;
   background-position: top center;
-  background-size: 100% auto;
-  opacity: 0.5;
+  background-size: cover;
+  opacity: 0.35;
   -webkit-mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
   mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
   pointer-events: none;
