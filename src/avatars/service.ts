@@ -14,7 +14,8 @@ import {
 import type { AvatarRenderOptions } from './types.js';
 
 const RENDER_CACHE_SECONDS = 24 * 60 * 60;
-const RENDERER_VERSION = 'v1';
+// Bump whenever the pixel output changes so stale renders are never served.
+const RENDERER_VERSION = 'v2';
 
 export interface AvatarImage {
   readonly body: Buffer;

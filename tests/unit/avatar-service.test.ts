@@ -68,7 +68,7 @@ describe('CachedAvatarService', (): void => {
     expect(renderer.calls).toBe(1);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v1:${textureHash}:slim:head:all:128`,
+        key: `avatar-render:v2:${textureHash}:slim:head:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -98,15 +98,15 @@ describe('CachedAvatarService', (): void => {
     expect(skins.calls).toBe(3);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v1:${textureHash}:slim:body:all:64`,
+        key: `avatar-render:v2:${textureHash}:slim:body:all:64`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v1:${textureHash}:slim:body:base:64`,
+        key: `avatar-render:v2:${textureHash}:slim:body:base:64`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v1:${textureHash}:slim:body:all:128`,
+        key: `avatar-render:v2:${textureHash}:slim:body:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
