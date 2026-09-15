@@ -129,7 +129,7 @@ export function renderLandingPage(input: LandingPageInput): string {
             )
               .map(
                 (item): string => `<li class="avatar-card">
-              <img src="/api/avatars/${AVATAR_DEMO_UUID}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async"${item.view === 'head' ? ' class="avatar-smooth"' : ''}>
+              <img src="/api/avatars/${AVATAR_DEMO_UUID}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async"${item.view === 'face' ? '' : ' class="avatar-smooth"'}>
               <h3>${escapeHtml(item.label)}</h3>
               <code>/api/avatars/:uuid/${item.view}</code>
             </li>`,

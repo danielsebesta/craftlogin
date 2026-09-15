@@ -239,25 +239,6 @@ describe('Minecraft avatar geometry', (): void => {
     },
   );
 
-  it('renders a flat mirror-symmetric classic body', async (): Promise<void> => {
-    const texture = await decodeSkinTexture(await createSkinPng(BASE_REGIONS));
-    const image = await decodePng(
-      await new CanvasAvatarRenderer().render(texture, 'classic', {
-        layers: 'base',
-        size: 128,
-        view: 'body',
-      }),
-    );
-
-    for (let y = 0; y < image.height; y += 1) {
-      for (let x = 0; x < image.width; x += 1) {
-        expect(readFixturePixel(image, x, y)).toEqual(
-          readFixturePixel(image, image.width - 1 - x, y),
-        );
-      }
-    }
-  });
-
   it.each<AvatarSize>([32, 64, 128, 256])(
     'produces a deterministic transparent square PNG at %i pixels',
     async (size): Promise<void> => {

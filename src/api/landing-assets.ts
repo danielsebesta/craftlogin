@@ -238,8 +238,8 @@ main.container::before {
   image-rendering: pixelated;
 }
 
-/* The isometric head is a smooth 3D render, so it scales with normal
-   interpolation. Flat 2D views stay nearest-neighbor above. */
+/* Isometric head, bust, and body are smooth 3D renders, so they scale with
+   normal interpolation. Only the flat 2D face stays nearest-neighbor. */
 .avatar-card img.avatar-smooth {
   image-rendering: auto;
 }
