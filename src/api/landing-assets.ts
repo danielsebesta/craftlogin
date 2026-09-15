@@ -169,7 +169,8 @@ main.container::before {
   text-wrap: pretty;
 }
 
-.landing-steps {
+.landing-steps,
+.use-list {
   display: grid;
   gap: var(--s5);
   padding: 0;
@@ -177,9 +178,11 @@ main.container::before {
   list-style: none;
 }
 
-.landing-steps li {
+.landing-steps li,
+.use-list li {
   display: grid;
   gap: var(--s1);
+  align-content: start;
 }
 
 .step-index {
@@ -188,11 +191,13 @@ main.container::before {
   font-size: var(--t-sm);
 }
 
-.landing-steps h3 {
+.landing-steps h3,
+.use-list h3 {
   margin: 0;
 }
 
-.landing-steps p {
+.landing-steps p,
+.use-list p {
   color: var(--muted);
 }
 
@@ -267,7 +272,8 @@ main.container::before {
 }
 
 @media (min-width: 48rem) {
-  .landing-steps {
+  .landing-steps,
+  .use-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--s6);
   }

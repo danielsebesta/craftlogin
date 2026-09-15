@@ -266,31 +266,31 @@ export const english = {
       rows: [
         {
           claim: 'sub',
-          detail: 'The Minecraft UUID. It survives a username change.',
+          detail: 'A permanent player ID. It stays the same even if they rename.',
           value: '123e4567-e89b-42d3-a456-426614174000',
         },
         {
           claim: 'preferred_username',
-          detail: 'The username the account has right now.',
+          detail: 'The name they play under right now.',
           value: 'Player',
         },
         {
           claim: 'picture',
-          detail: 'Head render at `/avatar/{uuid}` from the current Mojang skin.',
+          detail: 'Their current face at `/avatar/{uuid}`, ready to show on your site.',
           value: '/avatar/123e4567-e89b-42d3-a456-426614174000',
         },
       ],
       scopes: [
-        { detail: 'Sign in to the Minecraft account.', name: 'openid' },
-        { detail: 'Read the username and avatar.', name: 'profile' },
+        { detail: 'Permission to sign the player in.', name: 'openid' },
+        { detail: 'Permission to show their name and face.', name: 'profile' },
       ],
-      scopesHeading: 'Scopes',
+      scopesHeading: 'Permissions',
       valueHeading: 'Example',
-      text: 'The same three claims on every sign-in. `sub` is stable across username changes.',
+      text: 'Three simple facts on every login. The ID never changes, so roles and purchases stay attached to the right player.',
     },
     avatars: {
-      heading: 'Avatars from signed skins',
-      text: 'Four views rendered server-side from the account\u2019s current signed Mojang skin. No authentication, open CORS, cacheable ETags.',
+      heading: 'Free avatars included',
+      text: 'Every login can also show the player\u2019s face, rendered live from their actual current skin. Use them in comments, member lists, or leaderboards. No keys, no extra calls, ready to hotlink.',
       bust: 'Bust',
       body: 'Body',
       face: 'Face',
@@ -300,36 +300,56 @@ export const english = {
     endpoints: {
       heading: 'Endpoints',
       items: [
-        { detail: 'Start the sign-in. Requires S256 PKCE.', path: '/oauth2/authorize' },
-        { detail: 'Exchange a code, or rotate a refresh token.', path: '/oauth2/token' },
-        { detail: 'Read the OpenID Connect claims.', path: '/oauth2/userinfo' },
-        { detail: 'Check a token from a resource server.', path: '/oauth2/introspect' },
-        { detail: 'End the session at the provider.', path: '/oauth2/logout' },
-        { detail: 'Published signing keys for token verification.', path: '/oauth2/jwks' },
-        { detail: 'Invalidate a token.', path: '/oauth2/revoke' },
+        { detail: 'Where the login starts.', path: '/oauth2/authorize' },
+        { detail: 'Where your server swaps the one-time code for tokens.', path: '/oauth2/token' },
+        { detail: 'Where you read who just logged in.', path: '/oauth2/userinfo' },
+        { detail: 'Where your backend double-checks a token.', path: '/oauth2/introspect' },
+        { detail: 'Where the player signs out of CraftLogin.', path: '/oauth2/logout' },
+        { detail: 'The public keys your backend uses to trust our tokens.', path: '/oauth2/jwks' },
+        { detail: 'Where a token gets cancelled.', path: '/oauth2/revoke' },
       ],
     },
     flow: {
-      claimLabel: 'Your callback receives',
+      claimLabel: 'Your site receives',
       claimValue: '{ sub: "minecraft-uuid", preferred_username: "Player" }',
       exampleAddress: 'K7MPQ4RX.craftlogin.com',
       exampleLabel: 'The player connects to',
-      heading: 'How it works',
+      heading: 'From click to known player in seconds',
       items: [
         {
           detail:
-            'Redirect the player with S256 PKCE. CraftLogin answers with one single-use server address valid for five minutes.',
-          title: 'Redirect the player',
+            'Add a login button that sends the player to CraftLogin. No passwords or forms on your side.',
+          title: 'You send the player our way',
         },
         {
           detail:
-            'The player pastes that address into Minecraft Java Edition and joins. It works once, then expires after five minutes.',
-          title: 'The player joins the server',
+            'They join a one-time server address, verify with their skin, or sign in with Microsoft. It takes seconds, works once, and expires after five minutes.',
+          title: 'They prove it in Minecraft',
         },
         {
           detail:
-            'Online mode proves the account is theirs. CraftLogin returns the UUID and the current username.',
-          title: 'You receive the identity',
+            'Your site gets back their permanent player ID and current username. Now you reliably know who they are.',
+          title: 'You know exactly who they are',
+        },
+      ],
+    },
+    useCases: {
+      heading: 'Made for community sites',
+      items: [
+        {
+          detail:
+            'Give members forum or game roles tied to a real Minecraft account, not a nickname anyone can claim.',
+          title: 'Hand out roles',
+        },
+        {
+          detail:
+            'Deliver ranks and perks to the right player automatically after checkout. No manual whitelisting.',
+          title: 'Sell VIP',
+        },
+        {
+          detail:
+            'Let players comment and build a profile with their name and face, without yet another password.',
+          title: 'Comments and profiles',
         },
       ],
     },
@@ -337,12 +357,12 @@ export const english = {
       license: 'MIT licensed',
     },
     hero: {
-      codeLabel: 'Your app sends',
-      consoleAction: 'Open the Console',
+      codeLabel: 'It starts with one redirect',
+      consoleAction: 'Set up login',
       documentationAction: 'Read the API docs',
       githubAction: 'View source',
-      heading: 'Account verification for Java Edition',
-      lead: 'An OpenID Connect provider for Minecraft: Java Edition accounts. The player joins a short server address to prove the account is theirs, and your app receives the UUID and username.',
+      heading: 'Log in with Minecraft',
+      lead: 'Add a \u201cSign in with Minecraft\u201d button to your website. Players prove they own their Java Edition account in seconds, with no passwords and no emails, and you reliably know who they are.',
       request:
         'GET /oauth2/authorize\n  ?response_type=code\n  &client_id=cl_your_client\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &scope=openid%20profile\n  &state=<random>\n  &code_challenge=<S256>\n  &code_challenge_method=S256',
     },
@@ -356,13 +376,13 @@ export const english = {
     quickstart: {
       exchangeCode:
         'POST /oauth2/token\n  grant_type=authorization_code\n  &code=<code>\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &client_id=cl_your_client\n  &code_verifier=<verifier>',
-      exchangeHeading: 'Then exchange the code',
-      heading: 'Quickstart',
-      text: 'Register a client in the Console to get a client ID. Redirect the player to the authorization endpoint, then trade the single-use code from your callback for tokens.',
+      exchangeHeading: 'Then trade the code for tokens',
+      heading: 'Up and running in minutes',
+      text: 'Create a client in the Console to get your client ID. Send the player to the login page, then swap the one-time code you get back for their identity.',
     },
     security: {
-      heading: 'Security',
-      text: 'No Microsoft password ever reaches CraftLogin, so there is no password or email address to leak. Every client must use PKCE, redirect URIs are matched exactly, and each authorization code works once.',
+      heading: 'Safe by design',
+      text: 'There are no CraftLogin passwords to steal. Players never type a password on our pages, and we store no emails. Logins are short-lived and single-use, return addresses must match exactly, and everything is open source, so anyone can check our work.',
     },
   },
   interaction: {

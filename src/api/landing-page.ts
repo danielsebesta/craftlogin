@@ -56,6 +56,20 @@ export function renderLandingPage(input: LandingPageInput): string {
       title: strings.flow.heading,
     },
     {
+      body: `<ul class="use-list">${strings.useCases.items
+        .map(
+          (item): string => `
+            <li>
+              <h3>${escapeHtml(item.title)}</h3>
+              <p>${escapeHtml(item.detail)}</p>
+            </li>`,
+        )
+        .join('')}
+          </ul>`,
+      id: 'uses',
+      title: strings.useCases.heading,
+    },
+    {
       body: `<p class="section-intro">${escapeHtml(strings.quickstart.text)}</p>
           <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.quickstart.heading)}"><code>${escapeHtml(strings.hero.request)}</code></pre>
           <h3>${escapeHtml(strings.quickstart.exchangeHeading)}</h3>

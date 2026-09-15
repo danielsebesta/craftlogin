@@ -204,9 +204,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-security-policy']).toContain("manifest-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
     expect(response.body).toContain('<main id="main" class="container">');
-    expect(response.body).toContain(
-      '<h1 id="hero-heading">Account verification for Java Edition</h1>',
-    );
+    expect(response.body).toContain('<h1 id="hero-heading">Log in with Minecraft</h1>');
     expect(response.body).toContain('class="landing-steps"');
     expect(response.body).toContain('K7MPQ4RX.craftlogin.com');
     expect(response.body).toContain('href="/docs/"');
