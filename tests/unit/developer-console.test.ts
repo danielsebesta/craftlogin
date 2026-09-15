@@ -190,7 +190,11 @@ describe('Developer Console', (): void => {
         remove: unavailable,
       },
       apps: { register: unavailable },
-      clients: { findClientName: unavailable, isAllowedOrigin: unavailable },
+      clients: {
+        findClientName: unavailable,
+        findClientOwnerUuid: unavailable,
+        isAllowedOrigin: unavailable,
+      },
       consoleClient: { clientId: consoleClientId },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
       developerAuthentication: authentication,

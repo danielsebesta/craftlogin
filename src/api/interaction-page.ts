@@ -2,6 +2,11 @@ import { english } from '../locales/en.js';
 import type { SkinInteractionChallenge } from '../oauth/interaction-service.js';
 import { renderSignInPage, type ConsentPermission } from './ui/sign-in-page.js';
 
+export interface InteractionOwner {
+  readonly avatarUrl: string;
+  readonly name: string;
+}
+
 export interface InteractionPageInput {
   readonly appName: string;
   readonly code?: string;
@@ -11,6 +16,7 @@ export interface InteractionPageInput {
   readonly kind: 'consent' | 'login';
   readonly accountName?: string;
   readonly accountAvatarUrl?: string;
+  readonly owner?: InteractionOwner;
   readonly skinChallenge?: SkinInteractionChallenge;
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
@@ -90,6 +96,7 @@ export function renderInteractionPage(input: InteractionPageInput): string {
 
   return renderSignInPage({
     ...(input.accountAvatarUrl === undefined ? {} : { accountAvatarUrl: input.accountAvatarUrl }),
+    ...(input.owner === undefined ? {} : { owner: input.owner }),
     accountLabel: strings.signedInAs,
     ...(input.accountName === undefined ? {} : { accountName: input.accountName }),
     action: `${interactionPath}/complete`,
@@ -109,6 +116,8 @@ export function renderInteractionPage(input: InteractionPageInput): string {
         ? strings.status
         : { ...strings.status, pending: skin.statusPending },
     noJavaScript: strings.noJavaScript,
+    ownerBy: strings.ownerBy,
+    ownerLabel: strings.ownerLabel,
     ...(methodChoices.length < 2 ? {} : { methodChoices }),
     methodHeading: strings.methodHeading,
     ...(skinChallenge === undefined ? {} : { selectedMethod: 'skin' }),

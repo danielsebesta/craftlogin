@@ -115,6 +115,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     clients: options.clients,
     interactions: options.interactions,
     minecraftBaseDomain: options.minecraftBaseDomain,
+    ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });
   if (
     options.microsoftVerification !== undefined &&

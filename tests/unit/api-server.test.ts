@@ -308,6 +308,11 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('ABCDEFGH.craftlogin.com');
     expect(response.body).toContain('Maps &amp; More');
     expect(response.body).not.toContain('Maps & More</strong>');
+    expect(response.body).toContain('class="consent-owner"');
+    expect(response.body).toContain('by <bdi>VerifiedPlayer</bdi>');
+    expect(response.body).toContain(
+      '/api/avatars/123e4567-e89b-42d3-a456-426614174000/face?size=64&amp;layers=all',
+    );
     expect(response.body).toContain('This app will receive:');
     expect(response.body).toContain('Your Minecraft identity (stable UUID)');
     expect(response.body).toContain('Your current username and avatar');
@@ -923,6 +928,8 @@ describe('CraftLogin API server', (): void => {
       },
       clients: {
         findClientName: (): Promise<string> => Promise.resolve('Maps & More'),
+        findClientOwnerUuid: (): Promise<string> =>
+          Promise.resolve('123e4567-e89b-42d3-a456-426614174000'),
         isAllowedOrigin: (origin): Promise<boolean> =>
           Promise.resolve(origin === 'https://maps.example'),
       },

@@ -97,7 +97,11 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
           redirectUris: input.redirectUris,
         }),
     },
-    clients: { findClientName: unavailable, isAllowedOrigin: unavailable },
+    clients: {
+      findClientName: unavailable,
+      findClientOwnerUuid: unavailable,
+      isAllowedOrigin: unavailable,
+    },
     cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
     developerAuthentication: {
       authenticate: (): Promise<undefined> => Promise.resolve(undefined),

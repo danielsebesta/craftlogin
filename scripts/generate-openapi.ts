@@ -14,6 +14,7 @@ async function generate(): Promise<void> {
     apps: { register: unavailable },
     clients: {
       findClientName: unavailable,
+      findClientOwnerUuid: unavailable,
       isAllowedOrigin: unavailable,
     },
     cookieKeys: [

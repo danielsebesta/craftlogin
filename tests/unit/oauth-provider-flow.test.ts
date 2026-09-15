@@ -243,6 +243,7 @@ describe('CraftLogin OIDC provider', (): void => {
       apps: { register: unavailable },
       clients: {
         findClientName: (): Promise<string> => Promise.resolve('OAuth flow test client'),
+        findClientOwnerUuid: (): Promise<undefined> => Promise.resolve(undefined),
         isAllowedOrigin: (): Promise<boolean> => Promise.resolve(false),
       },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],

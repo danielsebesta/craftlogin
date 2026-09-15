@@ -73,6 +73,29 @@ export const signInSurfaceStyles = `
   font-weight: 700;
 }
 
+.consent-owner {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+  justify-self: start;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.consent-owner-avatar {
+  width: 2rem;
+  height: 2rem;
+  background: var(--surface-raised);
+  border: 2px solid var(--line);
+  image-rendering: pixelated;
+}
+
+.consent-owner bdi {
+  color: var(--text);
+  font-weight: 700;
+}
+
 .consent-scopes {
   display: grid;
   gap: var(--s3);

@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import { english } from '../locales/en.js';
+import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type {
   OAuthInteractionAbortion,
   OAuthInteractionCompletion,
@@ -17,7 +18,7 @@ import {
 import { renderAutoForwardPage } from './auto-forward-page.js';
 import { ApiError } from './errors.js';
 import { interactionScript, interactionStyles } from './interaction-assets.js';
-import { renderInteractionPage } from './interaction-page.js';
+import { renderInteractionPage, type InteractionOwner } from './interaction-page.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import {
   skinVerificationLookupRateLimit,
@@ -107,6 +108,7 @@ export interface ApiInteractionService {
 
 export interface ClientNameLookup {
   findClientName(clientId: string): Promise<string | undefined>;
+  findClientOwnerUuid(clientId: string): Promise<string | undefined>;
 }
 
 export interface AccountNameLookup {
@@ -118,6 +120,7 @@ export interface InteractionRoutesOptions {
   readonly clients: ClientNameLookup;
   readonly interactions: ApiInteractionService;
   readonly minecraftBaseDomain: string;
+  readonly players?: MinecraftPlayerLookup;
 }
 
 export function registerInteractionRoutes(
@@ -135,6 +138,9 @@ export function registerInteractionRoutes(
       );
       const appName =
         (await options.clients.findClientName(interaction.clientId)) ?? interaction.clientId;
+      const ownerUuid = await options.clients.findClientOwnerUuid(interaction.clientId);
+      const owner =
+        ownerUuid === undefined ? undefined : await resolveOwner(options.players, ownerUuid);
       const account =
         interaction.accountId === undefined || options.accounts === undefined
           ? undefined
@@ -154,6 +160,7 @@ export function registerInteractionRoutes(
             : {
                 accountAvatarUrl: `/api/avatars/${encodeURIComponent(interaction.accountId)}/face?size=64&layers=all`,
               }),
+          ...(owner === undefined ? {} : { owner }),
           scope: interaction.scope,
           ...(interaction.skinChallenge === undefined
             ? {}
@@ -419,6 +426,24 @@ export function registerInteractionRoutes(
       await reply.type('text/javascript; charset=utf-8').send(interactionScript);
     },
   );
+}
+
+// The publisher identity is decorative trust information: a failed Mojang
+// lookup degrades to a short UUID instead of failing the interaction page.
+async function resolveOwner(
+  players: MinecraftPlayerLookup | undefined,
+  ownerUuid: string,
+): Promise<InteractionOwner> {
+  let name: string | undefined;
+  try {
+    name = (await players?.findProfileById(ownerUuid))?.username;
+  } catch {
+    name = undefined;
+  }
+  return {
+    avatarUrl: `/api/avatars/${encodeURIComponent(ownerUuid)}/face?size=64&layers=all`,
+    name: name ?? `${ownerUuid.slice(0, 8)}…`,
+  };
 }
 
 function setInteractionHeaders(reply: FastifyReply): void {

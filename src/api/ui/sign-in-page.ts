@@ -76,6 +76,11 @@ export interface SignInMicrosoftVerification {
   readonly startLabel: string;
 }
 
+export interface SignInOwner {
+  readonly avatarUrl: string;
+  readonly name: string;
+}
+
 export interface SignInPageInput {
   readonly accountAvatarUrl?: string;
   readonly accountLabel: string;
@@ -101,6 +106,9 @@ export interface SignInPageInput {
   readonly methodHeading?: string;
   readonly microsoftVerification?: SignInMicrosoftVerification;
   readonly noJavaScript: string;
+  readonly owner?: SignInOwner;
+  readonly ownerBy: string;
+  readonly ownerLabel: string;
   readonly permissions: readonly ConsentPermission[];
   readonly securityNote?: string;
   readonly selectedMethod?: string;
@@ -137,6 +145,15 @@ function renderAccountChip(input: SignInPageInput): string {
       : `<img class="account-chip-avatar" src="${escapeHtml(input.accountAvatarUrl)}" alt="" width="32" height="32" decoding="async">`;
   return `
           <p class="account-chip">${avatar}<span><span class="visually-hidden">${escapeHtml(input.accountLabel)} </span><span class="account-chip-name">${escapeHtml(input.accountName)}</span></span></p>`;
+}
+
+function renderOwner(input: SignInPageInput): string {
+  const owner = input.owner;
+  if (owner === undefined) {
+    return '';
+  }
+  return `
+            <p class="consent-owner"><img class="consent-owner-avatar" src="${escapeHtml(owner.avatarUrl)}" alt="" width="32" height="32" decoding="async"><span><span class="visually-hidden">${escapeHtml(input.ownerLabel)} </span>${escapeHtml(input.ownerBy)} <bdi>${escapeHtml(owner.name)}</bdi></span></p>`;
 }
 
 function renderVerification(input: SignInPageInput): string {
@@ -284,6 +301,7 @@ export function renderSignInPage(input: SignInPageInput): string {
         <div class="consent-identity">
           <div class="consent-title">
             <h1 id="${SIGN_IN_HEADING_ID}">${escapeHtml(input.heading)}${headingSuffix}</h1>
+            ${renderOwner(input)}
             <p class="lead">${escapeHtml(input.lead)}</p>
           </div>${renderAccountChip(input)}
         </div>

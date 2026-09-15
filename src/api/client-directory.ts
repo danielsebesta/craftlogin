@@ -16,6 +16,14 @@ export class PrismaClientDirectory implements ClientNameLookup, RegisteredOrigin
     return client?.name;
   }
 
+  public async findClientOwnerUuid(clientId: string): Promise<string | undefined> {
+    const client = await this.database.app.findUnique({
+      where: { clientId },
+      select: { ownerUuid: true },
+    });
+    return client?.ownerUuid ?? undefined;
+  }
+
   public async isAllowedOrigin(origin: string): Promise<boolean> {
     const parsedOrigin = URL.parse(origin);
     if (parsedOrigin?.origin !== origin) {

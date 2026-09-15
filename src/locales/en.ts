@@ -429,6 +429,8 @@ export const english = {
     consentLead: 'Review what this application is requesting.',
     noJavaScript:
       'Automatic status checks need JavaScript. You can still connect in Minecraft, then use the continue button.',
+    ownerBy: 'by',
+    ownerLabel: 'Application publisher',
     securityNote:
       'Verify through Minecraft online mode, a fresh Mojang-signed skin, or one-shot Microsoft sign-in. CraftLogin never receives your Microsoft password or stores Microsoft tokens.',
     status: {
