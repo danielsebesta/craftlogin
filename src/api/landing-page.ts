@@ -4,6 +4,9 @@ import { renderPageDocument } from './ui/document.js';
 
 const SOURCE_URL = 'https://github.com/danielsebesta/craftlogin';
 
+// Public, long-lived demo identity whose signed skin showcases the avatar renders.
+const AVATAR_DEMO_UUID = '069a79f4-44e9-4726-a5be-fca90e38aaf5';
+
 export interface LandingPageInput {
   readonly showDocumentation: boolean;
 }
@@ -98,6 +101,29 @@ export function renderLandingPage(input: LandingPageInput): string {
           </dl>`,
       id: 'claims',
       title: claims.heading,
+    },
+    {
+      body: `<p class="section-intro">${escapeHtml(strings.avatars.text)}</p>
+          <ul class="avatar-showcase">
+            ${(
+              [
+                { label: strings.avatars.face, view: 'face' },
+                { label: strings.avatars.head, view: 'head' },
+                { label: strings.avatars.bust, view: 'bust' },
+                { label: strings.avatars.body, view: 'body' },
+              ] as const
+            )
+              .map(
+                (item): string => `<li class="avatar-card">
+              <img src="/api/avatars/${AVATAR_DEMO_UUID}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async">
+              <h3>${escapeHtml(item.label)}</h3>
+              <code>/api/avatars/:uuid/${item.view}</code>
+            </li>`,
+              )
+              .join('\n            ')}
+          </ul>`,
+      id: 'avatars',
+      title: strings.avatars.heading,
     },
     {
       body: `<ul class="endpoint-list">

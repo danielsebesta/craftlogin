@@ -113,6 +113,40 @@ const landingPageStyles = `
   margin-top: var(--s4);
 }
 
+.avatar-showcase {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--s5);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.avatar-card {
+  display: grid;
+  gap: var(--s2);
+  justify-items: center;
+  padding: var(--s4);
+  text-align: center;
+  background: var(--surface-raised);
+  border: 2px solid var(--line);
+}
+
+.avatar-card h3 {
+  margin: 0;
+}
+
+.avatar-card img {
+  width: 8rem;
+  height: 8rem;
+  image-rendering: pixelated;
+}
+
+.avatar-card code {
+  font-size: var(--t-xs);
+  overflow-wrap: anywhere;
+}
+
 .endpoint-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));

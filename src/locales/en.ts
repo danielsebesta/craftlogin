@@ -288,6 +288,15 @@ export const english = {
       valueHeading: 'Example',
       text: 'The same three claims on every sign-in. `sub` is stable across username changes.',
     },
+    avatars: {
+      heading: 'Avatars from signed skins',
+      text: 'Four views rendered server-side from the account\u2019s current signed Mojang skin. No authentication, open CORS, cacheable ETags.',
+      bust: 'Bust',
+      body: 'Body',
+      face: 'Face',
+      head: 'Head',
+      exampleAlt: 'Example Minecraft avatar render',
+    },
     endpoints: {
       heading: 'Endpoints',
       items: [
