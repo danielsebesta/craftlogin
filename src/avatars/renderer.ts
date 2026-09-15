@@ -395,6 +395,12 @@ interface FaceSample {
   readonly order: number;
 }
 
+// Sub-pixel samples per axis. Nine coverage samples per output pixel smooth the
+// projected cuboid edges the way launchers downscale a large off-screen render.
+// Interior texels stay crisp because every sub-sample keeps nearest-neighbor
+// texture lookup; only geometric coverage is averaged.
+const SUPERSAMPLE_GRID = 3;
+
 function rasterizeFaces(
   texture: SkinTexture,
   faces: readonly ProjectedFace[],
@@ -404,20 +410,47 @@ function rasterizeFaces(
   const samples: FaceSample[] = [];
   for (let y = 0; y < outputSize; y += 1) {
     for (let x = 0; x < outputSize; x += 1) {
-      samples.length = 0;
-      for (const face of faces) {
-        const sample = sampleFace(texture, face, x + 0.5, y + 0.5);
-        if (sample !== undefined) {
-          samples.push(sample);
+      // Accumulate premultiplied color so partially covered edges blend
+      // against transparency instead of darkening toward black.
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let alpha = 0;
+      for (let subY = 0; subY < SUPERSAMPLE_GRID; subY += 1) {
+        for (let subX = 0; subX < SUPERSAMPLE_GRID; subX += 1) {
+          samples.length = 0;
+          const sampleX = x + (subX + 0.5) / SUPERSAMPLE_GRID;
+          const sampleY = y + (subY + 0.5) / SUPERSAMPLE_GRID;
+          for (const face of faces) {
+            const sample = sampleFace(texture, face, sampleX, sampleY);
+            if (sample !== undefined) {
+              samples.push(sample);
+            }
+          }
+          if (samples.length === 0) {
+            continue;
+          }
+          samples.sort((left, right): number =>
+            left.depth === right.depth ? left.order - right.order : left.depth - right.depth,
+          );
+          const color = compositeSamples(samples);
+          const weight = color.alpha / 255;
+          red += color.red * weight;
+          green += color.green * weight;
+          blue += color.blue * weight;
+          alpha += weight;
         }
       }
-      if (samples.length === 0) {
+      const coverage = SUPERSAMPLE_GRID * SUPERSAMPLE_GRID;
+      const pixelAlpha = alpha / coverage;
+      if (pixelAlpha === 0) {
         continue;
       }
-      samples.sort((left, right): number =>
-        left.depth === right.depth ? left.order - right.order : left.depth - right.depth,
-      );
-      writeCompositePixel(output, (y * outputSize + x) * 4, samples);
+      const outputIndex = (y * outputSize + x) * 4;
+      output[outputIndex] = Math.round(red / coverage / pixelAlpha);
+      output[outputIndex + 1] = Math.round(green / coverage / pixelAlpha);
+      output[outputIndex + 2] = Math.round(blue / coverage / pixelAlpha);
+      output[outputIndex + 3] = Math.round(pixelAlpha * 255);
     }
   }
 }
@@ -465,11 +498,7 @@ function sampleFace(
   };
 }
 
-function writeCompositePixel(
-  output: Uint8ClampedArray,
-  outputIndex: number,
-  samples: readonly FaceSample[],
-): void {
+function compositeSamples(samples: readonly FaceSample[]): Color {
   let alpha = 0;
   let blue = 0;
   let green = 0;
@@ -483,12 +512,14 @@ function writeCompositePixel(
     alpha = sourceAlpha + alpha * remaining;
   }
   if (alpha === 0) {
-    return;
+    return { alpha: 0, blue: 0, green: 0, red: 0 };
   }
-  output[outputIndex] = red / alpha;
-  output[outputIndex + 1] = green / alpha;
-  output[outputIndex + 2] = blue / alpha;
-  output[outputIndex + 3] = alpha * 255;
+  return {
+    alpha: Math.round(alpha * 255),
+    blue: Math.round(blue / alpha),
+    green: Math.round(green / alpha),
+    red: Math.round(red / alpha),
+  };
 }
 
 interface TextureRect {

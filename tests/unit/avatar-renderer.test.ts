@@ -148,9 +148,22 @@ describe('Minecraft avatar geometry', (): void => {
 
     expect(countPixels(layered, isOuterColor)).toBeGreaterThan(0);
     expect(countPixels(base, isOuterColor)).toBe(0);
-    expect(countPixels(base, (pixel): boolean => pixel.alpha !== 0 && pixel.alpha !== 255)).toBe(0);
+    // Isometric edges are antialiased, so a small fringe of partially covered
+    // and face-blended pixels is expected instead of hard binary coverage.
+    const opaqueBase = countPixels(base, (pixel): boolean => pixel.alpha === 255);
+    const feathered = countPixels(
+      base,
+      (pixel): boolean => pixel.alpha !== 0 && pixel.alpha !== 255,
+    );
+    const blendedOpaque = countPixels(
+      base,
+      (pixel): boolean => pixel.alpha === 255 && !isBaseFaceColor(pixel),
+    );
+    expect(feathered).toBeGreaterThan(0);
+    expect(feathered).toBeLessThan(opaqueBase * 0.1);
+    expect(blendedOpaque).toBeLessThan(opaqueBase * 0.1);
     expect(
-      countPixels(base, (pixel): boolean => pixel.alpha === 255 && !isBaseFaceColor(pixel)),
+      countPixels(base, (pixel): boolean => pixel.alpha === 255 && !isShadedBaseBlend(pixel)),
     ).toBe(0);
     expect(
       countPixels(
@@ -316,6 +329,19 @@ function isBaseFaceColor(pixel: ReturnType<typeof readFixturePixel>): boolean {
     (pixel.red === 198 && pixel.green === 18 && pixel.blue === 18) ||
     (pixel.red === 14 && pixel.green === 158 && pixel.blue === 14) ||
     (pixel.red === 20 && pixel.green === 20 && pixel.blue === 220)
+  );
+}
+
+// Every opaque pixel must stay inside the per-channel range of the three
+// shaded base faces, so antialiased blends cannot introduce foreign colors.
+function isShadedBaseBlend(pixel: ReturnType<typeof readFixturePixel>): boolean {
+  return (
+    pixel.red >= 14 &&
+    pixel.red <= 198 &&
+    pixel.green >= 18 &&
+    pixel.green <= 158 &&
+    pixel.blue >= 14 &&
+    pixel.blue <= 220
   );
 }
 
