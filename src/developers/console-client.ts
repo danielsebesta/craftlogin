@@ -17,8 +17,8 @@ export function consoleCallbackUrl(issuer: string): string {
 // The Developer Console is one OAuth client among many: it authenticates
 // through the standard authorization flow like every other application. Its
 // record is seeded at startup so the login flow never depends on manual
-// registration. It stays deliberately unowned (visible to administrators)
-// instead of belonging to whichever developer was bootstrapped first.
+// registration. Seeding only repairs the callback URL and never touches
+// ownership, which stays operator-assigned.
 export async function ensureConsoleClient(
   database: PrismaClient,
   issuer: string,
