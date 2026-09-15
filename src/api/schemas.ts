@@ -273,7 +273,9 @@ export const interactionPageRouteSchema: FastifySchema = {
       description: operations.interactionPage.response,
     },
     400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: htmlResponseSchema,
     409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    410: htmlResponseSchema,
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
@@ -428,7 +430,6 @@ export const interactionCompleteRouteSchema: FastifySchema = {
   response: {
     200: htmlResponseSchema,
     303: { type: 'null' },
-    410: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },

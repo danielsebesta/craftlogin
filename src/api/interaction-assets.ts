@@ -8,6 +8,14 @@ export const interactionScript = `
 (() => {
   'use strict';
 
+  document.querySelectorAll('[data-go-back]').forEach((element) => {
+    if (!(element instanceof HTMLButtonElement)) return;
+    element.hidden = false;
+    element.addEventListener('click', () => {
+      window.history.back();
+    });
+  });
+
   document.querySelectorAll('[data-copy-target]').forEach((element) => {
     if (!(element instanceof HTMLButtonElement)) return;
     const selector = element.dataset.copyTarget;

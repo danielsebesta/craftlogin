@@ -1216,12 +1216,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            text/html:
+              schema:
+                type: string
         "409":
           description: Default Response
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+        "410":
+          description: Default Response
+          content:
+            text/html:
+              schema:
+                type: string
         "500":
           description: Default Response
           content:
@@ -1568,12 +1580,6 @@ paths:
         "303":
           description: Default Response
         "409":
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
-        "410":
           description: Default Response
           content:
             application/json:

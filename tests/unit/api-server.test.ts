@@ -10,6 +10,7 @@ import type { AuthenticatedAccessToken } from '../../src/api/access-token-authen
 import type { AppRegistrationInput, RegisteredApp } from '../../src/api/app-registration.js';
 import type { CurrentUser } from '../../src/api/current-user.js';
 import { ApiError } from '../../src/api/errors.js';
+import { OAuthInteractionStateError } from '../../src/oauth/interaction-gateway.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 import type { ApiInteractionService } from '../../src/api/interaction-routes.js';
 import {
@@ -323,6 +324,87 @@ describe('CraftLogin API server', (): void => {
     expect(interactions.expectedIds).toEqual(['interaction-id']);
   });
 
+  it('renders a friendly page with a back button for unknown interactions', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.start = (): Promise<never> =>
+      Promise.reject(new OAuthInteractionStateError('The interaction is unknown'));
+    const server = await buildServer('test', interactions);
+    const response = await server.inject({ method: 'GET', url: '/interaction/unknown-id' });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.body).toContain('This sign-in request cannot continue.');
+    expect(response.body).toContain('data-go-back');
+    expect(response.body).toContain('>Go back</button>');
+    expect(response.body).not.toContain('"error"');
+  });
+
+  it('renders a friendly expired page instead of an error envelope', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.start = (): Promise<never> =>
+      Promise.reject(new ApiError(410, 'interaction_expired', 'expired'));
+    const server = await buildServer('test', interactions);
+    const response = await server.inject({ method: 'GET', url: '/interaction/expired-id' });
+
+    expect(response.statusCode).toBe(410);
+    expect(response.body).toContain('This sign-in request expired');
+    expect(response.body).toContain('data-go-back');
+  });
+
+  it('renders the friendly expired page for malformed Microsoft callbacks', async (): Promise<void> => {
+    const server = await buildServer(
+      'test',
+      new InteractionStub(),
+      [],
+      undefined,
+      undefined,
+      new MicrosoftVerificationStub(),
+    );
+    const response = await server.inject({
+      method: 'GET',
+      url: '/interaction/microsoft/callback?code=only-code-no-state',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.body).toContain('This sign-in attempt expired');
+    expect(response.body).not.toContain('"error"');
+  });
+
+  it('redirects dead Microsoft starts back to the friendly interaction page', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.prepareMicrosoft = (): Promise<never> =>
+      Promise.reject(new OAuthInteractionStateError('The interaction is gone'));
+    const server = await buildServer(
+      'test',
+      interactions,
+      [],
+      undefined,
+      undefined,
+      new MicrosoftVerificationStub(),
+    );
+    const response = await server.inject({
+      method: 'GET',
+      url: '/interaction/dead-id/microsoft/start',
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/interaction/dead-id');
+  });
+
+  it('redirects expired completions back to the friendly interaction page', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.completion = { status: 'expired' };
+    const server = await buildServer('test', interactions);
+    const response = await server.inject({
+      method: 'POST',
+      url: '/interaction/interaction-id/complete',
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/interaction/interaction-id');
+  });
+
   it('completes Microsoft verification with signed state and the same OIDC completion path', async (): Promise<void> => {
     const interactions = new InteractionStub();
     const microsoft = new MicrosoftVerificationStub();
@@ -575,8 +657,8 @@ describe('CraftLogin API server', (): void => {
       method: 'POST',
       url: '/interaction/interaction-id/complete',
     });
-    expect(expired.statusCode).toBe(410);
-    expect(errorResponseSchema.parse(expired.json()).error.code).toBe('interaction_expired');
+    expect(expired.statusCode).toBe(303);
+    expect(expired.headers.location).toBe('/interaction/interaction-id');
   });
 
   it('authenticates the current-user endpoint and keeps every error in one shape', async (): Promise<void> => {

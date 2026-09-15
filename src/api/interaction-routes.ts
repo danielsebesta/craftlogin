@@ -9,6 +9,9 @@ import type {
   OAuthInteractionCompletion,
   PendingOAuthInteraction,
 } from '../oauth/interaction-service.js';
+import { OAuthInteractionStateError } from '../oauth/interaction-gateway.js';
+import { VerificationStateError } from '../verification/redis-verification-store.js';
+import { renderInteractionErrorPage, type InteractionErrorKind } from './interaction-error-page.js';
 import type { VerificationStatus } from '../verification/types.js';
 import type { SkinVerificationChallenge } from '../verification/redis-skin-verification-store.js';
 import {
@@ -131,11 +134,15 @@ export function registerInteractionRoutes(
     '/interaction/:uid',
     { schema: interactionPageRouteSchema },
     async (request, reply): Promise<void> => {
-      const interaction = await options.interactions.start(
-        request.raw,
-        reply.raw,
-        request.params.uid,
-      );
+      let interaction: PendingOAuthInteraction;
+      try {
+        interaction = await options.interactions.start(request.raw, reply.raw, request.params.uid);
+      } catch (error: unknown) {
+        if (await sendInteractionErrorPage(reply, error)) {
+          return;
+        }
+        throw error;
+      }
       const appName =
         (await options.clients.findClientName(interaction.clientId)) ?? interaction.clientId;
       const ownerUuid = await options.clients.findClientOwnerUuid(interaction.clientId);
@@ -200,7 +207,16 @@ export function registerInteractionRoutes(
     '/interaction/:uid/abort',
     { schema: interactionAbortRouteSchema },
     async (request, reply): Promise<void> => {
-      const abortion = await options.interactions.abort(request.raw, reply.raw, request.params.uid);
+      let abortion: OAuthInteractionAbortion;
+      try {
+        abortion = await options.interactions.abort(request.raw, reply.raw, request.params.uid);
+      } catch (error: unknown) {
+        if (isInteractionClientError(error)) {
+          await reply.redirect(interactionPageUrl(request.params.uid), 303);
+          return;
+        }
+        throw error;
+      }
       setInteractionHeaders(reply);
       await reply.type('text/html; charset=utf-8').send(renderAutoForwardPage(abortion.redirectTo));
     },
@@ -224,6 +240,10 @@ export function registerInteractionRoutes(
           request.params.uid,
         );
       } catch (error: unknown) {
+        if (isInteractionClientError(error)) {
+          await reply.redirect(interactionPageUrl(request.params.uid), 303);
+          return;
+        }
         if (error instanceof SkinVerificationPlayerNotFoundError) {
           throw new ApiError(404, 'not_found', english.api.errors.minecraftPlayerNotFound, {
             cause: error,
@@ -373,13 +393,23 @@ export function registerInteractionRoutes(
     '/interaction/:uid/complete',
     { schema: interactionCompleteRouteSchema },
     async (request, reply): Promise<void> => {
-      const completion = await options.interactions.complete(
-        request.raw,
-        reply.raw,
-        request.params.uid,
-      );
+      let completion: OAuthInteractionCompletion;
+      try {
+        completion = await options.interactions.complete(
+          request.raw,
+          reply.raw,
+          request.params.uid,
+        );
+      } catch (error: unknown) {
+        if (isInteractionClientError(error)) {
+          await reply.redirect(interactionPageUrl(request.params.uid), 303);
+          return;
+        }
+        throw error;
+      }
       if (completion.status === 'expired') {
-        throw new ApiError(410, 'interaction_expired', english.api.errors.interactionExpired);
+        await reply.redirect(interactionPageUrl(request.params.uid), 303);
+        return;
       }
       if (completion.status === 'complete') {
         setInteractionHeaders(reply);
@@ -399,11 +429,20 @@ export function registerInteractionRoutes(
       if (options.interactions.switchAccount === undefined) {
         throw new ApiError(501, 'internal_error', english.api.errors.internal);
       }
-      const result = await options.interactions.switchAccount(
-        request.raw,
-        reply.raw,
-        request.params.uid,
-      );
+      let result: OAuthInteractionAbortion;
+      try {
+        result = await options.interactions.switchAccount(
+          request.raw,
+          reply.raw,
+          request.params.uid,
+        );
+      } catch (error: unknown) {
+        if (isInteractionClientError(error)) {
+          await reply.redirect(interactionPageUrl(request.params.uid), 303);
+          return;
+        }
+        throw error;
+      }
       setInteractionHeaders(reply);
       await reply.type('text/html; charset=utf-8').send(renderAutoForwardPage(result.redirectTo));
     },
@@ -444,6 +483,44 @@ async function resolveOwner(
     avatarUrl: `/api/avatars/${encodeURIComponent(ownerUuid)}/face?size=64&layers=all`,
     name: name ?? `${ownerUuid.slice(0, 8)}…`,
   };
+}
+
+// Browser navigation and form posts never see raw JSON envelopes: expired or
+// invalid interactions become a friendly page (or a redirect back to it),
+// while unexpected failures still reach the centralized JSON handler.
+export function isInteractionClientError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return (
+      error.code === 'bad_request' ||
+      error.code === 'interaction_expired' ||
+      error.code === 'interaction_invalid'
+    );
+  }
+  return error instanceof OAuthInteractionStateError || error instanceof VerificationStateError;
+}
+
+function interactionPageUrl(uid: string): string {
+  return `/interaction/${encodeURIComponent(uid)}`;
+}
+
+async function sendInteractionErrorPage(reply: FastifyReply, error: unknown): Promise<boolean> {
+  let kind: InteractionErrorKind | undefined;
+  let statusCode = 404;
+  if (error instanceof ApiError && error.code === 'interaction_expired') {
+    kind = 'expired';
+    statusCode = 410;
+  } else if (isInteractionClientError(error)) {
+    kind = 'invalid';
+  }
+  if (kind === undefined) {
+    return false;
+  }
+  setInteractionHeaders(reply);
+  await reply
+    .status(statusCode)
+    .type('text/html; charset=utf-8')
+    .send(renderInteractionErrorPage(kind));
+  return true;
 }
 
 function setInteractionHeaders(reply: FastifyReply): void {

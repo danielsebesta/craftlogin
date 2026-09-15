@@ -404,6 +404,8 @@ export const english = {
     forwardHeading: 'Continuing…',
     forwardHint: 'If you are not redirected automatically, continue manually.',
     forwardTitle: 'Continuing',
+    expiredHeading: 'This sign-in request expired',
+    goBack: 'Go back',
     heading: 'Sign in to',
     scopeIdentity: 'Your Minecraft identity (stable UUID)',
     scopeOffline: 'Stay signed in between visits',

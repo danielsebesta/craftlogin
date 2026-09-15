@@ -16,6 +16,7 @@ import {
   MicrosoftVerificationResolutionError,
 } from '../verification/microsoft-oauth-verification-service.js';
 import { ApiError } from './errors.js';
+import { isInteractionClientError } from './interaction-routes.js';
 import {
   renderMicrosoftOAuthResultPage,
   type MicrosoftOAuthResultPageInput,
@@ -74,11 +75,20 @@ export function registerMicrosoftOAuthRoutes(
       schema: microsoftOAuthStartRouteSchema,
     },
     async (request, reply): Promise<void> => {
-      const interaction = await options.interactions.prepareMicrosoft(
-        request.raw,
-        reply.raw,
-        request.params.uid,
-      );
+      let interaction: { readonly interactionId: string };
+      try {
+        interaction = await options.interactions.prepareMicrosoft(
+          request.raw,
+          reply.raw,
+          request.params.uid,
+        );
+      } catch (error: unknown) {
+        if (isInteractionClientError(error)) {
+          await reply.redirect(`/interaction/${encodeURIComponent(request.params.uid)}`, 303);
+          return;
+        }
+        throw error;
+      }
       const transaction = createTransaction(interaction.interactionId);
       void reply.setCookie(transaction.cookieName, encodeTransaction(transaction), {
         httpOnly: true,
@@ -99,10 +109,18 @@ export function registerMicrosoftOAuthRoutes(
   server.get<{ Querystring: MicrosoftCallbackQuery }>(
     CALLBACK_PATH,
     {
+      attachValidation: true,
       config: { rateLimit: microsoftVerificationRateLimit },
       schema: microsoftOAuthCallbackRouteSchema,
     },
     async (request, reply): Promise<void> => {
+      // Browser callback: malformed Microsoft querystrings become the friendly
+      // expired page, never a JSON envelope (the OpenAPI contract promises
+      // HTML for this route).
+      if (request.validationError !== undefined) {
+        await sendResultPage(reply, 400, { kind: 'expired' });
+        return;
+      }
       let transaction: StoredMicrosoftOAuthTransaction;
       try {
         transaction = readTransaction(
