@@ -43,7 +43,7 @@ main.container::before {
   left: calc(50% - 50vw);
   right: calc(50% - 50vw);
   z-index: -1;
-  height: clamp(24rem, calc(100vw * 530 / 690), 64rem);
+  height: min(calc(100vw * 530 / 690), 64rem);
   content: "";
   background-image: url("/assets/grid-fade.svg");
   background-repeat: no-repeat;
@@ -53,6 +53,15 @@ main.container::before {
   -webkit-mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
   mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
   pointer-events: none;
+}
+
+/* Narrow viewports would compute only a short strip from the asset ratio, so
+   the glow gets a taller minimum there and cover crops the sides instead of
+   leaving a seam. */
+@media (max-width: 34rem) {
+  main.container::before {
+    height: 24rem;
+  }
 }
 
 @media (forced-colors: active) {
