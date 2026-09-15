@@ -3,6 +3,8 @@ import { uiControlStyles } from './ui/controls.js';
 
 const landingPageStyles = `
 .landing-hero {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s4);
@@ -10,6 +12,30 @@ const landingPageStyles = `
   margin-inline: auto;
   padding-block: var(--s8) var(--s7);
   text-align: center;
+}
+
+/* Decorative grid glow behind the hero: the asset itself fades downward, and
+   the mask melts its lower edge into the page background. Content stays
+   legible because the layer sits behind the text at reduced opacity. */
+.landing-hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background-image: url("/assets/grid-fade.svg");
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: min(100%, 43rem) auto;
+  opacity: 0.55;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 85%);
+  mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 85%);
+  pointer-events: none;
+}
+
+@media (forced-colors: active) {
+  .landing-hero::before {
+    display: none;
+  }
 }
 
 .landing-hero h1 {
