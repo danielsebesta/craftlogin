@@ -3,8 +3,9 @@ import { createCanvas } from '@napi-rs/canvas';
 import type { SkinTexture } from './skin-texture.js';
 import type { AvatarLayers, AvatarRenderOptions, AvatarView, MinecraftSkinModel } from './types.js';
 
-// A front-biased isometric view keeps both limbs readable while still exposing
-// the top and right-hand cube faces, matching Minecraft inventory-style renders.
+// A front-biased isometric view for the floating head, exposing the top and
+// right-hand cube faces like Minecraft inventory-style renders. Bust and body
+// use a flat front projection instead, matching the iconic Minotar-style look.
 const CAMERA = normalize({ x: 0.65, y: 0.55, z: 1 });
 const SCREEN_RIGHT = normalize({ x: CAMERA.z, y: 0, z: -CAMERA.x });
 const SCREEN_UP = normalize(cross(CAMERA, SCREEN_RIGHT));
@@ -58,6 +59,9 @@ export class CanvasAvatarRenderer implements AvatarRenderer {
   ): Promise<Buffer> {
     if (options.view === 'face') {
       return await renderFace(texture, options.layers, options.size);
+    }
+    if (options.view === 'body' || options.view === 'bust') {
+      return await renderFlatFigure(texture, model, options.view, options.layers, options.size);
     }
 
     const scene = buildAvatarScene(options.view, model, options.layers, texture.legacy);
@@ -135,6 +139,77 @@ async function renderFace(
           : readOutputColor(output.data, (y * outputSize + x) * 4);
       const outputIndex = (y * outputSize + x) * 4;
       writeColor(output.data, outputIndex, color);
+    }
+  }
+
+  context.putImageData(output, 0, 0);
+  return await canvas.encode('png');
+}
+
+// Flat front projection for bust and body: the 16-texel-wide figure is laid out
+// exactly like the skin file (arms beside the torso, legs below it) and scaled
+// to fill the square canvas height. Axis-aligned texels stay crisp without any
+// supersampling, and the viewer-facing layout mirrors limb placement.
+function flatLayout(part: BodyPart, armWidth: number): { readonly x: number; readonly y: number } {
+  switch (part) {
+    case 'head':
+      return { x: armWidth, y: 0 };
+    case 'torso':
+      return { x: armWidth, y: 8 };
+    case 'rightArm':
+      return { x: 0, y: 8 };
+    case 'leftArm':
+      return { x: armWidth + 8, y: 8 };
+    case 'rightLeg':
+      return { x: armWidth, y: 20 };
+    case 'leftLeg':
+      return { x: armWidth + 4, y: 20 };
+  }
+}
+
+async function renderFlatFigure(
+  texture: SkinTexture,
+  model: MinecraftSkinModel,
+  view: 'body' | 'bust',
+  layers: AvatarLayers,
+  outputSize: number,
+): Promise<Buffer> {
+  const scene = buildAvatarScene(view, model, layers, texture.legacy);
+  const armWidth = model === 'slim' ? 3 : 4;
+  const figureWidth = 8 + armWidth * 2;
+  const figureHeight = view === 'body' ? 32 : 20;
+  const scale = outputSize / figureHeight;
+  const offsetX = (outputSize - figureWidth * scale) / 2;
+
+  const canvas = createCanvas(outputSize, outputSize);
+  const context = canvas.getContext('2d');
+  const output = context.createImageData(outputSize, outputSize);
+
+  for (const cuboid of scene) {
+    const layout = flatLayout(cuboid.part, armWidth);
+    const rect = textureRect(cuboid.texture, 'front');
+    const destX = offsetX + layout.x * scale;
+    const destY = layout.y * scale;
+    const startX = Math.max(0, Math.floor(destX));
+    const endX = Math.min(outputSize, Math.ceil(destX + rect.width * scale));
+    const startY = Math.max(0, Math.floor(destY));
+    const endY = Math.min(outputSize, Math.ceil(destY + rect.height * scale));
+    for (let y = startY; y < endY; y += 1) {
+      const sourceY = rect.v + Math.min(rect.height - 1, Math.floor((y - destY) / scale));
+      for (let x = startX; x < endX; x += 1) {
+        const sourceX = rect.u + Math.min(rect.width - 1, Math.floor((x - destX) / scale));
+        const sampled = readColor(texture, sourceX, sourceY);
+        const outputIndex = (y * outputSize + x) * 4;
+        if (cuboid.layer === 'base') {
+          writeColor(output.data, outputIndex, { ...sampled, alpha: 255 });
+        } else if (sampled.alpha !== 0) {
+          writeColor(
+            output.data,
+            outputIndex,
+            compositeColor(readOutputColor(output.data, outputIndex), sampled),
+          );
+        }
+      }
     }
   }
 
