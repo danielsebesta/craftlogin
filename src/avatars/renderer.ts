@@ -68,15 +68,22 @@ export class CanvasAvatarRenderer implements AvatarRenderer {
     // Use the all-layers envelope for both modes so switching layers never
     // changes the camera framing and the outer cuboid visibly extends outward.
     const framingScene = buildAvatarScene(options.view, model, 'all', texture.legacy);
-    const projection = createProjection(framingScene, options.size);
+    // The isometric scene rasterizes at double resolution and averages each
+    // 2x2 block back down. Together with per-pixel supersampling this gives
+    // truly smooth cube edges; interior texels still use nearest-neighbor
+    // lookup, so only geometric coverage is ever blended.
+    const hiresSize = options.size * RENDER_UPSCALE;
+    const projection = createProjection(framingScene, hiresSize);
     const faces = scene.flatMap((cuboid, cuboidIndex): readonly ProjectedFace[] =>
       projectCuboid(cuboid, projection, cuboidIndex * 3),
     );
 
     const canvas = createCanvas(options.size, options.size);
     const context = canvas.getContext('2d');
+    const hires = context.createImageData(hiresSize, hiresSize);
+    rasterizeFaces(texture, faces, hires.data, hiresSize);
     const output = context.createImageData(options.size, options.size);
-    rasterizeFaces(texture, faces, output.data, options.size);
+    downsampleBox(hires.data, hiresSize, output.data, options.size);
     context.putImageData(output, 0, 0);
 
     return await canvas.encode('png');
@@ -475,6 +482,7 @@ interface FaceSample {
 // Interior texels stay crisp because every sub-sample keeps nearest-neighbor
 // texture lookup; only geometric coverage is averaged.
 const SUPERSAMPLE_GRID = 3;
+const RENDER_UPSCALE = 2;
 
 function rasterizeFaces(
   texture: SkinTexture,
@@ -571,6 +579,43 @@ function sampleFace(
       vertical * (verticalDepth - originDepth),
     order: face.order,
   };
+}
+
+function downsampleBox(
+  source: Uint8ClampedArray,
+  sourceSize: number,
+  target: Uint8ClampedArray,
+  targetSize: number,
+): void {
+  const ratio = sourceSize / targetSize;
+  for (let y = 0; y < targetSize; y += 1) {
+    for (let x = 0; x < targetSize; x += 1) {
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let alpha = 0;
+      for (let blockY = 0; blockY < ratio; blockY += 1) {
+        for (let blockX = 0; blockX < ratio; blockX += 1) {
+          const sourceIndex = ((y * ratio + blockY) * sourceSize + (x * ratio + blockX)) * 4;
+          const weight = (source[sourceIndex + 3] ?? 0) / 255;
+          red += (source[sourceIndex] ?? 0) * weight;
+          green += (source[sourceIndex + 1] ?? 0) * weight;
+          blue += (source[sourceIndex + 2] ?? 0) * weight;
+          alpha += weight;
+        }
+      }
+      const samples = ratio * ratio;
+      const pixelAlpha = alpha / samples;
+      if (pixelAlpha === 0) {
+        continue;
+      }
+      const targetIndex = (y * targetSize + x) * 4;
+      target[targetIndex] = Math.round(red / samples / pixelAlpha);
+      target[targetIndex + 1] = Math.round(green / samples / pixelAlpha);
+      target[targetIndex + 2] = Math.round(blue / samples / pixelAlpha);
+      target[targetIndex + 3] = Math.round(pixelAlpha * 255);
+    }
+  }
 }
 
 function compositeSamples(samples: readonly FaceSample[]): Color {

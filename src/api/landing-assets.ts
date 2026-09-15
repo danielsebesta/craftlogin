@@ -238,6 +238,12 @@ main.container::before {
   image-rendering: pixelated;
 }
 
+/* The isometric head is a smooth 3D render, so it scales with normal
+   interpolation. Flat 2D views stay nearest-neighbor above. */
+.avatar-card img.avatar-smooth {
+  image-rendering: auto;
+}
+
 .avatar-card code {
   font-size: var(--t-xs);
   overflow-wrap: anywhere;
