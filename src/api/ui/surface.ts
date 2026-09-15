@@ -93,15 +93,12 @@ export const signInSurfaceStyles = `
   align-items: baseline;
 }
 
-.consent-check {
+.consent-marker {
   flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--bg);
-  text-align: center;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-top: 0.45rem;
   background: var(--accent);
-  clip-path: circle(50%);
-  font-family: var(--font-mono);
 }
 
 .consent-verify,

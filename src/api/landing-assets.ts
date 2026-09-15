@@ -141,10 +141,6 @@ const landingPageStyles = `
   text-align: right;
 }
 
-.landing-cta {
-  padding-block: var(--s7) var(--s8);
-}
-
 @media (min-width: 48rem) {
   .landing-steps {
     grid-template-columns: repeat(3, minmax(0, 1fr));

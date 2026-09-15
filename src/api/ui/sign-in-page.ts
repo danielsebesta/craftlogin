@@ -111,9 +111,9 @@ export interface SignInPageInput {
 
 function renderPermission(permission: ConsentPermission): string {
   if (permission.kind === 'code') {
-    return `<li><span class="consent-check" aria-hidden="true">✓</span><code>${escapeHtml(permission.code)}</code></li>`;
+    return `<li><span class="consent-marker" aria-hidden="true"></span><code>${escapeHtml(permission.code)}</code></li>`;
   }
-  return `<li><span class="consent-check" aria-hidden="true">✓</span><span>${escapeHtml(permission.text)}</span></li>`;
+  return `<li><span class="consent-marker" aria-hidden="true"></span><span>${escapeHtml(permission.text)}</span></li>`;
 }
 
 function renderFormAction(cancel: SignInCancel | undefined, className?: string): string {

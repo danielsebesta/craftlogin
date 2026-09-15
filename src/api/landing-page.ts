@@ -140,15 +140,7 @@ ${sections
         ${section.body}
       </section>`,
   )
-  .join('')}
-      <section class="landing-section landing-cta" aria-labelledby="cta-heading">
-        <h2 id="cta-heading">${escapeHtml(strings.callToAction.heading)}</h2>
-        <p class="section-intro">${escapeHtml(strings.callToAction.text)}</p>
-        <div class="button-row landing-actions">
-          <a class="button" href="/developers">${escapeHtml(strings.hero.consoleAction)}</a>
-          ${secondaryAction}
-        </div>
-      </section>`,
+  .join('')}`,
     description: strings.hero.lead,
     footer: [`${strings.navigation.brand} · ${strings.footer.license}`],
     header: {

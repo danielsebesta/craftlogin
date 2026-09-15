@@ -199,7 +199,7 @@ export const english = {
       empty: 'No applications yet. Register one to get a client ID.',
       formErrorNotice: 'Check the application name and redirect URIs, then try again.',
       nameLabel: 'Application name',
-      namePlaceholder: 'Community map',
+      namePlaceholder: 'Example app',
       newHeading: 'New application',
       ownerLabel: 'Owner UUID',
       publicHelp: 'For browser, desktop, mobile, or other clients that cannot keep a secret.',
@@ -259,10 +259,6 @@ export const english = {
   landing: {
     affiliation:
       'NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
-    callToAction: {
-      heading: 'Ready to add it?',
-      text: 'Register a client in the Console, then send your first authorization request.',
-    },
     claims: {
       claimHeading: 'Claim',
       detailHeading: 'Detail',
@@ -280,8 +276,8 @@ export const english = {
         },
         {
           claim: 'picture',
-          detail: 'A head rendered from the current Mojang skin.',
-          value: 'https://craftlogin.com/avatar/123e4567-e89b-42d3-a456-426614174000',
+          detail: 'Head render at `/avatar/{uuid}` from the current Mojang skin.',
+          value: '/avatar/123e4567-e89b-42d3-a456-426614174000',
         },
       ],
       scopes: [
@@ -290,7 +286,7 @@ export const english = {
       ],
       scopesHeading: 'Scopes',
       valueHeading: 'Example',
-      text: 'Every sign-in returns the same three values, whatever the player is called now.',
+      text: 'The same three claims on every sign-in. `sub` is stable across username changes.',
     },
     endpoints: {
       heading: 'Endpoints',
@@ -300,7 +296,7 @@ export const english = {
         { detail: 'Read the OpenID Connect claims.', path: '/oauth2/userinfo' },
         { detail: 'Check a token from a resource server.', path: '/oauth2/introspect' },
         { detail: 'End the session at the provider.', path: '/oauth2/logout' },
-        { detail: 'Public keys that verify our tokens.', path: '/oauth2/jwks' },
+        { detail: 'Published signing keys for token verification.', path: '/oauth2/jwks' },
         { detail: 'Invalidate a token.', path: '/oauth2/revoke' },
       ],
     },
@@ -313,8 +309,8 @@ export const english = {
       items: [
         {
           detail:
-            'Send a normal authorization request with S256 PKCE. CraftLogin answers with one server address to show the player.',
-          title: 'Your app starts the sign-in',
+            'Redirect the player with S256 PKCE. CraftLogin answers with one single-use server address valid for five minutes.',
+          title: 'Redirect the player',
         },
         {
           detail:
