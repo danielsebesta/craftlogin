@@ -24,12 +24,20 @@ export const english = {
         appDelete: { summary: 'Delete an owned OAuth client' },
         appList: { summary: 'List manageable OAuth clients' },
         avatarBody: {
-          description: 'Render the full Minecraft player model from its current signed skin.',
+          description: 'Render a flat front view of the full player from its current signed skin.',
           summary: 'Render a Minecraft body',
         },
         avatarBust: {
-          description: 'Render the Minecraft head, torso, and arms from its current signed skin.',
+          description: 'Render a flat front view of the head, torso, and arms.',
           summary: 'Render a Minecraft bust',
+        },
+        avatarCape: {
+          description: "Return the account's current cape texture, if the player wears one.",
+          summary: 'Get a Minecraft cape',
+        },
+        avatarElytra: {
+          description: 'Return the elytra wing texture, which matches the worn cape texture.',
+          summary: 'Get a Minecraft elytra texture',
         },
         avatarFace: {
           description:
@@ -37,8 +45,13 @@ export const english = {
           summary: 'Render a Minecraft face',
         },
         avatarHead: {
-          description: 'Render a three-dimensional Minecraft head from its current signed skin.',
+          description: 'Render a flat front-facing head from its current signed skin.',
           summary: 'Render a Minecraft head',
+        },
+        avatarProcessedSkin: {
+          description:
+            'Return the normalized 64x64 skin: legacy layouts converted, base layers opaque, fully-opaque overlays cleared.',
+          summary: 'Get a normalized Minecraft skin',
         },
         avatarSkin: {
           description: 'Return the current signed Mojang skin for a Minecraft UUID.',

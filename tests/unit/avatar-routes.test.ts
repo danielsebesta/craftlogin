@@ -29,8 +29,21 @@ const found: AvatarLookupResult = {
 class RecordingAvatars implements AvatarService {
   public rawResult: AvatarLookupResult = found;
   public renderResult: AvatarLookupResult = found;
+  public capeResult: AvatarLookupResult = found;
+  public processedResult: AvatarLookupResult = found;
   public readonly rawUuids: string[] = [];
   public readonly renders: { options: AvatarRenderOptions; uuid: string }[] = [];
+  public readonly textureUuids: { uuid: string; view: string }[] = [];
+
+  public findCape(uuid: string): Promise<AvatarLookupResult> {
+    this.textureUuids.push({ uuid, view: 'cape' });
+    return Promise.resolve(this.capeResult);
+  }
+
+  public findProcessedSkin(uuid: string): Promise<AvatarLookupResult> {
+    this.textureUuids.push({ uuid, view: 'processed-skin' });
+    return Promise.resolve(this.processedResult);
+  }
 
   public findRawSkin(uuid: string): Promise<AvatarLookupResult> {
     this.rawUuids.push(uuid);
@@ -85,8 +98,21 @@ describe('avatar routes', (): void => {
       method: 'GET',
       url: `/api/avatars/${playerUuid}/body?size=32`,
     });
+    const processed = await server.inject({
+      headers: { origin: 'https://anonymous.example' },
+      method: 'GET',
+      url: `/api/avatars/${playerUuid}/processed-skin`,
+    });
+    const cape = await server.inject({
+      method: 'GET',
+      url: `/api/avatars/${playerUuid}/cape`,
+    });
+    const elytra = await server.inject({
+      method: 'GET',
+      url: `/api/avatars/${playerUuid}/elytra`,
+    });
 
-    for (const response of [raw, face, head, bust, body]) {
+    for (const response of [raw, face, head, bust, body, processed, cape, elytra]) {
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-type']).toContain('image/png');
       expect(response.headers.etag).toBe('"avatar-etag"');
@@ -95,7 +121,13 @@ describe('avatar routes', (): void => {
       );
     }
     expect(raw.headers['access-control-allow-origin']).toBe('*');
+    expect(processed.headers['access-control-allow-origin']).toBe('*');
     expect(avatars.rawUuids).toEqual([playerUuid]);
+    expect(avatars.textureUuids).toEqual([
+      { uuid: playerUuid, view: 'processed-skin' },
+      { uuid: playerUuid, view: 'cape' },
+      { uuid: playerUuid, view: 'cape' },
+    ]);
     expect(avatars.renders).toEqual([
       { options: { layers: 'all', size: 128, view: 'face' }, uuid: playerUuid },
       { options: { layers: 'all', size: 128, view: 'head' }, uuid: playerUuid },
@@ -232,6 +264,15 @@ describe('avatar routes', (): void => {
       method: 'GET',
       url: `/api/avatars/${playerUuid}/skin?size=128`,
     });
+    avatars.capeResult = { status: 'not-found' };
+    const bareCape = await server.inject({
+      method: 'GET',
+      url: `/api/avatars/${playerUuid}/cape`,
+    });
+    const processedQuery = await server.inject({
+      method: 'GET',
+      url: `/api/avatars/${playerUuid}/processed-skin?size=128`,
+    });
 
     expect(missing.statusCode).toBe(404);
     expect(missing.json()).toEqual({
@@ -248,6 +289,8 @@ describe('avatar routes', (): void => {
     expect(badSize.headers['access-control-allow-origin']).toBe('*');
     expect(badUuid.statusCode).toBe(400);
     expect(unexpectedQuery.statusCode).toBe(400);
+    expect(bareCape.statusCode).toBe(404);
+    expect(processedQuery.statusCode).toBe(400);
   });
 
   async function buildServer(avatars: AvatarService, skins: SkinStore): Promise<FastifyInstance> {

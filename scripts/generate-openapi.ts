@@ -48,7 +48,12 @@ async function generate(): Promise<void> {
     },
     microsoftVerification: { createAuthorizationUrl: unavailable, verify: unavailable },
     minecraft: {
-      avatars: { findRawSkin: unavailable, render: unavailable },
+      avatars: {
+        findCape: unavailable,
+        findProcessedSkin: unavailable,
+        findRawSkin: unavailable,
+        render: unavailable,
+      },
       players: { findProfileById: unavailable, findProfileByName: unavailable },
       skins: { fetchSkin: unavailable },
     },

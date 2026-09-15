@@ -7,9 +7,10 @@ import type { AvatarRenderOptions, MinecraftSkinModel } from '../../src/avatars/
 import type { CachedValue, MinecraftCache } from '../../src/mojang/cache.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
 import type { SkinStore } from '../../src/mojang/skin-store.js';
-import { createSkinPng } from './support/skin-fixture.js';
+import { createSkinPng, decodePng, readFixturePixel } from './support/skin-fixture.js';
 
 const playerUuid = '853c80ef-3c37-49fd-aa49-938b674adae6';
+const capeHash = '9c8e7d6b5a4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e';
 const secondUuid = '123e4567-e89b-42d3-a456-426614174000';
 const textureHash = '7fd9ba42a7c81eeea22f1524271ae85a8e045ce0af5a6ae16c6406ae917e68b5';
 
@@ -147,6 +148,75 @@ describe('CachedAvatarService', (): void => {
     expect(failedCache.writes).toEqual([]);
   });
 
+  it('serves processed skins normalized to the modern opaque-base layout', async (): Promise<void> => {
+    const skin = await createSkinPng(
+      [
+        {
+          color: { blue: 20, green: 20, red: 220 },
+          height: 8,
+          width: 8,
+          x: 8,
+          y: 8,
+        },
+        {
+          color: { alpha: 64, blue: 20, green: 20, red: 220 },
+          height: 1,
+          width: 1,
+          x: 16,
+          y: 8,
+        },
+      ],
+      32,
+    );
+    const cache = new RecordingCache();
+    const service = new CachedAvatarService({
+      cache,
+      players: playersWithTexture(),
+      renderer: new RecordingRenderer(),
+      skins: skinStore(skin),
+    });
+
+    const result = await service.findProcessedSkin(playerUuid);
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') {
+      throw new Error('Expected a processed skin');
+    }
+    const image = await decodePng(result.image.body);
+    expect({ height: image.height, width: image.width }).toEqual({ height: 64, width: 64 });
+    expect(readFixturePixel(image, 8, 8)).toEqual({ alpha: 255, blue: 20, green: 20, red: 220 });
+    expect(readFixturePixel(image, 16, 8).alpha).toBe(255);
+    expect(readFixturePixel(image, 40, 8).alpha).toBe(0);
+    expect(cache.writes).toEqual([
+      { key: `avatar-processed:${textureHash}`, ttlSeconds: 24 * 60 * 60 },
+    ]);
+  });
+
+  it('serves capes and reports capeless accounts as not-found', async (): Promise<void> => {
+    const skin = await createSkinPng([]);
+    const cache = new RecordingCache();
+    const caped = new CachedAvatarService({
+      cache,
+      players: playersWithCape(),
+      renderer: new RecordingRenderer(),
+      skins: skinStore(skin),
+    });
+    const bare = new CachedAvatarService({
+      cache: new RecordingCache(),
+      players: playersWithTexture(),
+      renderer: new RecordingRenderer(),
+      skins: skinStore(skin),
+    });
+
+    const result = await caped.findCape(playerUuid);
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') {
+      throw new Error('Expected a cape');
+    }
+    expect(result.image.body).toEqual(skin);
+    expect(cache.writes).toEqual([{ key: `avatar-cape:${capeHash}`, ttlSeconds: 24 * 60 * 60 }]);
+    await expect(bare.findCape(playerUuid)).resolves.toEqual({ status: 'not-found' });
+  });
+
   it('rejects unsupported skin dimensions before native decoding or rendering', async (): Promise<void> => {
     const unsupported = Buffer.from(await createSkinPng([]));
     unsupported.writeUInt32BE(32, 16);
@@ -172,6 +242,19 @@ function playersWithTexture(): MinecraftPlayerLookup {
       Promise.resolve({
         texture: { hash: textureHash, model: 'slim' },
         username: 'FixturePlayer',
+        uuid,
+      }),
+    findProfileByName: (): Promise<undefined> => Promise.resolve(undefined),
+  };
+}
+
+function playersWithCape(): MinecraftPlayerLookup {
+  return {
+    findProfileById: (uuid) =>
+      Promise.resolve({
+        cape: { hash: capeHash },
+        texture: { hash: textureHash, model: 'classic' },
+        username: 'CapedPlayer',
         uuid,
       }),
     findProfileByName: (): Promise<undefined> => Promise.resolve(undefined),

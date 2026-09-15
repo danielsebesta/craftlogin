@@ -768,6 +768,9 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).toHaveProperty('/api/apps');
     expect(parsed.paths).toHaveProperty('/oauth2/token');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/skin');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/processed-skin');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/cape');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/elytra');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/face');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/head');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/bust');
@@ -993,6 +996,9 @@ describe('CraftLogin API server', (): void => {
       issuer: 'https://craftlogin.com',
       minecraft: {
         avatars: {
+          findCape: (): Promise<never> => Promise.reject(new Error('Unexpected cape lookup')),
+          findProcessedSkin: (): Promise<never> =>
+            Promise.reject(new Error('Unexpected processed skin lookup')),
           findRawSkin: (): Promise<{
             image: { body: Buffer; contentType: 'image/png'; etag: string };
             status: 'found';

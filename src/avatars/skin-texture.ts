@@ -57,6 +57,24 @@ export function inspectSkinPng(body: Buffer): SkinPngHeader {
   return { height, legacy: height === 32, width };
 }
 
+// Overlay blocks of the modern 64x64 layout. Legacy skins predate limb
+// overlays, so only the hat block applies to them.
+const SKIN_OVERLAY_REGIONS: readonly AlphaRegion[] = [
+  { height: 16, width: 32, x: 32, y: 0 },
+  { height: 16, width: 24, x: 16, y: 32 },
+  { height: 16, width: 16, x: 40, y: 32 },
+  { height: 16, width: 16, x: 48, y: 48 },
+  { height: 16, width: 16, x: 0, y: 32 },
+  { height: 16, width: 16, x: 0, y: 48 },
+];
+
+export function isPngImage(body: Buffer): boolean {
+  return (
+    body.length >= PNG_SIGNATURE.length &&
+    body.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  );
+}
+
 export async function decodeSkinTexture(body: Buffer): Promise<SkinTexture> {
   const header = inspectSkinPng(body);
   let image: Image;
@@ -108,6 +126,34 @@ function clearOpaqueCompatibilityLayers(pixels: Uint8ClampedArray, legacy: boole
       }
     }
   }
+}
+
+// Re-encode a decoded texture the way the vanilla client treats it: legacy
+// skins arrive converted to the modern layout by decodeSkinTexture, base
+// layers are fully opaque, and overlay translucency is preserved.
+export async function encodeProcessedSkin(texture: SkinTexture): Promise<Buffer> {
+  const regions = texture.legacy ? SKIN_OVERLAY_REGIONS.slice(0, 1) : SKIN_OVERLAY_REGIONS;
+  const pixels = new Uint8ClampedArray(texture.pixels);
+  for (let y = 0; y < SKIN_WIDTH; y += 1) {
+    for (let x = 0; x < SKIN_WIDTH; x += 1) {
+      if (!isOverlayPixel(regions, x, y)) {
+        pixels[(y * SKIN_WIDTH + x) * 4 + 3] = 255;
+      }
+    }
+  }
+  const canvas = createCanvas(SKIN_WIDTH, SKIN_WIDTH);
+  const context = canvas.getContext('2d');
+  const output = context.createImageData(SKIN_WIDTH, SKIN_WIDTH);
+  output.data.set(pixels);
+  context.putImageData(output, 0, 0);
+  return Buffer.from(await canvas.encode('png'));
+}
+
+function isOverlayPixel(regions: readonly AlphaRegion[], x: number, y: number): boolean {
+  return regions.some(
+    (region): boolean =>
+      x >= region.x && x < region.x + region.width && y >= region.y && y < region.y + region.height,
+  );
 }
 
 interface AlphaRegion {

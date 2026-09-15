@@ -3,16 +3,8 @@ import { createCanvas } from '@napi-rs/canvas';
 import type { SkinTexture } from './skin-texture.js';
 import type { AvatarLayers, AvatarRenderOptions, AvatarView, MinecraftSkinModel } from './types.js';
 
-// A front-biased isometric view keeps both limbs readable while still exposing
-// the top and right-hand cube faces, matching Minecraft inventory-style renders.
-const CAMERA = normalize({ x: 0.65, y: 0.55, z: 1 });
-const SCREEN_RIGHT = normalize({ x: CAMERA.z, y: 0, z: -CAMERA.x });
-const SCREEN_UP = normalize(cross(CAMERA, SCREEN_RIGHT));
-const OUTPUT_PADDING_RATIO = 0.08;
-
 type AvatarLayer = 'base' | 'outer';
 type BodyPart = 'head' | 'leftArm' | 'leftLeg' | 'rightArm' | 'rightLeg' | 'torso';
-type VisibleFace = 'front' | 'right' | 'top';
 
 interface Vector3 {
   readonly x: number;
@@ -56,32 +48,17 @@ export class CanvasAvatarRenderer implements AvatarRenderer {
     model: MinecraftSkinModel,
     options: AvatarRenderOptions,
   ): Promise<Buffer> {
+    // Every view is a flat front projection with nearest-neighbor texels: the
+    // face fills the canvas, the head is a plain front head, and bust/body lay
+    // the figure out exactly like the skin file. Nothing here is perspective
+    // projected, so edges never need antialiasing.
     if (options.view === 'face') {
       return await renderFace(texture, options.layers, options.size);
     }
-    const scene = buildAvatarScene(options.view, model, options.layers, texture.legacy);
-    // Use the all-layers envelope for both modes so switching layers never
-    // changes the camera framing and the outer cuboid visibly extends outward.
-    const framingScene = buildAvatarScene(options.view, model, 'all', texture.legacy);
-    // The isometric scene rasterizes at double resolution and averages each
-    // 2x2 block back down. Together with per-pixel supersampling this gives
-    // truly smooth cube edges; interior texels still use nearest-neighbor
-    // lookup, so only geometric coverage is ever blended.
-    const hiresSize = options.size * RENDER_UPSCALE;
-    const projection = createProjection(framingScene, hiresSize);
-    const faces = scene.flatMap((cuboid, cuboidIndex): readonly ProjectedFace[] =>
-      projectCuboid(cuboid, projection, cuboidIndex * 3),
-    );
-
-    const canvas = createCanvas(options.size, options.size);
-    const context = canvas.getContext('2d');
-    const hires = context.createImageData(hiresSize, hiresSize);
-    rasterizeFaces(texture, faces, hires.data, hiresSize);
-    const output = context.createImageData(options.size, options.size);
-    downsampleBox(hires.data, hiresSize, output.data, options.size);
-    context.putImageData(output, 0, 0);
-
-    return await canvas.encode('png');
+    if (options.view === 'head') {
+      return await renderFlatHead(texture, options.layers, options.size);
+    }
+    return await renderFlatFigure(texture, model, options.view, options.layers, options.size);
   }
 }
 
@@ -119,10 +96,10 @@ async function renderFace(
         writeColor(
           output.data,
           (shadowY * outputSize + shadowX) * 4,
-          compositeColor(readOutputColor(output.data, (shadowY * outputSize + shadowX) * 4), {
-            ...shadeColor(overlay, 'right'),
-            alpha: overlay.alpha,
-          }),
+          compositeColor(
+            readOutputColor(output.data, (shadowY * outputSize + shadowX) * 4),
+            overlay,
+          ),
         );
       }
     }
@@ -146,6 +123,132 @@ async function renderFace(
 
   context.putImageData(output, 0, 0);
   return await canvas.encode('png');
+}
+
+async function renderFlatHead(
+  texture: SkinTexture,
+  layers: AvatarLayers,
+  outputSize: number,
+): Promise<Buffer> {
+  const canvas = createCanvas(outputSize, outputSize);
+  const context = canvas.getContext('2d');
+  const output = context.createImageData(outputSize, outputSize);
+  const scale = outputSize / 8;
+  paintFlatRect(
+    output.data,
+    outputSize,
+    texture,
+    { height: 8, u: 8, v: 8, width: 8 },
+    0,
+    0,
+    scale,
+    true,
+  );
+  if (layers === 'all') {
+    paintFlatRect(
+      output.data,
+      outputSize,
+      texture,
+      { height: 8, u: 40, v: 8, width: 8 },
+      0,
+      0,
+      scale,
+      false,
+    );
+  }
+  context.putImageData(output, 0, 0);
+  return await canvas.encode('png');
+}
+
+// Flat front projection for bust and body: the figure is laid out exactly like
+// the skin file (arms beside the torso, legs below it) and scaled to fill the
+// square canvas height. Axis-aligned texels stay crisp, and the viewer-facing
+// layout mirrors limb placement.
+function flatLayout(part: BodyPart, armWidth: number): { readonly x: number; readonly y: number } {
+  switch (part) {
+    case 'head':
+      return { x: armWidth, y: 0 };
+    case 'torso':
+      return { x: armWidth, y: 8 };
+    case 'rightArm':
+      return { x: 0, y: 8 };
+    case 'leftArm':
+      return { x: armWidth + 8, y: 8 };
+    case 'rightLeg':
+      return { x: armWidth, y: 20 };
+    case 'leftLeg':
+      return { x: armWidth + 4, y: 20 };
+  }
+}
+
+async function renderFlatFigure(
+  texture: SkinTexture,
+  model: MinecraftSkinModel,
+  view: 'body' | 'bust',
+  layers: AvatarLayers,
+  outputSize: number,
+): Promise<Buffer> {
+  const scene = buildAvatarScene(view, model, layers, texture.legacy);
+  const armWidth = model === 'slim' ? 3 : 4;
+  const figureWidth = 8 + armWidth * 2;
+  const figureHeight = view === 'body' ? 32 : 20;
+  const scale = outputSize / figureHeight;
+  const offsetX = (outputSize - figureWidth * scale) / 2;
+
+  const canvas = createCanvas(outputSize, outputSize);
+  const context = canvas.getContext('2d');
+  const output = context.createImageData(outputSize, outputSize);
+
+  for (const cuboid of scene) {
+    const layout = flatLayout(cuboid.part, armWidth);
+    const rect = frontTextureRect(cuboid.texture);
+    paintFlatRect(
+      output.data,
+      outputSize,
+      texture,
+      rect,
+      offsetX + layout.x * scale,
+      layout.y * scale,
+      scale,
+      cuboid.layer === 'base',
+    );
+  }
+
+  context.putImageData(output, 0, 0);
+  return await canvas.encode('png');
+}
+
+function paintFlatRect(
+  output: Uint8ClampedArray,
+  outputSize: number,
+  texture: SkinTexture,
+  rect: TextureRect,
+  destX: number,
+  destY: number,
+  scale: number,
+  base: boolean,
+): void {
+  const startX = Math.max(0, Math.floor(destX));
+  const endX = Math.min(outputSize, Math.ceil(destX + rect.width * scale));
+  const startY = Math.max(0, Math.floor(destY));
+  const endY = Math.min(outputSize, Math.ceil(destY + rect.height * scale));
+  for (let y = startY; y < endY; y += 1) {
+    const sourceY = rect.v + Math.min(rect.height - 1, Math.floor((y - destY) / scale));
+    for (let x = startX; x < endX; x += 1) {
+      const sourceX = rect.u + Math.min(rect.width - 1, Math.floor((x - destX) / scale));
+      const sampled = readColor(texture, sourceX, sourceY);
+      const outputIndex = (y * outputSize + x) * 4;
+      if (base) {
+        writeColor(output, outputIndex, { ...sampled, alpha: 255 });
+      } else if (sampled.alpha !== 0) {
+        writeColor(
+          output,
+          outputIndex,
+          compositeColor(readOutputColor(output, outputIndex), sampled),
+        );
+      }
+    }
+  }
 }
 
 function compositeColor(base: Color, overlay: Color): Color {
@@ -302,268 +405,11 @@ function outerTextureOrigin(part: BodyPart): { readonly u: number; readonly v: n
   }
 }
 
-interface ScreenPoint {
-  readonly x: number;
-  readonly y: number;
-}
-
-interface Projection {
-  project(point: Vector3): ScreenPoint;
-}
-
-function createProjection(scene: readonly AvatarCuboid[], outputSize: number): Projection {
-  const projectedCorners = scene.flatMap((cuboid): readonly ScreenPoint[] =>
-    cuboidCorners(cuboid).map(projectPoint),
-  );
-  const xValues = projectedCorners.map((point): number => point.x);
-  const yValues = projectedCorners.map((point): number => point.y);
-  const minX = Math.min(...xValues);
-  const maxX = Math.max(...xValues);
-  const minY = Math.min(...yValues);
-  const maxY = Math.max(...yValues);
-  const padding = outputSize * OUTPUT_PADDING_RATIO;
-  const drawableSize = outputSize - padding * 2;
-  const scale = Math.min(drawableSize / (maxX - minX), drawableSize / (maxY - minY));
-  const offsetX = (outputSize - (maxX - minX) * scale) / 2 - minX * scale;
-  const offsetY = (outputSize - (maxY - minY) * scale) / 2 - minY * scale;
-
-  return {
-    project: (point): ScreenPoint => {
-      const projected = projectPoint(point);
-      return { x: projected.x * scale + offsetX, y: projected.y * scale + offsetY };
-    },
-  };
-}
-
-function cuboidCorners(cuboid: AvatarCuboid): readonly Vector3[] {
-  const halfWidth = cuboid.size.width / 2;
-  const halfHeight = cuboid.size.height / 2;
-  const halfDepth = cuboid.size.depth / 2;
-  return [-1, 1].flatMap((xSign): readonly Vector3[] =>
-    [-1, 1].flatMap((ySign): readonly Vector3[] =>
-      [-1, 1].map((zSign): Vector3 => ({
-        x: cuboid.center.x + xSign * halfWidth,
-        y: cuboid.center.y + ySign * halfHeight,
-        z: cuboid.center.z + zSign * halfDepth,
-      })),
-    ),
-  );
-}
-
-function projectPoint(point: Vector3): ScreenPoint {
-  return { x: dot(point, SCREEN_RIGHT), y: -dot(point, SCREEN_UP) };
-}
-
 interface Color {
   readonly alpha: number;
   readonly blue: number;
   readonly green: number;
   readonly red: number;
-}
-
-interface ProjectedFace {
-  readonly cuboid: AvatarCuboid;
-  readonly depths: readonly [number, number, number, number];
-  readonly face: VisibleFace;
-  readonly order: number;
-  readonly points: readonly [ScreenPoint, ScreenPoint, ScreenPoint, ScreenPoint];
-  readonly texture: TextureRect;
-}
-
-function projectCuboid(
-  cuboid: AvatarCuboid,
-  projection: Projection,
-  startingOrder: number,
-): readonly ProjectedFace[] {
-  const faces: readonly VisibleFace[] = ['top', 'right', 'front'];
-  return faces.map((face, faceIndex): ProjectedFace => {
-    const worldPoints = faceCorners(cuboid, face);
-    const [first, second, third, fourth] = worldPoints;
-    return {
-      cuboid,
-      depths: [dot(first, CAMERA), dot(second, CAMERA), dot(third, CAMERA), dot(fourth, CAMERA)],
-      face,
-      order: startingOrder + faceIndex,
-      points: [
-        projection.project(first),
-        projection.project(second),
-        projection.project(third),
-        projection.project(fourth),
-      ],
-      texture: textureRect(cuboid.texture, face),
-    };
-  });
-}
-
-interface FaceSample {
-  readonly color: Color;
-  readonly depth: number;
-  readonly order: number;
-}
-
-// Sub-pixel samples per axis. Nine coverage samples per output pixel smooth the
-// projected cuboid edges the way launchers downscale a large off-screen render.
-// Interior texels stay crisp because every sub-sample keeps nearest-neighbor
-// texture lookup; only geometric coverage is averaged.
-const SUPERSAMPLE_GRID = 3;
-const RENDER_UPSCALE = 2;
-
-function rasterizeFaces(
-  texture: SkinTexture,
-  faces: readonly ProjectedFace[],
-  output: Uint8ClampedArray,
-  outputSize: number,
-): void {
-  const samples: FaceSample[] = [];
-  for (let y = 0; y < outputSize; y += 1) {
-    for (let x = 0; x < outputSize; x += 1) {
-      // Accumulate premultiplied color so partially covered edges blend
-      // against transparency instead of darkening toward black.
-      let red = 0;
-      let green = 0;
-      let blue = 0;
-      let alpha = 0;
-      for (let subY = 0; subY < SUPERSAMPLE_GRID; subY += 1) {
-        for (let subX = 0; subX < SUPERSAMPLE_GRID; subX += 1) {
-          samples.length = 0;
-          const sampleX = x + (subX + 0.5) / SUPERSAMPLE_GRID;
-          const sampleY = y + (subY + 0.5) / SUPERSAMPLE_GRID;
-          for (const face of faces) {
-            const sample = sampleFace(texture, face, sampleX, sampleY);
-            if (sample !== undefined) {
-              samples.push(sample);
-            }
-          }
-          if (samples.length === 0) {
-            continue;
-          }
-          samples.sort((left, right): number =>
-            left.depth === right.depth ? left.order - right.order : left.depth - right.depth,
-          );
-          const color = compositeSamples(samples);
-          const weight = color.alpha / 255;
-          red += color.red * weight;
-          green += color.green * weight;
-          blue += color.blue * weight;
-          alpha += weight;
-        }
-      }
-      const coverage = SUPERSAMPLE_GRID * SUPERSAMPLE_GRID;
-      const pixelAlpha = alpha / coverage;
-      if (pixelAlpha === 0) {
-        continue;
-      }
-      const outputIndex = (y * outputSize + x) * 4;
-      output[outputIndex] = Math.round(red / coverage / pixelAlpha);
-      output[outputIndex + 1] = Math.round(green / coverage / pixelAlpha);
-      output[outputIndex + 2] = Math.round(blue / coverage / pixelAlpha);
-      output[outputIndex + 3] = Math.round(pixelAlpha * 255);
-    }
-  }
-}
-
-function sampleFace(
-  texture: SkinTexture,
-  face: ProjectedFace,
-  x: number,
-  y: number,
-): FaceSample | undefined {
-  const [origin, horizontalEnd, , verticalEnd] = face.points;
-  const horizontalX = horizontalEnd.x - origin.x;
-  const horizontalY = horizontalEnd.y - origin.y;
-  const verticalX = verticalEnd.x - origin.x;
-  const verticalY = verticalEnd.y - origin.y;
-  const determinant = horizontalX * verticalY - horizontalY * verticalX;
-  const offsetX = x - origin.x;
-  const offsetY = y - origin.y;
-  const horizontal = (offsetX * verticalY - offsetY * verticalX) / determinant;
-  const vertical = (horizontalX * offsetY - horizontalY * offsetX) / determinant;
-  if (horizontal < 0 || horizontal > 1 || vertical < 0 || vertical > 1) {
-    return undefined;
-  }
-
-  const textureX =
-    face.texture.u + Math.min(face.texture.width - 1, Math.floor(horizontal * face.texture.width));
-  const textureY =
-    face.texture.v + Math.min(face.texture.height - 1, Math.floor(vertical * face.texture.height));
-  let color = shadeColor(readColor(texture, textureX, textureY), face.face);
-  if (face.cuboid.layer === 'outer' && color.alpha === 0) {
-    return undefined;
-  }
-  if (face.cuboid.layer === 'base') {
-    color = { ...color, alpha: 255 };
-  }
-
-  const [originDepth, horizontalDepth, , verticalDepth] = face.depths;
-  return {
-    color,
-    depth:
-      originDepth +
-      horizontal * (horizontalDepth - originDepth) +
-      vertical * (verticalDepth - originDepth),
-    order: face.order,
-  };
-}
-
-function downsampleBox(
-  source: Uint8ClampedArray,
-  sourceSize: number,
-  target: Uint8ClampedArray,
-  targetSize: number,
-): void {
-  const ratio = sourceSize / targetSize;
-  for (let y = 0; y < targetSize; y += 1) {
-    for (let x = 0; x < targetSize; x += 1) {
-      let red = 0;
-      let green = 0;
-      let blue = 0;
-      let alpha = 0;
-      for (let blockY = 0; blockY < ratio; blockY += 1) {
-        for (let blockX = 0; blockX < ratio; blockX += 1) {
-          const sourceIndex = ((y * ratio + blockY) * sourceSize + (x * ratio + blockX)) * 4;
-          const weight = (source[sourceIndex + 3] ?? 0) / 255;
-          red += (source[sourceIndex] ?? 0) * weight;
-          green += (source[sourceIndex + 1] ?? 0) * weight;
-          blue += (source[sourceIndex + 2] ?? 0) * weight;
-          alpha += weight;
-        }
-      }
-      const samples = ratio * ratio;
-      const pixelAlpha = alpha / samples;
-      if (pixelAlpha === 0) {
-        continue;
-      }
-      const targetIndex = (y * targetSize + x) * 4;
-      target[targetIndex] = Math.round(red / samples / pixelAlpha);
-      target[targetIndex + 1] = Math.round(green / samples / pixelAlpha);
-      target[targetIndex + 2] = Math.round(blue / samples / pixelAlpha);
-      target[targetIndex + 3] = Math.round(pixelAlpha * 255);
-    }
-  }
-}
-
-function compositeSamples(samples: readonly FaceSample[]): Color {
-  let alpha = 0;
-  let blue = 0;
-  let green = 0;
-  let red = 0;
-  for (const sample of samples) {
-    const sourceAlpha = sample.color.alpha / 255;
-    const remaining = 1 - sourceAlpha;
-    red = sample.color.red * sourceAlpha + red * remaining;
-    green = sample.color.green * sourceAlpha + green * remaining;
-    blue = sample.color.blue * sourceAlpha + blue * remaining;
-    alpha = sourceAlpha + alpha * remaining;
-  }
-  if (alpha === 0) {
-    return { alpha: 0, blue: 0, green: 0, red: 0 };
-  }
-  return {
-    alpha: Math.round(alpha * 255),
-    blue: Math.round(blue / alpha),
-    green: Math.round(green / alpha),
-    red: Math.round(red / alpha),
-  };
 }
 
 interface TextureRect {
@@ -573,66 +419,13 @@ interface TextureRect {
   readonly width: number;
 }
 
-function textureRect(texture: TextureBox, face: VisibleFace): TextureRect {
-  switch (face) {
-    case 'front':
-      return {
-        height: texture.height,
-        u: texture.u + texture.depth,
-        v: texture.v + texture.depth,
-        width: texture.width,
-      };
-    case 'right':
-      return {
-        height: texture.height,
-        u: texture.u + texture.depth + texture.width,
-        v: texture.v + texture.depth,
-        width: texture.depth,
-      };
-    case 'top':
-      return {
-        height: texture.depth,
-        u: texture.u + texture.depth,
-        v: texture.v,
-        width: texture.width,
-      };
-  }
-}
-
-function faceCorners(
-  cuboid: AvatarCuboid,
-  face: VisibleFace,
-): readonly [Vector3, Vector3, Vector3, Vector3] {
-  const left = cuboid.center.x - cuboid.size.width / 2;
-  const right = cuboid.center.x + cuboid.size.width / 2;
-  const top = cuboid.center.y + cuboid.size.height / 2;
-  const bottom = cuboid.center.y - cuboid.size.height / 2;
-  const front = cuboid.center.z + cuboid.size.depth / 2;
-  const back = cuboid.center.z - cuboid.size.depth / 2;
-
-  switch (face) {
-    case 'front':
-      return [
-        { x: left, y: top, z: front },
-        { x: right, y: top, z: front },
-        { x: right, y: bottom, z: front },
-        { x: left, y: bottom, z: front },
-      ];
-    case 'right':
-      return [
-        { x: right, y: top, z: front },
-        { x: right, y: top, z: back },
-        { x: right, y: bottom, z: back },
-        { x: right, y: bottom, z: front },
-      ];
-    case 'top':
-      return [
-        { x: left, y: top, z: back },
-        { x: right, y: top, z: back },
-        { x: right, y: top, z: front },
-        { x: left, y: top, z: front },
-      ];
-  }
+function frontTextureRect(texture: TextureBox): TextureRect {
+  return {
+    height: texture.height,
+    u: texture.u + texture.depth,
+    v: texture.v + texture.depth,
+    width: texture.width,
+  };
 }
 
 function readColor(texture: SkinTexture, x: number, y: number): Color {
@@ -645,31 +438,4 @@ function readColor(texture: SkinTexture, x: number, y: number): Color {
     throw new RangeError('Minecraft skin UV points outside the decoded texture');
   }
   return { alpha, blue, green, red };
-}
-
-function shadeColor(color: Color, face: VisibleFace): Color {
-  const factor = face === 'top' ? 1 : face === 'front' ? 0.9 : 0.72;
-  return {
-    alpha: color.alpha,
-    blue: Math.round(color.blue * factor),
-    green: Math.round(color.green * factor),
-    red: Math.round(color.red * factor),
-  };
-}
-
-function dot(left: Vector3, right: Vector3): number {
-  return left.x * right.x + left.y * right.y + left.z * right.z;
-}
-
-function cross(left: Vector3, right: Vector3): Vector3 {
-  return {
-    x: left.y * right.z - left.z * right.y,
-    y: left.z * right.x - left.x * right.z,
-    z: left.x * right.y - left.y * right.x,
-  };
-}
-
-function normalize(vector: Vector3): Vector3 {
-  const length = Math.hypot(vector.x, vector.y, vector.z);
-  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
 }

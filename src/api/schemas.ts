@@ -914,6 +914,28 @@ export const rawAvatarRouteSchema: FastifySchema = {
   tags: ['Avatars'],
 };
 
+export function textureAvatarRouteSchema(
+  operation: 'avatarCape' | 'avatarElytra' | 'avatarProcessedSkin' | 'avatarSkin',
+): FastifySchema {
+  return {
+    description: operations[operation].description,
+    params: avatarParamsSchema,
+    querystring: emptyQuerySchema,
+    response: {
+      200: pngResponseSchema,
+      304: { type: 'null' },
+      400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    },
+    summary: operations[operation].summary,
+    tags: ['Avatars'],
+  };
+}
+
 export function renderedAvatarRouteSchema(
   operation: 'avatarBody' | 'avatarBust' | 'avatarFace' | 'avatarHead',
 ): FastifySchema {

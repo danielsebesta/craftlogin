@@ -232,16 +232,11 @@ main.container::before {
   margin: 0;
 }
 
+/* Every view is a flat 2D render, so nearest-neighbor scaling keeps texels crisp. */
 .avatar-card img {
   width: 8rem;
   height: 8rem;
   image-rendering: pixelated;
-}
-
-/* Isometric head, bust, and body are smooth 3D renders, so they scale with
-   normal interpolation. Only the flat 2D face stays nearest-neighbor. */
-.avatar-card img.avatar-smooth {
-  image-rendering: auto;
 }
 
 .avatar-card code {

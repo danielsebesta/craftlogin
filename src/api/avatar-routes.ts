@@ -13,6 +13,7 @@ import {
   rawAvatarRouteSchema,
   renderedAvatarRouteSchema,
   skinRouteSchema,
+  textureAvatarRouteSchema,
 } from './schemas.js';
 
 const UUID_IMAGE_CACHE = 'public, max-age=3600, stale-while-revalidate=86400';
@@ -45,6 +46,9 @@ export interface AvatarRoutesOptions {
 
 export function registerAvatarRoutes(server: FastifyInstance, options: AvatarRoutesOptions): void {
   registerPublicPreflight(server, '/api/avatars/:uuid/skin');
+  registerPublicPreflight(server, '/api/avatars/:uuid/processed-skin');
+  registerPublicPreflight(server, '/api/avatars/:uuid/cape');
+  registerPublicPreflight(server, '/api/avatars/:uuid/elytra');
   registerPublicPreflight(server, '/api/avatars/:uuid/face');
   registerPublicPreflight(server, '/api/avatars/:uuid/head');
   registerPublicPreflight(server, '/api/avatars/:uuid/bust');
@@ -82,6 +86,17 @@ export function registerAvatarRoutes(server: FastifyInstance, options: AvatarRou
   registerRenderedRoute(server, options.avatars, 'head', 'avatarHead');
   registerRenderedRoute(server, options.avatars, 'bust', 'avatarBust');
   registerRenderedRoute(server, options.avatars, 'body', 'avatarBody');
+  registerTextureRoute(
+    server,
+    options.avatars,
+    'processed-skin',
+    'avatarProcessedSkin',
+    'processed',
+  );
+  // Vanilla renders elytra wings with the account's cape texture, so both
+  // endpoints serve the same texture under their own path.
+  registerTextureRoute(server, options.avatars, 'cape', 'avatarCape', 'cape');
+  registerTextureRoute(server, options.avatars, 'elytra', 'avatarElytra', 'cape');
 
   registerHashSkinRoute(server, options.skins, '/skin/:hash');
   registerHashSkinRoute(server, options.skins, '/skin/:hash.png');
@@ -121,6 +136,28 @@ function registerRenderedRoute(
           view,
         }),
       );
+    },
+  );
+}
+
+function registerTextureRoute(
+  server: FastifyInstance,
+  avatars: AvatarService,
+  view: 'cape' | 'elytra' | 'processed-skin',
+  operation: 'avatarCape' | 'avatarElytra' | 'avatarProcessedSkin',
+  kind: 'cape' | 'processed',
+): void {
+  server.get<{ Params: AvatarParams }>(
+    `/api/avatars/:uuid/${view}`,
+    {
+      config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRawRateLimit },
+      schema: textureAvatarRouteSchema(operation),
+    },
+    async (request, reply): Promise<void> => {
+      const uuid = requireCanonicalUuid(request.params.uuid);
+      const result =
+        kind === 'cape' ? await avatars.findCape(uuid) : await avatars.findProcessedSkin(uuid);
+      await sendAvatarResult(request, reply, result);
     },
   );
 }

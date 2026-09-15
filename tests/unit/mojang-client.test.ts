@@ -10,6 +10,7 @@ import {
 } from '../../src/mojang/client.js';
 
 const textureHash = '7fd9ba42a7c81eeea22f1524271ae85a8e045ce0af5a6ae16c6406ae917e68b5';
+const capeHash = '9c8e7d6b5a4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e';
 const playerUuid = '853c80ef-3c37-49fd-aa49-938b674adae6';
 
 interface StubResponse {
@@ -39,11 +40,12 @@ function stubFetch(routes: (url: string) => StubResponse): {
 
 function signedTextures(
   privateKey: KeyObject,
-  options: { readonly model?: 'slim'; readonly url?: string } = {},
+  options: { readonly capeUrl?: string; readonly model?: 'slim'; readonly url?: string } = {},
 ): { signature: string; value: string } {
   const value = Buffer.from(
     JSON.stringify({
       textures: {
+        ...(options.capeUrl === undefined ? {} : { CAPE: { url: options.capeUrl } }),
         SKIN: {
           ...(options.model === undefined ? {} : { metadata: { model: options.model } }),
           url: options.url ?? `https://textures.minecraft.net/texture/${textureHash}`,
@@ -196,6 +198,38 @@ describe('HttpMojangClient', (): void => {
     );
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain(`${playerUuid.replaceAll('-', '')}?unsigned=false`);
+  });
+
+  it('reads the cape hash from a signed Minecraft texture payload', async (): Promise<void> => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
+    const textures = signedTextures(privateKey, {
+      capeUrl: `https://textures.minecraft.net/texture/${capeHash}`,
+    });
+    const { fetch } = stubFetch((url) =>
+      url.includes('/publickeys')
+        ? { body: { profilePropertyKeys: [{ publicKey: profilePublicKey(publicKey) }] } }
+        : {
+            body: {
+              id: playerUuid.replaceAll('-', ''),
+              name: 'jeb_',
+              properties: [
+                { name: 'textures', signature: textures.signature, value: textures.value },
+              ],
+            },
+          },
+    );
+    const client = new HttpMojangClient({
+      cache: new MemoryMinecraftCache(),
+      fetch,
+      logger: silentLogger(),
+    });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toEqual({
+      cape: { hash: capeHash },
+      texture: { hash: textureHash, model: 'classic' },
+      username: 'jeb_',
+      uuid: playerUuid,
+    });
   });
 
   it('reads the slim model only from a signed Minecraft texture URL', async (): Promise<void> => {

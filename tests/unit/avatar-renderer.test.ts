@@ -134,7 +134,7 @@ describe('Minecraft avatar geometry', (): void => {
     expect(outerParts).toEqual(['head']);
   });
 
-  it('renders visible isometric outer faces separately from the base head', async (): Promise<void> => {
+  it('renders the flat head overlay separately from the base head', async (): Promise<void> => {
     const texture = await decodeSkinTexture(
       await createSkinPng([...BASE_REGIONS, ...OUTER_REGIONS]),
     );
@@ -148,42 +148,14 @@ describe('Minecraft avatar geometry', (): void => {
 
     expect(countPixels(layered, isOuterColor)).toBeGreaterThan(0);
     expect(countPixels(base, isOuterColor)).toBe(0);
-    // Isometric edges are antialiased, so a small fringe of partially covered
-    // and face-blended pixels is expected instead of hard binary coverage.
-    const opaqueBase = countPixels(base, (pixel): boolean => pixel.alpha === 255);
-    const feathered = countPixels(
-      base,
-      (pixel): boolean => pixel.alpha !== 0 && pixel.alpha !== 255,
-    );
-    const blendedOpaque = countPixels(
-      base,
-      (pixel): boolean => pixel.alpha === 255 && !isBaseFaceColor(pixel),
-    );
-    expect(feathered).toBeGreaterThan(0);
-    expect(feathered).toBeLessThan(opaqueBase * 0.1);
-    expect(blendedOpaque).toBeLessThan(opaqueBase * 0.1);
+    // Axis-aligned texels give full coverage only: no semi-transparency.
+    expect(countPixels(base, (pixel): boolean => pixel.alpha !== 0 && pixel.alpha !== 255)).toBe(0);
+    // Every opaque base pixel is exactly a fixture base color.
     expect(
-      countPixels(base, (pixel): boolean => pixel.alpha === 255 && !isShadedBaseBlend(pixel)),
+      countPixels(base, (pixel): boolean => pixel.alpha === 255 && !isFlatBaseColor(pixel)),
     ).toBe(0);
-    expect(
-      countPixels(
-        layered,
-        (pixel): boolean => pixel.red > 150 && pixel.green < 50 && pixel.blue < 50,
-      ),
-    ).toBeGreaterThan(0);
-
-    const baseBounds = opaqueBounds(base);
-    expect(
-      countPixelsAt(
-        layered,
-        (pixel, x, y): boolean =>
-          isOuterColor(pixel) &&
-          (x < baseBounds.minX ||
-            x > baseBounds.maxX ||
-            y < baseBounds.minY ||
-            y > baseBounds.maxY),
-      ),
-    ).toBeGreaterThan(0);
+    // The transparent two-by-two overlay hole reveals the base red beneath.
+    expect(countPixels(layered, isFlatBaseRed)).toBeGreaterThan(0);
   });
 
   it('renders a crisp front face with the Minecraft head overlay and no interpolation', async (): Promise<void> => {
@@ -247,10 +219,10 @@ describe('Minecraft avatar geometry', (): void => {
       );
       const renderer = new CanvasAvatarRenderer();
       const first = await decodePng(
-        await renderer.render(texture, 'classic', { layers: 'all', size, view: 'head' }),
+        await renderer.render(texture, 'classic', { layers: 'all', size, view: 'bust' }),
       );
       const second = await decodePng(
-        await renderer.render(texture, 'classic', { layers: 'all', size, view: 'head' }),
+        await renderer.render(texture, 'classic', { layers: 'all', size, view: 'bust' }),
       );
 
       expect({ height: first.height, width: first.width }).toEqual({ height: size, width: size });
@@ -301,21 +273,6 @@ function countPixels(
   return count;
 }
 
-function countPixelsAt(
-  image: DecodedPng,
-  predicate: (pixel: ReturnType<typeof readFixturePixel>, x: number, y: number) => boolean,
-): number {
-  let count = 0;
-  for (let y = 0; y < image.height; y += 1) {
-    for (let x = 0; x < image.width; x += 1) {
-      if (predicate(readFixturePixel(image, x, y), x, y)) {
-        count += 1;
-      }
-    }
-  }
-  return count;
-}
-
 function isOuterColor(pixel: ReturnType<typeof readFixturePixel>): boolean {
   return (
     (pixel.red > 180 && pixel.green > 180 && pixel.blue < 30) ||
@@ -324,50 +281,14 @@ function isOuterColor(pixel: ReturnType<typeof readFixturePixel>): boolean {
   );
 }
 
-function isBaseFaceColor(pixel: ReturnType<typeof readFixturePixel>): boolean {
+function isFlatBaseColor(pixel: ReturnType<typeof readFixturePixel>): boolean {
   return (
-    (pixel.red === 198 && pixel.green === 18 && pixel.blue === 18) ||
-    (pixel.red === 14 && pixel.green === 158 && pixel.blue === 14) ||
+    (pixel.red === 220 && pixel.green === 20 && pixel.blue === 20) ||
+    (pixel.red === 20 && pixel.green === 220 && pixel.blue === 20) ||
     (pixel.red === 20 && pixel.green === 20 && pixel.blue === 220)
   );
 }
 
-// Every opaque pixel must stay inside the per-channel range of the three
-// shaded base faces, so antialiased blends cannot introduce foreign colors.
-function isShadedBaseBlend(pixel: ReturnType<typeof readFixturePixel>): boolean {
-  return (
-    pixel.red >= 14 &&
-    pixel.red <= 198 &&
-    pixel.green >= 18 &&
-    pixel.green <= 158 &&
-    pixel.blue >= 14 &&
-    pixel.blue <= 220
-  );
-}
-
-interface PixelBounds {
-  readonly maxX: number;
-  readonly maxY: number;
-  readonly minX: number;
-  readonly minY: number;
-}
-
-function opaqueBounds(image: DecodedPng): PixelBounds {
-  let minX = image.width;
-  let minY = image.height;
-  let maxX = -1;
-  let maxY = -1;
-  countPixelsAt(image, (pixel, x, y): boolean => {
-    if ((pixel.alpha ?? 0) > 0) {
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-    return false;
-  });
-  if (maxX < 0 || maxY < 0) {
-    throw new Error('Expected an opaque pixel');
-  }
-  return { maxX, maxY, minX, minY };
+function isFlatBaseRed(pixel: ReturnType<typeof readFixturePixel>): boolean {
+  return pixel.red === 220 && pixel.green === 20 && pixel.blue === 20;
 }

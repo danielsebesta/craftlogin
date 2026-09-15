@@ -5,7 +5,12 @@ import type { CachedValue, MinecraftCache } from '../mojang/cache.js';
 import type { MinecraftPlayerLookup, MinecraftSkinTexture } from '../mojang/client.js';
 import type { SkinStore } from '../mojang/skin-store.js';
 import type { AvatarRenderer } from './renderer.js';
-import { decodeSkinTexture, inspectSkinPng } from './skin-texture.js';
+import {
+  decodeSkinTexture,
+  encodeProcessedSkin,
+  inspectSkinPng,
+  isPngImage,
+} from './skin-texture.js';
 import type { AvatarRenderOptions } from './types.js';
 
 const RENDER_CACHE_SECONDS = 24 * 60 * 60;
@@ -23,6 +28,8 @@ export type AvatarLookupResult =
   | { readonly status: 'unavailable' };
 
 export interface AvatarService {
+  findCape(uuid: string): Promise<AvatarLookupResult>;
+  findProcessedSkin(uuid: string): Promise<AvatarLookupResult>;
   findRawSkin(uuid: string): Promise<AvatarLookupResult>;
   render(uuid: string, options: AvatarRenderOptions): Promise<AvatarLookupResult>;
 }
@@ -42,6 +49,7 @@ export interface AvatarLogger {
 export class CachedAvatarService implements AvatarService {
   private readonly inFlightRenders = new Map<string, Promise<AvatarLookupResult>>();
   private readonly inFlightRequests = new Map<string, Promise<AvatarLookupResult>>();
+  private readonly inFlightTextures = new Map<string, Promise<Buffer>>();
 
   public constructor(private readonly options: CachedAvatarServiceOptions) {}
 
@@ -64,6 +72,57 @@ export class CachedAvatarService implements AvatarService {
       },
       status: 'found',
     };
+  }
+
+  public async findProcessedSkin(uuid: string): Promise<AvatarLookupResult> {
+    const source = await this.findSource(uuid);
+    if (source.status !== 'found') {
+      return source;
+    }
+    const cacheKey = `avatar-processed:${source.texture.hash}`;
+    const identity = `processed:${source.texture.hash}`;
+    try {
+      const body = await this.cachedTexture(cacheKey, async (): Promise<Buffer> => {
+        const texture = await decodeSkinTexture(source.body);
+        return await encodeProcessedSkin(texture);
+      });
+      return foundRenderedImage(body, identity);
+    } catch (error: unknown) {
+      this.logFailure(error, 'process-skin');
+      return { status: 'unavailable' };
+    }
+  }
+
+  public async findCape(uuid: string): Promise<AvatarLookupResult> {
+    let profile;
+    try {
+      profile = await this.options.players.findProfileById(uuid);
+    } catch (error: unknown) {
+      this.logFailure(error, 'resolve-cape');
+      return { status: 'unavailable' };
+    }
+    const cape = profile?.cape;
+    if (cape === undefined) {
+      return { status: 'not-found' };
+    }
+    const cacheKey = `avatar-cape:${cape.hash}`;
+    const identity = `cape:${cape.hash}`;
+    try {
+      const body = await this.cachedTexture(cacheKey, async (): Promise<Buffer> => {
+        const image = await this.options.skins.fetchSkin(cape.hash);
+        if (image === undefined || !isPngImage(image.body)) {
+          throw new CapeTextureMissingError('Minecraft cape texture is not available');
+        }
+        return image.body;
+      });
+      return foundRenderedImage(body, identity);
+    } catch (error: unknown) {
+      if (error instanceof CapeTextureMissingError) {
+        return { status: 'not-found' };
+      }
+      this.logFailure(error, 'fetch-cape');
+      return { status: 'unavailable' };
+    }
   }
 
   public async render(
@@ -153,6 +212,45 @@ export class CachedAvatarService implements AvatarService {
     }
   }
 
+  private async cachedTexture(cacheKey: string, compute: () => Promise<Buffer>): Promise<Buffer> {
+    try {
+      const cached = await this.options.cache.read(cacheKey);
+      const cachedBody = cachedImageBody(cached?.value);
+      if (cachedBody !== undefined) {
+        return cachedBody;
+      }
+    } catch (error: unknown) {
+      this.logFailure(error, 'read-texture-cache');
+    }
+
+    const pending = this.inFlightTextures.get(cacheKey);
+    if (pending !== undefined) {
+      return await pending;
+    }
+    const operation = this.computeAndCacheTexture(cacheKey, compute);
+    this.inFlightTextures.set(cacheKey, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.inFlightTextures.get(cacheKey) === operation) {
+        this.inFlightTextures.delete(cacheKey);
+      }
+    }
+  }
+
+  private async computeAndCacheTexture(
+    cacheKey: string,
+    compute: () => Promise<Buffer>,
+  ): Promise<Buffer> {
+    const body = await compute();
+    try {
+      await this.options.cache.write(cacheKey, body.toString('base64'), RENDER_CACHE_SECONDS);
+    } catch (error: unknown) {
+      this.logFailure(error, 'write-texture-cache');
+    }
+    return body;
+  }
+
   private async renderAndCache(
     cacheKey: string,
     identity: string,
@@ -180,6 +278,10 @@ export class CachedAvatarService implements AvatarService {
       'Avatar image operation failed',
     );
   }
+}
+
+class CapeTextureMissingError extends Error {
+  public override readonly name = 'CapeTextureMissingError';
 }
 
 interface AvatarSource {
