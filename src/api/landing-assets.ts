@@ -24,27 +24,28 @@ const landingPageStyles = `
   }
 }
 
-/* Ambient grid glow across the whole landing page: a fixed full-viewport layer
-   behind all content. The asset itself fades downward and the mask melts the
-   lower edge plus both sides into the page background. Content stays legible
-   because the layer sits behind everything at reduced opacity. */
+/* Grid glow only across the top of the landing page: an absolutely positioned
+   layer the exact height of the asset scrolls away with the content, its lower
+   edge melting into the plain single-color page background below. */
+main.container {
+  position: relative;
+}
+
 main.container::before {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
   z-index: -1;
+  height: min(calc(100vw * 530 / 690), 64rem);
   content: "";
   background-image: url("/assets/grid-fade.svg");
   background-repeat: no-repeat;
   background-position: top center;
   background-size: 100% auto;
   opacity: 0.5;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    black 0%,
-    black 25%,
-    transparent 72%
-  );
-  mask-image: linear-gradient(to bottom, black 0%, black 25%, transparent 72%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 45%, transparent 100%);
   pointer-events: none;
 }
 
