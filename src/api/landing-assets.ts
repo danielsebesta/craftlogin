@@ -8,6 +8,10 @@ const landingPageStyles = `
   border-bottom: 0;
 }
 
+.page-footer {
+  border-top: 0;
+}
+
 .page-nav {
   display: flex;
   flex-wrap: wrap;
@@ -145,7 +149,6 @@ main.container::before {
   max-width: 56rem;
   margin-inline: auto;
   padding-block: var(--s7);
-  border-top: 1px solid var(--line);
 }
 
 .landing-section > h2,
@@ -225,7 +228,6 @@ main.container::before {
   padding: var(--s4);
   text-align: center;
   background: var(--surface-raised);
-  border: 2px solid var(--line);
 }
 
 .avatar-card h3 {
@@ -260,7 +262,6 @@ main.container::before {
   align-items: baseline;
   justify-content: space-between;
   padding-block: var(--s3);
-  border-bottom: 1px solid var(--line);
 }
 
 .endpoint-list code {

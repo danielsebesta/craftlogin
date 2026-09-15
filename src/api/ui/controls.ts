@@ -294,7 +294,7 @@ textarea[aria-invalid="true"] {
 .notice {
   padding: var(--s3) var(--s4);
   background: var(--surface-raised);
-  border: 2px solid var(--line);
+  border: 1px solid var(--line);
 }
 
 .notice-error {
@@ -318,7 +318,7 @@ textarea[aria-invalid="true"] {
   color: var(--text);
   white-space: pre;
   background: var(--surface-raised);
-  border: 2px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: 0;
 }
 

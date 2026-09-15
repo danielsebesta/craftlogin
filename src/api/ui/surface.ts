@@ -34,7 +34,6 @@ export const signInSurfaceStyles = `
   display: grid;
   gap: var(--s4);
   padding-top: var(--s6);
-  border-top: 1px solid var(--line);
 }
 
 .consent-card {
@@ -106,8 +105,6 @@ export const signInSurfaceStyles = `
 .skin-verification {
   display: grid;
   gap: var(--s4);
-  padding-top: var(--s5);
-  border-top: 1px solid var(--line);
 }
 
 .skin-download {
@@ -119,8 +116,6 @@ export const signInSurfaceStyles = `
   flex-wrap: wrap;
   gap: var(--s3);
   align-items: center;
-  padding-top: var(--s5);
-  border-top: 1px solid var(--line);
 }
 
 .consent-actions .signin-continue {
@@ -201,5 +196,73 @@ export const signInSurfaceStyles = `
 
 .signin-continue[hidden] {
   display: none;
+}
+
+/* Sign-in pages share the landing look: no app-shell rails, an ambient grid
+   glow, and content floating without boxes or divider rules. The card gaps
+   carry the rhythm, so blocks and actions need no separating borders. */
+@media (min-width: 74.01rem) {
+  body.page-narrow::before,
+  body.page-narrow::after {
+    display: none;
+  }
+}
+
+body.page-narrow {
+  overflow-x: clip;
+}
+
+body.page-narrow .page-footer {
+  border-top: 0;
+}
+
+body.page-narrow .page-header {
+  border-bottom: 0;
+}
+
+body.page-narrow main.page-column {
+  position: relative;
+}
+
+body.page-narrow main.page-column::before {
+  position: absolute;
+  top: 0;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
+  z-index: -1;
+  height: min(calc(100vw * 530 / 690), 48rem);
+  content: "";
+  background-image: url("/assets/grid-fade.svg");
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: cover;
+  opacity: 0.15;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 18%,
+    black 45%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 45%, transparent 100%);
+  pointer-events: none;
+}
+
+@media (max-width: 34rem) {
+  body.page-narrow main.page-column::before {
+    height: 24rem;
+  }
+}
+
+@media (forced-colors: active) {
+  body.page-narrow main.page-column::before {
+    display: none;
+  }
+}
+
+.consent-card {
+  background: transparent;
+  border: 0;
+  padding: var(--s6) 0;
 }
 `;
