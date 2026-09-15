@@ -14,8 +14,9 @@ const landingPageStyles = `
   text-align: center;
 }
 
-/* Decorative grid glow behind the hero: the asset itself fades downward, and
-   the mask melts its lower edge into the page background. Content stays
+/* Decorative grid glow behind the hero: full-bleed across the hero width with a
+   radial mask that melts every edge into the page background. The asset itself
+   already fades downward; the mask adds the horizontal melt. Content stays
    legible because the layer sits behind the text at reduced opacity. */
 .landing-hero::before {
   position: absolute;
@@ -25,10 +26,10 @@ const landingPageStyles = `
   background-image: url("/assets/grid-fade.svg");
   background-repeat: no-repeat;
   background-position: top center;
-  background-size: min(100%, 43rem) auto;
-  opacity: 0.55;
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 85%);
-  mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 85%);
+  background-size: 100% auto;
+  opacity: 0.35;
+  -webkit-mask-image: radial-gradient(ellipse 105% 95% at 50% 0%, black 25%, transparent 78%);
+  mask-image: radial-gradient(ellipse 105% 95% at 50% 0%, black 25%, transparent 78%);
   pointer-events: none;
 }
 
