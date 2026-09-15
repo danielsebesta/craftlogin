@@ -48,8 +48,13 @@ export const signInSurfaceStyles = `
 
 .consent-title {
   display: grid;
-  gap: var(--s2);
+  gap: var(--s3);
   min-width: 0;
+  text-align: center;
+}
+
+.consent-app {
+  display: block;
 }
 
 .account-chip {
@@ -78,7 +83,7 @@ export const signInSurfaceStyles = `
   flex-wrap: wrap;
   gap: var(--s2) var(--s3);
   align-items: center;
-  justify-self: start;
+  justify-self: center;
   font-size: var(--t-sm);
   color: var(--muted);
 }

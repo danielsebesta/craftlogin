@@ -286,7 +286,9 @@ function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefi
 
 export function renderSignInPage(input: SignInPageInput): string {
   const headingSuffix =
-    input.appName === undefined ? '' : ` <bdi>${escapeHtml(input.appName)}</bdi>`;
+    input.appName === undefined
+      ? ''
+      : `<span class="consent-app"><bdi>${escapeHtml(input.appName)}</bdi></span>`;
   const securityNote =
     input.securityNote === undefined
       ? ''
