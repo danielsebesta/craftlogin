@@ -593,6 +593,7 @@ export const developerCallbackRouteSchema: FastifySchema = {
       code: { type: 'string' },
       error: { type: 'string' },
       error_description: { type: 'string' },
+      iss: { format: 'uri', maxLength: 2_048, type: 'string' },
       state: { type: 'string' },
     },
     type: 'object',

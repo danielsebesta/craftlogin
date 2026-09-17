@@ -67,7 +67,7 @@ describe('Developer Console', (): void => {
     const response = await server.inject({
       headers: { cookie: cookiePair(login.headers['set-cookie']) },
       method: 'GET',
-      url: `/developers/callback?code=console-code&state=${state ?? ''}`,
+      url: `/developers/callback?code=console-code&state=${state ?? ''}&iss=${encodeURIComponent('https://craftlogin.com')}`,
     });
 
     expect(response.statusCode).toBe(303);
@@ -106,6 +106,22 @@ describe('Developer Console', (): void => {
       headers: { cookie: cookiePair(login.headers['set-cookie']) },
       method: 'GET',
       url: '/developers/callback?code=console-code&state=tampered-state',
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers/login');
+    expect(fetchCalls).toEqual([]);
+  });
+
+  it('restarts the login when the callback issuer does not match', async (): Promise<void> => {
+    const fetchCalls: string[] = [];
+    const server = await buildServer({ authenticated: false, allowlisted: true, fetchCalls });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
+    const state = new URL(login.headers.location ?? '').searchParams.get('state');
+    const response = await server.inject({
+      headers: { cookie: cookiePair(login.headers['set-cookie']) },
+      method: 'GET',
+      url: `/developers/callback?code=console-code&state=${state ?? ''}&iss=${encodeURIComponent('https://attacker.example')}`,
     });
 
     expect(response.statusCode).toBe(303);

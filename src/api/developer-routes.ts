@@ -120,6 +120,7 @@ interface DeveloperCallbackQuery {
   readonly code?: string;
   readonly error?: string;
   readonly error_description?: string;
+  readonly iss?: string;
   readonly state?: string;
 }
 
@@ -182,9 +183,10 @@ export function registerDeveloperRoutes(
     async (request, reply): Promise<void> => {
       const stored = readConsoleOAuthCookie(request);
       clearConsoleOAuthCookie(reply);
-      const { code, error, state } = request.query;
+      const { code, error, iss, state } = request.query;
       if (
         error !== undefined ||
+        (iss !== undefined && iss !== options.issuer) ||
         stored === undefined ||
         state === undefined ||
         code === undefined ||
