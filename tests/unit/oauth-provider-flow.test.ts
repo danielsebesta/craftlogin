@@ -239,10 +239,16 @@ describe('CraftLogin OIDC provider', (): void => {
     const accessTokens = new ProviderAccessTokenAuthenticator(provider);
     server = await createApiServer({
       accessTokens,
-      appManager: { list: unavailable, remove: unavailable },
+      appManager: {
+        decideVerification: unavailable,
+        list: unavailable,
+        remove: unavailable,
+        requestVerification: unavailable,
+      },
       apps: { register: unavailable },
       clients: {
-        findClientName: (): Promise<string> => Promise.resolve('OAuth flow test client'),
+        findClient: (): Promise<{ name: string; verified: boolean }> =>
+          Promise.resolve({ name: 'OAuth flow test client', verified: true }),
         findClientOwnerUuid: (): Promise<undefined> => Promise.resolve(undefined),
         isAllowedOrigin: (): Promise<boolean> => Promise.resolve(false),
       },
@@ -256,7 +262,13 @@ describe('CraftLogin OIDC provider', (): void => {
       },
       consoleClient: { clientId: 'cl_oauth-flow-test-console' },
       developerSessions: { create: unavailable },
-      developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
+      developers: {
+        find: unavailable,
+        grant: unavailable,
+        list: unavailable,
+        revoke: unavailable,
+        setVerified: unavailable,
+      },
       httpPort: port,
       interactions,
       issuer,

@@ -109,8 +109,14 @@ export interface ApiInteractionService {
   ): Promise<unknown>;
 }
 
-export interface ClientNameLookup {
-  findClientName(clientId: string): Promise<string | undefined>;
+export interface ClientDirectoryEntry {
+  readonly name: string;
+  /** Manual verification label shown beside the app name on the consent screen. */
+  readonly verified: boolean;
+}
+
+export interface ClientDirectoryLookup {
+  findClient(clientId: string): Promise<ClientDirectoryEntry | undefined>;
   findClientOwnerUuid(clientId: string): Promise<string | undefined>;
 }
 
@@ -120,7 +126,7 @@ export interface AccountNameLookup {
 
 export interface InteractionRoutesOptions {
   readonly accounts?: AccountNameLookup;
-  readonly clients: ClientNameLookup;
+  readonly clients: ClientDirectoryLookup;
   readonly interactions: ApiInteractionService;
   readonly minecraftBaseDomain: string;
   readonly players?: MinecraftPlayerLookup;
@@ -143,8 +149,8 @@ export function registerInteractionRoutes(
         }
         throw error;
       }
-      const appName =
-        (await options.clients.findClientName(interaction.clientId)) ?? interaction.clientId;
+      const client = await options.clients.findClient(interaction.clientId);
+      const appName = client?.name ?? interaction.clientId;
       const ownerUuid = await options.clients.findClientOwnerUuid(interaction.clientId);
       const owner =
         ownerUuid === undefined ? undefined : await resolveOwner(options.players, ownerUuid);
@@ -157,6 +163,7 @@ export function registerInteractionRoutes(
       await reply.type('text/html; charset=utf-8').send(
         renderInteractionPage({
           appName,
+          ...(client?.verified === true ? { appVerified: true } : {}),
           ...(interaction.code === undefined ? {} : { code: interaction.code }),
           interactionId: interaction.interactionId,
           minecraftBaseDomain: options.minecraftBaseDomain,

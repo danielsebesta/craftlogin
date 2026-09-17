@@ -1,25 +1,27 @@
 import type { PrismaClient } from '../generated/prisma/client.js';
-import type { ClientNameLookup } from './interaction-routes.js';
+import type { ClientDirectoryEntry, ClientDirectoryLookup } from './interaction-routes.js';
 
 export interface RegisteredOriginLookup {
   isAllowedOrigin(origin: string): Promise<boolean>;
 }
 
-export class PrismaClientDirectory implements ClientNameLookup, RegisteredOriginLookup {
+export class PrismaClientDirectory implements ClientDirectoryLookup, RegisteredOriginLookup {
   public constructor(private readonly database: PrismaClient) {}
 
-  public async findClientName(clientId: string): Promise<string | undefined> {
+  public async findClient(clientId: string): Promise<ClientDirectoryEntry | undefined> {
     const client = await this.database.app.findUnique({
+      select: { name: true, verifiedAt: true },
       where: { clientId },
-      select: { name: true },
     });
-    return client?.name;
+    return client === null
+      ? undefined
+      : { name: client.name, verified: client.verifiedAt !== null };
   }
 
   public async findClientOwnerUuid(clientId: string): Promise<string | undefined> {
     const client = await this.database.app.findUnique({
-      where: { clientId },
       select: { ownerUuid: true },
+      where: { clientId },
     });
     return client?.ownerUuid ?? undefined;
   }

@@ -10,10 +10,15 @@ const unavailable = (): never => {
 async function generate(): Promise<void> {
   const server = await createApiServer({
     accessTokens: { authenticate: unavailable },
-    appManager: { list: unavailable, remove: unavailable },
+    appManager: {
+      decideVerification: unavailable,
+      list: unavailable,
+      remove: unavailable,
+      requestVerification: unavailable,
+    },
     apps: { register: unavailable },
     clients: {
-      findClientName: unavailable,
+      findClient: unavailable,
       findClientOwnerUuid: unavailable,
       isAllowedOrigin: unavailable,
     },
@@ -30,7 +35,13 @@ async function generate(): Promise<void> {
     },
     consoleClient: { clientId: 'cl_openapi-test-console' },
     developerSessions: { create: unavailable },
-    developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
+    developers: {
+      find: unavailable,
+      grant: unavailable,
+      list: unavailable,
+      revoke: unavailable,
+      setVerified: unavailable,
+    },
     httpPort: 3000,
     interactions: {
       abort: unavailable,

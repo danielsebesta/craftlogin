@@ -11,6 +11,7 @@ const MAX_TRANSACTION_ATTEMPTS = 4;
 
 export const developerRoleSchema = z.enum(['developer', 'admin']);
 export const developerUuidSchema = authenticatedMinecraftPlayerSchema.shape.uuid;
+export const developerVerificationDecisionSchema = z.enum(['verify', 'revoke']);
 
 export type DeveloperRole = z.infer<typeof developerRoleSchema>;
 
@@ -18,6 +19,8 @@ export interface DeveloperAccess {
   readonly createdAt: string;
   readonly role: DeveloperRole;
   readonly uuid: string;
+  /** Manual trust label shown in the console. It never grants authorization. */
+  readonly verified: boolean;
 }
 
 export interface DeveloperAccessRepository {
@@ -25,6 +28,7 @@ export interface DeveloperAccessRepository {
   grant(uuid: string, role: DeveloperRole): Promise<DeveloperAccess>;
   list(): Promise<readonly DeveloperAccess[]>;
   revoke(uuid: string): Promise<boolean>;
+  setVerified(uuid: string, verified: boolean): Promise<boolean>;
 }
 
 export class LastAdministratorError extends Error {
@@ -72,6 +76,17 @@ export class PrismaDeveloperAccessRepository implements DeveloperAccessRepositor
     return developers.map(toDeveloperAccess);
   }
 
+  public async setVerified(uuidInput: string, verifiedInput: boolean): Promise<boolean> {
+    const uuid = developerUuidSchema.parse(uuidInput);
+    const verified = z.boolean().parse(verifiedInput);
+    // Requiring the opposite state gives concurrent or stale decisions exactly one winner.
+    const updated = await this.database.developer.updateMany({
+      data: { verifiedAt: verified ? new Date() : null },
+      where: { uuid, verifiedAt: verified ? null : { not: null } },
+    });
+    return updated.count === 1;
+  }
+
   public async revoke(uuidInput: string): Promise<boolean> {
     const uuid = developerUuidSchema.parse(uuidInput);
     return await this.withSerializableRetry(async (transaction): Promise<boolean> => {
@@ -115,6 +130,7 @@ interface StoredDeveloper {
   readonly createdAt: Date;
   readonly role: (typeof PrismaDeveloperRole)[keyof typeof PrismaDeveloperRole];
   readonly uuid: string;
+  readonly verifiedAt: Date | null;
 }
 
 function toDeveloperAccess(developer: StoredDeveloper): DeveloperAccess {
@@ -122,6 +138,7 @@ function toDeveloperAccess(developer: StoredDeveloper): DeveloperAccess {
     createdAt: developer.createdAt.toISOString(),
     role: developer.role === PrismaDeveloperRole.ADMIN ? 'admin' : 'developer',
     uuid: developer.uuid,
+    verified: developer.verifiedAt !== null,
   };
 }
 

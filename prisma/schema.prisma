@@ -16,15 +16,18 @@ model User {
 }
 
 model App {
-  id               String         @id @default(uuid()) @db.Uuid
-  clientId         String         @unique @db.VarChar(64)
-  clientSecretHash String?        @db.VarChar(255)
-  name             String         @db.VarChar(100)
-  redirectUris     String[]
-  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
-  ownerUuid        String?        @db.Uuid
-  owner            Developer?     @relation(fields: [ownerUuid], references: [uuid], onDelete: SetNull)
-  refreshTokens    RefreshToken[]
+  id                      String         @id @default(uuid()) @db.Uuid
+  clientId                String         @unique @db.VarChar(64)
+  clientSecretHash        String?        @db.VarChar(255)
+  name                    String         @db.VarChar(100)
+  redirectUris            String[]
+  createdAt               DateTime       @default(now()) @db.Timestamptz(3)
+  ownerUuid               String?        @db.Uuid
+  owner                   Developer?     @relation(fields: [ownerUuid], references: [uuid], onDelete: SetNull)
+  refreshTokens           RefreshToken[]
+  verificationNote        String?        @db.VarChar(500)
+  verificationRequestedAt DateTime?      @db.Timestamptz(3)
+  verifiedAt              DateTime?      @db.Timestamptz(3)
 
   @@index([ownerUuid, createdAt])
 }
@@ -35,10 +38,11 @@ enum DeveloperRole {
 }
 
 model Developer {
-  uuid      String        @id @db.Uuid
-  role      DeveloperRole @default(DEVELOPER)
-  createdAt DateTime      @default(now()) @db.Timestamptz(3)
-  apps      App[]
+  uuid       String        @id @db.Uuid
+  role       DeveloperRole @default(DEVELOPER)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  verifiedAt DateTime?     @db.Timestamptz(3)
+  apps       App[]
 }
 
 model RefreshToken {

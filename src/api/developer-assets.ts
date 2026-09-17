@@ -104,6 +104,59 @@ const consoleStyles = `
   align-items: center;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.row-actions-stacked {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.row-action-form {
+  display: inline-flex;
+}
+
+/* Verification actions sit beside the destructive delete link, so they must not
+   inherit its danger hover treatment. */
+.table-actions .row-actions .button-quiet:hover,
+.row-actions-stacked .button-quiet:hover {
+  color: var(--text);
+}
+
+.verification-queue {
+  display: grid;
+  gap: var(--s3);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.request-list {
+  display: grid;
+  gap: var(--s3);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.request-card {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+}
+
+.request-note {
+  max-width: var(--measure);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
 .role-form select {
   width: auto;
   min-width: 9rem;

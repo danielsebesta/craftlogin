@@ -27,7 +27,7 @@ import { registerHealthRoute, type ReadinessCheck } from './health-route.js';
 import {
   registerInteractionRoutes,
   type ApiInteractionService,
-  type ClientNameLookup,
+  type ClientDirectoryLookup,
 } from './interaction-routes.js';
 import { registerLandingRoutes } from './landing-routes.js';
 import { registerMicrosoftIdentityAssociationRoute } from './microsoft-identity-association-route.js';
@@ -45,7 +45,7 @@ export interface ApiServerOptions {
   readonly accessTokens: AccessTokenAuthenticator;
   readonly appManager: AppManager;
   readonly apps: AppRegistrar;
-  readonly clients: ClientNameLookup & RegisteredOriginLookup;
+  readonly clients: ClientDirectoryLookup & RegisteredOriginLookup;
   readonly consoleClient: { readonly clientId: string };
   readonly cookieKeys: readonly string[];
   readonly fetchImplementation?: typeof fetch;

@@ -36,7 +36,7 @@
     "start:production": "node dist/main.js",
     "test": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:integration:postgres": "vitest run tests/integration/postgres-oidc-adapter.test.ts tests/integration/postgres-developer-access.test.ts tests/integration/postgres-identity-profile.test.ts",
+    "test:integration:postgres": "vitest run tests/integration/postgres-oidc-adapter.test.ts tests/integration/postgres-app-verification.test.ts tests/integration/postgres-developer-access.test.ts tests/integration/postgres-identity-profile.test.ts",
     "test:integration:redis": "vitest run tests/integration/redis-verification-store.test.ts tests/integration/redis-skin-verification-store.test.ts tests/integration/redis-developer-session.test.ts tests/integration/redis-mojang-cache.test.ts tests/integration/redis-rate-limit.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

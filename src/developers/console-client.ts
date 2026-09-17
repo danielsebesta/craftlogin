@@ -17,8 +17,8 @@ export function consoleCallbackUrl(issuer: string): string {
 // The Developer Console is one OAuth client among many: it authenticates
 // through the standard authorization flow like every other application. Its
 // record is seeded at startup so the login flow never depends on manual
-// registration. Seeding only repairs the callback URL and never touches
-// ownership, which stays operator-assigned.
+// registration. Seeding only repairs the callback URL and the first-party
+// verification label, and never touches ownership, which stays operator-assigned.
 export async function ensureConsoleClient(
   database: PrismaClient,
   issuer: string,
@@ -36,6 +36,12 @@ export async function ensureConsoleClient(
         where: { id: existing.id },
       });
     }
+    // The console is first-party, so it carries the verified label by definition.
+    // The condition keeps the write from rewriting an unchanged timestamp.
+    await database.app.updateMany({
+      data: { verifiedAt: new Date() },
+      where: { id: existing.id, verifiedAt: null },
+    });
     return { clientId: existing.clientId, redirectUri };
   }
 
@@ -46,6 +52,7 @@ export async function ensureConsoleClient(
       name: CONSOLE_CLIENT_NAME,
       ownerUuid: null,
       redirectUris: [redirectUri],
+      verifiedAt: new Date(),
     },
     select: { clientId: true },
   });

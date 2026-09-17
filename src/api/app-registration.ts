@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 import { developerUuidSchema } from '../developers/developer-repository.js';
+import { containsOnlyDisplayCharacters } from '../developers/display-text.js';
 import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import { hashClientSecret } from '../oauth/client-secret.js';
 import { redirectUriSchema } from '../oauth/redirect-uri.js';
@@ -109,14 +110,4 @@ export class PrismaAppRegistrar implements AppRegistrar {
 
 function isClientIdCollision(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
-}
-
-function containsOnlyDisplayCharacters(value: string): boolean {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint === undefined || codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f)) {
-      return false;
-    }
-  }
-  return true;
 }

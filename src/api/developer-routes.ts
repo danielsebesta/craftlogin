@@ -1,12 +1,21 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 
-import type { AppManager } from '../developers/app-management.js';
+import {
+  appVerificationDecisionSchema,
+  appVerificationNoteSchema,
+  type AppManager,
+  type AppVerificationDecision,
+} from '../developers/app-management.js';
 import type {
   DeveloperAccessRepository,
   DeveloperRole,
 } from '../developers/developer-repository.js';
-import { developerUuidSchema, LastAdministratorError } from '../developers/developer-repository.js';
+import {
+  developerUuidSchema,
+  developerVerificationDecisionSchema,
+  LastAdministratorError,
+} from '../developers/developer-repository.js';
 import type { DeveloperSessionService } from '../developers/session-service.js';
 import { ApiError } from './errors.js';
 import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
@@ -37,15 +46,23 @@ import {
   renderDeveloperAccessDeniedPage,
   renderDeveloperDashboard,
   renderRemoveDeveloperPage,
+  renderRequestVerificationPage,
   type DashboardNotice,
   type DeveloperDashboardInput,
 } from './developer-pages.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
-import { appRegistrationRateLimit, developerLoginPageRateLimit } from './rate-limit.js';
+import {
+  appRegistrationRateLimit,
+  developerAppVerificationRateLimit,
+  developerLoginPageRateLimit,
+} from './rate-limit.js';
 import {
   developerAppCreateRouteSchema,
   developerAppDeleteConfirmRouteSchema,
   developerAppDeleteRouteSchema,
+  developerAppVerificationDecisionRouteSchema,
+  developerAppVerificationRequestRouteSchema,
+  developerAppVerificationRouteSchema,
   developerAssetRouteSchema,
   developerCallbackRouteSchema,
   developerDashboardRouteSchema,
@@ -54,6 +71,7 @@ import {
   developerLogoutRouteSchema,
   developerRevokeConfirmRouteSchema,
   developerRevokeRouteSchema,
+  developerVerificationDecisionRouteSchema,
 } from './schemas.js';
 
 interface DeveloperAppBody {
@@ -71,9 +89,23 @@ interface AppParams {
   readonly id: string;
 }
 
+const APP_VERIFICATION_NOTICES = {
+  approve: 'verification-approved',
+  reject: 'verification-rejected',
+  revoke: 'verification-revoked',
+} satisfies Record<AppVerificationDecision, DashboardNotice>;
+
 interface DeveloperGrantBody extends CsrfBody {
   readonly role: DeveloperRole;
   readonly uuid: string;
+}
+
+interface AppVerificationRequestBody extends CsrfBody {
+  readonly note?: string;
+}
+
+interface VerificationDecisionBody extends CsrfBody {
+  readonly decision: string;
 }
 
 interface DeveloperParams {
@@ -295,6 +327,136 @@ export function registerDeveloperRoutes(
         'Developer deleted an OAuth application',
       );
       await reply.redirect('/developers', 303);
+    },
+  );
+
+  server.get<{ Params: AppParams }>(
+    '/developers/apps/:id/verification',
+    { schema: developerAppVerificationRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      const apps = await options.appManager.list(session.userUuid, session.role);
+      const app = apps.find((candidate): boolean => candidate.id === request.params.id);
+      if (app?.verification !== 'none') {
+        await reply.redirect('/developers?notice=verification-unavailable', 303);
+        return;
+      }
+      setDeveloperPageHeaders(reply);
+      await reply
+        .type('text/html; charset=utf-8')
+        .send(renderRequestVerificationPage(app, session.csrfToken));
+    },
+  );
+
+  server.post<{ Body: AppVerificationRequestBody; Params: AppParams }>(
+    '/developers/apps/:id/verification',
+    {
+      attachValidation: true,
+      config: { rateLimit: developerAppVerificationRateLimit },
+      schema: developerAppVerificationRequestRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, readStringField(request.body, 'csrfToken'));
+      if (request.validationError !== undefined) {
+        await reply.redirect('/developers?notice=invalid-form', 303);
+        return;
+      }
+      // The note is optional free text: trailing whitespace from a textarea is
+      // formatting, not content, so trim it and treat the result as absent.
+      const note = (readStringField(request.body, 'note') ?? '').trim();
+      const parsedNote = note.length === 0 ? undefined : appVerificationNoteSchema.safeParse(note);
+      if (parsedNote !== undefined && !parsedNote.success) {
+        await reply.redirect('/developers?notice=invalid-form', 303);
+        return;
+      }
+      const outcome = await options.appManager.requestVerification(
+        request.params.id,
+        session.userUuid,
+        parsedNote?.data,
+      );
+      if (outcome !== 'applied') {
+        await reply.redirect('/developers?notice=verification-unavailable', 303);
+        return;
+      }
+      options.logger.info(
+        { actorUuid: session.userUuid, appId: request.params.id },
+        'Developer requested application verification',
+      );
+      await reply.redirect('/developers?notice=verification-requested', 303);
+    },
+  );
+
+  server.post<{ Body: VerificationDecisionBody; Params: AppParams }>(
+    '/developers/admin/apps/:id/verification',
+    { attachValidation: true, schema: developerAppVerificationDecisionRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, readStringField(request.body, 'csrfToken'));
+      options.authentication.requireAdministrator(session);
+      const decision = appVerificationDecisionSchema.safeParse(
+        readStringField(request.body, 'decision'),
+      );
+      if (request.validationError !== undefined || !decision.success) {
+        await reply.redirect('/developers?notice=invalid-form', 303);
+        return;
+      }
+      const outcome = await options.appManager.decideVerification(request.params.id, decision.data);
+      if (outcome !== 'applied') {
+        await reply.redirect('/developers?notice=verification-unavailable', 303);
+        return;
+      }
+      options.logger.info(
+        { actorUuid: session.userUuid, appId: request.params.id, decision: decision.data },
+        'Administrator changed application verification',
+      );
+      await reply.redirect(`/developers?notice=${APP_VERIFICATION_NOTICES[decision.data]}`, 303);
+    },
+  );
+
+  server.post<{ Body: VerificationDecisionBody; Params: DeveloperParams }>(
+    '/developers/admin/developers/:uuid/verification',
+    { attachValidation: true, schema: developerVerificationDecisionRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, readStringField(request.body, 'csrfToken'));
+      options.authentication.requireAdministrator(session);
+      const decision = developerVerificationDecisionSchema.safeParse(
+        readStringField(request.body, 'decision'),
+      );
+      if (request.validationError !== undefined || !decision.success) {
+        await reply.redirect('/developers?notice=invalid-form', 303);
+        return;
+      }
+      const developerUuid = request.params.uuid.toLowerCase();
+      const updated = await options.developers.setVerified(
+        developerUuid,
+        decision.data === 'verify',
+      );
+      if (!updated) {
+        await reply.redirect('/developers?notice=verification-unavailable', 303);
+        return;
+      }
+      options.logger.info(
+        { actorUuid: session.userUuid, decision: decision.data, developerUuid },
+        'Administrator changed developer verification',
+      );
+      await reply.redirect(
+        `/developers?notice=${decision.data === 'verify' ? 'developer-verified' : 'developer-unverified'}`,
+        303,
+      );
     },
   );
 

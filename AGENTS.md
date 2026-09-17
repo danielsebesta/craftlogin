@@ -37,10 +37,11 @@ Keep modules small and organized by responsibility:
   metadata, and provider adapters. Never implement authorization or token protocols by hand.
 - `src/api/` owns Fastify setup, schemas, HTTP routes, the verification page/status endpoint, API
   authentication, centralized errors, OpenAPI generation, and development-only Swagger UI.
-- `src/developers/` owns the UUID allowlist, developer/admin roles, OAuth-client ownership, the
-  seeded first-party Developer Console OAuth client, and opaque Redis-backed console sessions. The
-  console authenticates through the standard authorization flow like any other client; parallel
-  console login routes or interaction hooks are forbidden.
+- `src/developers/` owns the UUID allowlist, developer/admin roles, OAuth-client ownership, manual
+  developer/application verification labels, the seeded first-party Developer Console OAuth client,
+  and opaque Redis-backed console sessions. The console authenticates through the standard
+  authorization flow like any other client; parallel console login routes or interaction hooks are
+  forbidden.
 - `src/verification/` owns the shared atomic interaction resolution and the one-shot Microsoft, Xbox
   Live, XSTS, and Minecraft Services verification client. Token-bearing HTTP modules must not import
   or receive Redis, Prisma, repositories, or caches.
@@ -149,6 +150,9 @@ values, or password-equivalent material.
 - Rate-limit `/oauth2/token`, `/api/apps`, and verification-status requests.
 - OAuth client registration is never anonymous. `/api/apps` and the Developer Console require a
   current allowlisted developer session plus CSRF protection for state-changing requests.
+  Verification is a manual administrator decision and a trust label only: it never authorizes a
+  request, never grants a scope, and must stay enforced by conditional writes so concurrent requests
+  and decisions have exactly one winner.
 - The final administrator cannot be removed or demoted. Preserve this invariant with a serializable
   database transaction; a read followed by a separate write is insufficient.
 - Session cookies are signed, `HttpOnly`, `Secure`, and `SameSite=Lax`. Rotate session identifiers
@@ -166,10 +170,12 @@ The core Prisma models are:
 - `User`: Minecraft UUID primary key, current username, first verification time, and last
   verification time. Do not add email, password, or unrelated PII.
 - `App`: internal ID, public client ID, nullable secret hash for public-client support, display
-  name, exact-match redirect URI array, creation time, and nullable developer ownership for legacy
-  or deliberately unassigned clients.
-- `Developer`: allowlisted Minecraft UUID, developer/admin role, and creation time. It is an access
-  record, not a second identity profile, and must not gain email, password, or unrelated PII.
+  name, exact-match redirect URI array, creation time, nullable developer ownership for legacy or
+  deliberately unassigned clients, and the optional verification request note/timestamp plus the
+  verification timestamp.
+- `Developer`: allowlisted Minecraft UUID, developer/admin role, creation time, and an optional
+  verification timestamp. It is an access record, not a second identity profile, and must not gain
+  email, password, or unrelated PII.
 - `RefreshToken`: token hash, client ID, user UUID, expiry, optional revocation time, and the
   minimum provider-managed payload/index data required to implement the `oidc-provider` adapter
   contract. The raw token identifier must never be persisted.

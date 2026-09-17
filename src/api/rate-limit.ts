@@ -11,6 +11,15 @@ export const appRegistrationRateLimit = {
   timeWindow: 60 * 60 * 1_000,
 };
 
+// A verification request is a rare, developer-initiated write with the same abuse
+// profile as registering an application, but its own bucket so the two do not
+// consume each other's budget.
+export const developerAppVerificationRateLimit = {
+  groupId: 'developer-app-verification',
+  max: appRegistrationRateLimit.max,
+  timeWindow: appRegistrationRateLimit.timeWindow,
+};
+
 export const tokenRateLimit = {
   groupId: 'oauth-token',
   max: 30,

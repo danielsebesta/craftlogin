@@ -85,7 +85,12 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
   } satisfies AuthenticatedDeveloperSession;
   const server = await createApiServer({
     accessTokens: { authenticate: unavailable },
-    appManager: { list: unavailable, remove: unavailable },
+    appManager: {
+      decideVerification: unavailable,
+      list: unavailable,
+      remove: unavailable,
+      requestVerification: unavailable,
+    },
     apps: {
       register: (input) =>
         Promise.resolve({
@@ -98,7 +103,7 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
         }),
     },
     clients: {
-      findClientName: unavailable,
+      findClient: unavailable,
       findClientOwnerUuid: unavailable,
       isAllowedOrigin: unavailable,
     },
@@ -112,7 +117,13 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
     },
     consoleClient: { clientId: 'cl_rate-limit-test-console' },
     developerSessions: { create: unavailable },
-    developers: { find: unavailable, grant: unavailable, list: unavailable, revoke: unavailable },
+    developers: {
+      find: unavailable,
+      grant: unavailable,
+      list: unavailable,
+      revoke: unavailable,
+      setVerified: unavailable,
+    },
     httpPort: 3000,
     interactions: {
       abort: unavailable,

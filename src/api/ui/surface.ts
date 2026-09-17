@@ -54,7 +54,39 @@ export const signInSurfaceStyles = `
 }
 
 .consent-app {
-  display: block;
+  display: grid;
+  gap: var(--s3);
+  justify-items: center;
+}
+
+.verification-badge {
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.verification-badge-icon {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.verification-badge-verified {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+@media (forced-colors: active) {
+  .verification-badge {
+    border-color: currentColor;
+  }
 }
 
 .account-chip {

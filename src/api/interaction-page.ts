@@ -9,6 +9,7 @@ export interface InteractionOwner {
 
 export interface InteractionPageInput {
   readonly appName: string;
+  readonly appVerified?: boolean;
   readonly code?: string;
   readonly interactionId: string;
   readonly minecraftBaseDomain: string;
@@ -102,6 +103,7 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     action: `${interactionPath}/complete`,
     allowsHeading: strings.allowsHeading,
     appName: input.appName,
+    ...(input.appVerified === true ? { appVerified: true } : {}),
     brand: strings.brand,
     cancel: { action: `${interactionPath}/abort`, label: strings.cancelButton },
     continueLabel: strings.continueButton,

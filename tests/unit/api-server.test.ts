@@ -309,6 +309,8 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('ABCDEFGH.craftlogin.com');
     expect(response.body).toContain('Maps &amp; More');
     expect(response.body).not.toContain('Maps & More</strong>');
+    expect(response.body).toContain('verification-badge-verified');
+    expect(response.body).toContain('Verified by CraftLogin');
     expect(response.body).toContain('class="consent-owner"');
     expect(response.body).toContain('by <bdi>VerifiedPlayer</bdi>');
     expect(response.body).toContain(
@@ -991,8 +993,10 @@ describe('CraftLogin API server', (): void => {
             : Promise.reject(new ApiError(401, 'unauthorized', 'Unauthorized')),
       },
       appManager: {
+        decideVerification: (): Promise<'applied'> => Promise.resolve('applied'),
         list: (): Promise<[]> => Promise.resolve([]),
         remove: (): Promise<boolean> => Promise.resolve(true),
+        requestVerification: (): Promise<'applied'> => Promise.resolve('applied'),
       },
       apps: {
         register: (input): Promise<RegisteredApp> => {
@@ -1009,7 +1013,8 @@ describe('CraftLogin API server', (): void => {
         },
       },
       clients: {
-        findClientName: (): Promise<string> => Promise.resolve('Maps & More'),
+        findClient: (): Promise<{ name: string; verified: boolean }> =>
+          Promise.resolve({ name: 'Maps & More', verified: true }),
         findClientOwnerUuid: (): Promise<string> =>
           Promise.resolve('123e4567-e89b-42d3-a456-426614174000'),
         isAllowedOrigin: (origin): Promise<boolean> =>
@@ -1041,6 +1046,9 @@ describe('CraftLogin API server', (): void => {
         list: (): Promise<[]> => Promise.resolve([]),
         revoke: (): never => {
           throw new Error('Unexpected developer revoke');
+        },
+        setVerified: (): never => {
+          throw new Error('Unexpected developer verification change');
         },
       },
       interactions,

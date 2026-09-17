@@ -129,6 +129,19 @@ components:
           minItems: 1
           type: array
           uniqueItems: true
+        verification:
+          enum:
+            - none
+            - requested
+            - verified
+          type: string
+        verificationNote:
+          maxLength: 500
+          minLength: 1
+          type: string
+        verificationRequestedAt:
+          format: date-time
+          type: string
       required:
         - id
         - clientId
@@ -136,6 +149,7 @@ components:
         - name
         - redirectUris
         - createdAt
+        - verification
       type: object
 paths:
   /api/avatars/{uuid}/skin:

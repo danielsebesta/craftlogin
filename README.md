@@ -180,6 +180,20 @@ can create and remove their own public or confidential OAuth clients. Confidenti
 displayed once. Role changes are checked on every request and rotate or revoke active console
 sessions.
 
+#### Application verification
+
+Verification is a manual trust label, not a permission. A developer requests it for one of their
+applications from the console, optionally adding a note for the reviewer. An administrator then
+approves, rejects, or later withdraws it in the console's Administration panel, which lists every
+pending request with its note and the application's owner. The label appears in the console and
+beside the application name on the consent screen.
+
+A verified application gains no access, scopes, or privileges: its credentials, redirect URIs, and
+authorization behavior are unchanged, and nothing is verified automatically. The seeded Developer
+Console client is the only exception, because it is first-party and therefore verified by
+definition. Administrator accounts carry their own independent label, which shows in the access
+registry next to their role; neither label is required for the other.
+
 For a built production image, run the compiled bootstrap command inside the application container:
 
 ```sh
@@ -298,4 +312,5 @@ the required copyright notice and license are available in
 
 ## License
 
-CraftLogin is available under the [MIT License](LICENSE).
+CraftLogin is available under the [MIT License](LICENSE). Bundled third-party assets retain their
+respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -1,5 +1,7 @@
+import { english } from '../../locales/en.js';
 import { escapeHtml } from '../html.js';
 import { renderPageDocument } from './document.js';
+import { renderVerificationBadge } from './verification-badge.js';
 
 // Forty gentle polls cover the five-minute verification code lifetime.
 export const MAXIMUM_POLL_ATTEMPTS = 40;
@@ -88,6 +90,7 @@ export interface SignInPageInput {
   readonly action: string;
   readonly allowsHeading: string;
   readonly appName?: string;
+  readonly appVerified?: boolean;
   readonly brand: string;
   readonly cancel?: SignInCancel;
   readonly continueLabel: string;
@@ -285,10 +288,18 @@ function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefi
 }
 
 export function renderSignInPage(input: SignInPageInput): string {
+  const verifiedBadge =
+    input.appVerified === true
+      ? renderVerificationBadge({
+          kind: 'app',
+          label: english.interaction.verifiedAppBadge,
+          state: 'verified',
+        })
+      : '';
   const headingSuffix =
     input.appName === undefined
       ? ''
-      : `<span class="consent-app"><bdi>${escapeHtml(input.appName)}</bdi></span>`;
+      : `<span class="consent-app"><bdi>${escapeHtml(input.appName)}</bdi>${verifiedBadge}</span>`;
   const securityNote =
     input.securityNote === undefined
       ? ''

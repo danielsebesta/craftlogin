@@ -56,6 +56,7 @@ describe('DeveloperSessionService', (): void => {
       createdAt: '2026-09-07T00:00:00.000Z',
       role: 'admin',
       uuid,
+      verified: false,
     };
     const service = new DeveloperSessionService(
       store,
@@ -93,7 +94,12 @@ describe('DeveloperSessionService', (): void => {
       store,
       {
         find: (): Promise<DeveloperAccess> =>
-          Promise.resolve({ createdAt: '2026-09-07T00:00:00.000Z', role: 'developer', uuid }),
+          Promise.resolve({
+            createdAt: '2026-09-07T00:00:00.000Z',
+            role: 'developer',
+            uuid,
+            verified: false,
+          }),
       },
       {
         info: (): void => undefined,

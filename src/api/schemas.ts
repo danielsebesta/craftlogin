@@ -87,8 +87,11 @@ const managedAppResponseSchema = {
       type: 'array',
       uniqueItems: true,
     },
+    verification: { enum: ['none', 'requested', 'verified'], type: 'string' },
+    verificationNote: { maxLength: 500, minLength: 1, type: 'string' },
+    verificationRequestedAt: { format: 'date-time', type: 'string' },
   },
-  required: ['id', 'clientId', 'clientType', 'name', 'redirectUris', 'createdAt'],
+  required: ['id', 'clientId', 'clientType', 'name', 'redirectUris', 'createdAt', 'verification'],
   type: 'object',
 };
 
@@ -128,6 +131,7 @@ const csrfHeadersSchema = {
 };
 
 const csrfFormProperty = { maxLength: 128, minLength: 1, type: 'string' };
+const appVerificationNoteProperty = { maxLength: 500, type: 'string' };
 const developerRoleProperty = { enum: ['developer', 'admin'], type: 'string' };
 const minecraftUuidProperty = {
   format: 'uuid',
@@ -607,7 +611,18 @@ export const developerDashboardRouteSchema: FastifySchema = {
     additionalProperties: false,
     properties: {
       notice: {
-        enum: ['invalid-form', 'last-admin', 'not-found'],
+        enum: [
+          'developer-unverified',
+          'developer-verified',
+          'invalid-form',
+          'last-admin',
+          'not-found',
+          'verification-approved',
+          'verification-rejected',
+          'verification-requested',
+          'verification-revoked',
+          'verification-unavailable',
+        ],
         type: 'string',
       },
     },
@@ -671,6 +686,82 @@ export const developerAppDeleteConfirmRouteSchema: FastifySchema = {
     200: htmlResponseSchema,
     303: { type: 'null' },
     404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppVerificationRouteSchema: FastifySchema = {
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppVerificationRequestRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      csrfToken: csrfFormProperty,
+      note: appVerificationNoteProperty,
+    },
+    required: ['csrfToken'],
+    type: 'object',
+  },
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppVerificationDecisionRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      csrfToken: csrfFormProperty,
+      decision: { enum: ['approve', 'reject', 'revoke'], type: 'string' },
+    },
+    required: ['csrfToken', 'decision'],
+    type: 'object',
+  },
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerVerificationDecisionRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      csrfToken: csrfFormProperty,
+      decision: { enum: ['verify', 'revoke'], type: 'string' },
+    },
+    required: ['csrfToken', 'decision'],
+    type: 'object',
+  },
+  hide: true,
+  params: developerUuidParamsSchema,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
