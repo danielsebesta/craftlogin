@@ -96,8 +96,13 @@ The verification flow is fixed:
    play-state kick sent after the Join Game packet; a login- or configuration-state disconnect is
    dropped by the client and surfaces to the player as a generic connection error.
 7. A connection to the bare base domain enters the public void lobby, which renders an empty world,
-   answers chat, and never reads or mutates verification state. Every lobby session is bounded by a
-   lifetime timeout and a connection cap.
+   answers chat, and accepts the verification code typed into chat as a bare code, a pasted
+   `<code>.craftlogin.com` subdomain, or a `/verify <code>` command. Chat entry uses the same
+   normalization, the same atomic claim, and the same identity source (the online-mode-
+   authenticated connection) as the handshake path; chat is only a transport for the code, never a
+   source of identity. Code attempts share the lobby chat cooldown, and a failed attempt keeps the
+   player in the lobby so they can retry. Every lobby session is bounded by a lifetime timeout and a
+   connection cap.
 8. The accessible interaction page progressively enhances its initial server-rendered content with
    bounded polling, a short starting interval, and exponential backoff.
 9. A resolved interaction resumes `oidc-provider`, which completes the standard authorization code,

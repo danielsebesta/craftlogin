@@ -8,7 +8,17 @@ import { type MinecraftGhostServer, startGhostServer } from '../../src/mc-server
 import { findAvailablePort } from './support/tcp-port.js';
 
 const loginDisconnectSchema = z.object({ reason: z.string() });
-const chatComponentSchema = z.object({ text: z.string() });
+const chatComponentSchema: z.ZodType<ChatComponent> = z.lazy(() =>
+  z.object({
+    text: z.string(),
+    extra: z.array(chatComponentSchema).optional(),
+  }),
+);
+
+interface ChatComponent {
+  readonly text: string;
+  readonly extra?: readonly ChatComponent[] | undefined;
+}
 
 describe('Minecraft ghost server rejection', (): void => {
   let ghostServer: MinecraftGhostServer | undefined;
@@ -40,10 +50,16 @@ describe('Minecraft ghost server rejection', (): void => {
     const rawReason = await connectAndWaitForRejection(port);
     const parsedReason: unknown = JSON.parse(rawReason);
 
-    expect(chatComponentSchema.parse(parsedReason).text).toBe(english.minecraft.unavailable);
+    expect(flattenChatComponent(chatComponentSchema.parse(parsedReason))).toBe(
+      english.minecraft.unavailable,
+    );
     expect(resolutionAttempts).toBe(0);
   });
 });
+
+function flattenChatComponent(component: ChatComponent): string {
+  return component.text + (component.extra ?? []).map(flattenChatComponent).join('');
+}
 
 async function connectAndWaitForRejection(port: number): Promise<string> {
   const client = minecraftProtocol.createClient({

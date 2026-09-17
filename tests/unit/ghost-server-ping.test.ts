@@ -12,9 +12,16 @@ const dataUriPrefix = 'data:image/png;base64,';
 const serverPingSchema = z.object({
   description: z.object({
     text: z.string(),
-    extra: z.array(z.object({ text: z.string() })),
+    color: z.string(),
+    extra: z.array(z.object({ text: z.string(), color: z.string() })),
   }),
   favicon: z.string(),
+  version: z.object({ name: z.string(), protocol: z.number() }),
+  players: z.object({
+    online: z.number(),
+    max: z.number(),
+    sample: z.array(z.object({ name: z.string() })),
+  }),
 });
 
 describe('Minecraft ghost server advertisement', (): void => {
@@ -44,7 +51,18 @@ describe('Minecraft ghost server advertisement', (): void => {
     const parsedPing = serverPingSchema.parse(result);
 
     expect(parsedPing.description.text).toBe(english.minecraft.motd);
-    expect(parsedPing.description.extra[0]?.text).toBe(`\n${english.minecraft.motdDetail}`);
+    expect(parsedPing.description.color).toBe('#A2D060');
+    expect(parsedPing.description.extra[0]).toEqual({
+      text: `\n${english.minecraft.motdDetail}`,
+      color: '#A7ADA7',
+    });
+
+    expect(parsedPing.version.name).toBe(english.minecraft.listVersion);
+    expect(parsedPing.version.protocol).toBeGreaterThan(0);
+    expect(parsedPing.players.max).toBe(64);
+    expect(parsedPing.players.sample.map((entry): string => entry.name)).toEqual([
+      ...english.minecraft.listHover,
+    ]);
 
     expect(parsedPing.favicon.startsWith(dataUriPrefix)).toBe(true);
     const iconBytes = Buffer.from(parsedPing.favicon.slice(dataUriPrefix.length), 'base64');

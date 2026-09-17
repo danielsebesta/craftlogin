@@ -523,16 +523,23 @@ export const english = {
   minecraft: {
     motd: 'CraftLogin verification',
     motdDetail: 'Join with the code shown in your browser',
-    success: 'Verification complete. You can return to your browser.',
+    success: 'Verification complete.\nYou can return to your browser.',
     unavailable:
-      'This verification code is invalid or has expired. Return to your browser and try again.',
+      'This verification code is invalid or has expired.\nReturn to your browser and try again.',
     temporaryFailure:
-      'Verification is temporarily unavailable. Return to your browser and try again.',
-    shutdown: 'CraftLogin is restarting. Return to your browser and try again.',
-    lobbyWelcome: 'Welcome to CraftLogin. This server verifies Minecraft accounts for sign-in.',
-    lobbyHint:
-      'Start signing in from the application, then join the server address it shows in your browser.',
-    lobbyTimeout: 'You have been disconnected from the CraftLogin lobby. Reconnect to continue.',
-    lobbyFull: 'The CraftLogin lobby is at capacity. Please try again shortly.',
+      'Verification is temporarily unavailable.\nReturn to your browser and try again.',
+    shutdown: 'CraftLogin is restarting.\nReturn to your browser and try again.',
+    lobbyWelcome: 'Start sign-in in your browser, then type your verification code here in chat.',
+    lobbyTitle: 'ᴄʀᴀꜰᴛʟᴏɢɪɴ',
+    lobbySubtitle: 'Start sign-in in your browser',
+    lobbyCountdownLabel: 'You will be kicked in ',
+    lobbyHint: 'Type the code from your browser here in chat, or use /verify <code>.',
+    lobbyInvalidCode: 'That code did not work. Check the code in your browser and try again.',
+    lobbyTimeout: 'You have been disconnected from the CraftLogin lobby.\nReconnect to continue.',
+    lobbyFull: 'The CraftLogin lobby is at capacity.\nPlease try again shortly.',
+    listVersion: 'CraftLogin',
+    listHover: ['Sign in with Minecraft', 'No passwords, no emails'],
+    unsupportedVersion:
+      'This Minecraft version is not supported yet.\nPlease connect with version 26.1 or older to verify, then you can switch back.',
   },
 };

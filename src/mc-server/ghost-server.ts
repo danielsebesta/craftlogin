@@ -1,6 +1,7 @@
 import debug from 'debug';
 import { readFile } from 'node:fs/promises';
 import minecraftProtocol, {
+  type Client,
   type Server,
   type ServerClient,
   type ServerOptions,
@@ -19,22 +20,32 @@ import type {
   VerificationResolution,
   VerificationResolver,
 } from '../verification/verification-resolver.js';
+import { installConfigurationTags } from './configuration-tags.js';
 import { disconnect, isLoggedIn, markLoggedIn, markWorldReady } from './disconnect.js';
 import { extractVerificationCode, isLobbyHost } from './hostname.js';
-import { MinecraftLobby } from './lobby.js';
+import { getMinecraftData } from './minecraft-data.js';
+import { MinecraftLobby, type LobbyCodeVerificationResult } from './lobby.js';
 import { installVersionedRegistryCodec } from './registry-codec.js';
-import { presentVoidWorld, sendVoidMessage } from './void-world.js';
+import { sendServerBrand } from './server-brand.js';
+import {
+  presentVoidWorld,
+  sendVoidMessage,
+  supportsHexColors,
+  WEB_ACCENT_COLOR,
+  WEB_MUTED_COLOR,
+} from './void-world.js';
 
 // Shutdown must not stall on a client that never completes configuration; the reason is best effort.
 const SHUTDOWN_WORLD_WAIT_TIMEOUT_MS = 1_500;
 const MAX_PLAYERS = 10_000;
 const LOBBY_MAX_PLAYERS = 64;
-const LOBBY_LIFETIME_MS = 10 * 60 * 1000;
+const LOBBY_LIFETIME_MS = 40 * 1000;
 const LOBBY_PROMPT_COOLDOWN_MS = 3_000;
 
 const loginHandshakeSchema = z.object({
   nextState: z.literal(2),
   serverHost: z.string(),
+  protocolVersion: z.number(),
 });
 
 const serverIconFileUrl = new URL('../../public/server-icon.png', import.meta.url);
@@ -113,6 +124,7 @@ export class MinecraftGhostServer {
       Object.values(this.server.clients).map((client) =>
         disconnect(client, english.minecraft.shutdown, {
           worldWaitTimeoutMs: SHUTDOWN_WORLD_WAIT_TIMEOUT_MS,
+          tone: 'neutral',
         }),
       ),
     );
@@ -133,9 +145,12 @@ export async function startGhostServer(
 
   const serverIcon = await loadServerIcon(dependencies.logger);
   const lobby = new MinecraftLobby({
+    baseDomain: config.baseDomain,
     maxPlayers: LOBBY_MAX_PLAYERS,
     lifetimeMs: LOBBY_LIFETIME_MS,
     promptCooldownMs: LOBBY_PROMPT_COOLDOWN_MS,
+    verifyCode: (client, code): Promise<LobbyCodeVerificationResult> =>
+      resolveLobbyCode(client, code, dependencies),
   });
   const pendingClients = new WeakMap<ServerClient, PendingClient>();
   const options: ServerOptions = {
@@ -145,6 +160,9 @@ export async function startGhostServer(
     'online-mode': true,
     hideErrors: true,
     keepAlive: true,
+    // Modern vanilla clients otherwise label the session as unverified even though online-mode
+    // authentication succeeded. The library validates Mojang's signed profile key during login.
+    enforceSecureProfile: true,
     maxPlayers: MAX_PLAYERS,
     motd: english.minecraft.motd,
     motdMsg: {
@@ -152,21 +170,25 @@ export async function startGhostServer(
       color: 'green',
       extra: [{ text: `\n${english.minecraft.motdDetail}`, color: 'gray' }],
     },
-    ...(serverIcon === null
-      ? {}
-      : { favicon: serverIcon, beforePing: createPingIconHook(serverIcon) }),
+    ...(serverIcon === null ? {} : { favicon: serverIcon }),
+    beforePing: createPingHook(serverIcon),
     errorHandler: (client, error): void => {
       dependencies.logger.warn(
         { errorKind: getErrorKind(error) },
         'Minecraft client connection failed',
       );
-      void disconnect(client, english.minecraft.temporaryFailure);
+      // The library types this as a bare Client, but error paths always carry the server-side
+      // client object; without it there is nothing to disconnect.
+      if (isServerClient(client)) {
+        void disconnect(client, english.minecraft.temporaryFailure, { tone: 'error' });
+      }
     },
   };
   const server = minecraftProtocol.createServer(options);
 
   server.on('connection', (client): void => {
     installVersionedRegistryCodec(client);
+    installConfigurationTags(client);
 
     client.once('set_protocol', (packet: unknown): void => {
       const parsedHandshake = loginHandshakeSchema.safeParse(packet);
@@ -175,7 +197,22 @@ export async function startGhostServer(
         return;
       }
 
-      const { serverHost } = parsedHandshake.data;
+      const { serverHost, protocolVersion } = parsedHandshake.data;
+
+      // minecraft-data only knows a fixed protocol range (currently up to 26.1). A newer client
+      // would otherwise receive a login success encoded with an older protocol and fail with a
+      // generic DecoderException. Stop before the library writes it and explain what to do.
+      if (getMinecraftData(protocolVersion) === null) {
+        // The server host is never logged: for code subdomains it carries the verification code.
+        dependencies.logger.info(
+          { protocolVersion },
+          'Minecraft client uses an unsupported version',
+        );
+        client.removeAllListeners('login_start');
+        void disconnect(client, english.minecraft.unsupportedVersion, { tone: 'error' });
+        return;
+      }
+
       const code = extractVerificationCode(serverHost, config.baseDomain);
       if (code !== null) {
         const availability = lookupCodeAvailability(code, dependencies);
@@ -186,9 +223,9 @@ export async function startGhostServer(
             return;
           }
           if (result === 'unavailable') {
-            void disconnect(client, english.minecraft.unavailable);
+            void disconnect(client, english.minecraft.unavailable, { tone: 'error' });
           } else if (result === 'error') {
-            void disconnect(client, english.minecraft.temporaryFailure);
+            void disconnect(client, english.minecraft.temporaryFailure, { tone: 'error' });
           }
         });
         return;
@@ -199,7 +236,7 @@ export async function startGhostServer(
         return;
       }
 
-      void disconnect(client, english.minecraft.unavailable);
+      void disconnect(client, english.minecraft.unavailable, { tone: 'error' });
     });
   });
 
@@ -231,11 +268,12 @@ export async function startGhostServer(
       );
     }
     markWorldReady(client);
+    sendServerBrand(client);
 
     if (pending?.kind === 'lobby') {
       if (!lobby.enter(client)) {
         sendVoidMessage(client, english.minecraft.lobbyFull);
-        void disconnect(client, english.minecraft.lobbyFull);
+        void disconnect(client, english.minecraft.lobbyFull, { tone: 'error' });
       }
       return;
     }
@@ -244,7 +282,7 @@ export async function startGhostServer(
       return;
     }
 
-    void disconnect(client, english.minecraft.unavailable);
+    void disconnect(client, english.minecraft.unavailable, { tone: 'error' });
   });
 
   let listening = false;
@@ -305,12 +343,43 @@ async function settleVerification(
   }
 }
 
+// A code typed into lobby chat runs the same atomic claim as the subdomain handshake. The
+// identity still comes from the online-mode-authenticated connection, so chat is only a
+// transport for the code, never a source of identity.
+async function resolveLobbyCode(
+  client: ServerClient,
+  code: string,
+  dependencies: GhostServerDependencies,
+): Promise<LobbyCodeVerificationResult> {
+  const parsedPlayer = authenticatedMinecraftPlayerSchema.safeParse({
+    uuid: client.uuid.toLowerCase(),
+    username: client.username,
+  });
+  if (!parsedPlayer.success) {
+    dependencies.logger.warn('Lobby chat verification found an invalid authenticated profile');
+    return 'error';
+  }
+  try {
+    const resolution = await dependencies.resolver.resolve(code, parsedPlayer.data, new Date());
+    if (resolution === 'resolved') {
+      dependencies.logger.info({ username: client.username }, 'Minecraft verification resolved');
+    }
+    return resolution;
+  } catch (error: unknown) {
+    dependencies.logger.error({ errorKind: getErrorKind(error) }, 'Lobby chat verification failed');
+    return 'error';
+  }
+}
+
 async function finalizeVerification(
   client: ServerClient,
   outcome: Promise<VerificationOutcome>,
   logger: Logger,
 ): Promise<void> {
   const result = await outcome;
+  if (result.kind === 'resolution' && result.value === 'resolved') {
+    logger.info({ username: client.username }, 'Minecraft verification resolved');
+  }
   const message =
     result.kind === 'failure'
       ? english.minecraft.temporaryFailure
@@ -322,7 +391,9 @@ async function finalizeVerification(
     logger.error({ errorKind: result.errorKind }, 'Authenticated Minecraft verification failed');
   }
 
-  await disconnect(client, message);
+  await disconnect(client, message, {
+    tone: result.kind === 'resolution' && result.value === 'resolved' ? 'success' : 'error',
+  });
 }
 
 async function lookupCodeAvailability(
@@ -342,13 +413,62 @@ async function lookupCodeAvailability(
 
 // The status ping expects a data URI, while the login exchange decodes raw base64. Keep the option
 // as raw base64 and enrich the ping response so both paths receive the format they expect.
-function createPingIconHook(
-  iconBase64: string,
-): (response: ServerPingResponse) => ServerPingResponse {
-  return (response: ServerPingResponse): ServerPingResponse => ({
-    ...response,
-    favicon: `data:image/png;base64,${iconBase64}`,
-  });
+// version.name renders as small gray text under the MOTD and players.sample as the hover tooltip
+// over the player count. The count slot itself is client-rendered "online/max" numbers with no
+// text field, so custom text lives in those two places instead.
+const pingVersionSchema = z.looseObject({ name: z.string(), protocol: z.number() });
+const pingPlayersSchema = z.looseObject({
+  online: z.number(),
+  max: z.number(),
+  sample: z.array(z.unknown()).optional(),
+});
+const LIST_SAMPLE_ID = '00000000-0000-0000-0000-000000000000';
+
+function createPingHook(
+  iconBase64: string | null,
+): (response: ServerPingResponse, client: Client) => ServerPingResponse {
+  return (response: ServerPingResponse, client: Client): ServerPingResponse => {
+    const mcData = getMinecraftData(client.protocolVersion);
+    const hex = mcData !== null && supportsHexColors(mcData);
+    const version = pingVersionSchema.safeParse(response['version']);
+    const players = pingPlayersSchema.safeParse(response['players']);
+    return {
+      ...response,
+      ...(iconBase64 === null ? {} : { favicon: `data:image/png;base64,${iconBase64}` }),
+      // The protocol number must stay untouched: the client uses it for compatibility display.
+      ...(version.success
+        ? { version: { ...version.data, name: english.minecraft.listVersion } }
+        : {}),
+      // max reflects the 64-seat lobby capacity rather than the 10000 connection gate.
+      ...(players.success
+        ? {
+            players: {
+              ...players.data,
+              max: LOBBY_MAX_PLAYERS,
+              sample: english.minecraft.listHover.map((text) => ({
+                name: text,
+                id: LIST_SAMPLE_ID,
+              })),
+            },
+          }
+        : {}),
+      // The static motdMsg stays in legacy colors as the fallback for ancient clients; modern
+      // clients receive the exact website palette instead.
+      ...(hex
+        ? {
+            description: {
+              text: english.minecraft.motd,
+              color: WEB_ACCENT_COLOR,
+              extra: [{ text: `\n${english.minecraft.motdDetail}`, color: WEB_MUTED_COLOR }],
+            },
+          }
+        : {}),
+    };
+  };
+}
+
+function isServerClient(client: Client): client is ServerClient {
+  return 'id' in client;
 }
 
 async function loadServerIcon(logger: Logger): Promise<string | null> {

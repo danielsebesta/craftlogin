@@ -12,23 +12,22 @@ export interface PacketField {
   readonly type: unknown;
 }
 
-export interface ChunkLight {
-  readonly skyLight: readonly unknown[];
-  readonly blockLight: readonly unknown[];
-  readonly skyLightMask: unknown;
-  readonly blockLightMask: unknown;
-  readonly emptySkyLightMask: unknown;
-  readonly emptyBlockLightMask: unknown;
+export interface ChunkOptions {
+  readonly minY?: number;
+  readonly worldHeight?: number;
 }
 
 export interface ChunkLike {
   dump(): Buffer;
   getMask(): unknown;
   dumpBiomes?(): readonly number[];
-  dumpLight?(): ChunkLight;
 }
 
-export type ChunkConstructor = new () => ChunkLike;
+export type ChunkConstructor = new (options?: ChunkOptions) => ChunkLike;
+
+export interface MinecraftEffectData {
+  readonly id: number;
+}
 
 export interface MinecraftData {
   readonly version: {
@@ -38,12 +37,23 @@ export interface MinecraftData {
     readonly type: string;
   };
   readonly loginPacket?: Readonly<Record<string, unknown>> | undefined;
+  // Version-specific effect registry (classic numeric IDs up to 1.20.1, data-driven registry
+  // IDs from 1.20.2). Effects unknown to a version are simply absent, e.g. Darkness pre-1.19.
+  readonly effectsByName?: Readonly<Record<string, MinecraftEffectData>> | undefined;
   readonly protocol: {
     readonly play: {
       readonly toClient: {
         readonly types: Readonly<Record<string, unknown>>;
       };
     };
+    // Versions before 1.20.2 have no configuration state at all.
+    readonly configuration?:
+      | {
+          readonly toClient: {
+            readonly types: Readonly<Record<string, unknown>>;
+          };
+        }
+      | undefined;
   };
 }
 
@@ -55,12 +65,20 @@ const minecraftDataSchema = z.looseObject({
     type: z.string(),
   }),
   loginPacket: z.record(z.string(), z.unknown()).optional(),
+  effectsByName: z.record(z.string(), z.object({ id: z.number() })).optional(),
   protocol: z.object({
     play: z.object({
       toClient: z.object({
         types: z.record(z.string(), z.unknown()),
       }),
     }),
+    configuration: z
+      .object({
+        toClient: z.object({
+          types: z.record(z.string(), z.unknown()),
+        }),
+      })
+      .optional(),
   }),
 });
 
@@ -111,6 +129,11 @@ export function getPacketFields(mcData: MinecraftData, packetType: string): read
 
 export function hasPacket(mcData: MinecraftData, packetType: string): boolean {
   return Object.hasOwn(mcData.protocol.play.toClient.types, packetType);
+}
+
+export function hasConfigurationPacket(mcData: MinecraftData, packetType: string): boolean {
+  const types = mcData.protocol.configuration?.toClient.types;
+  return types !== undefined && Object.hasOwn(types, packetType);
 }
 
 export function getFieldType(fields: readonly PacketField[], fieldName: string): unknown {
