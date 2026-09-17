@@ -16,6 +16,7 @@ import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
 import { registerAvatarRoutes } from './avatar-routes.js';
 import { registerBackgroundAssetRoute } from './background-asset.js';
+import { registerCanonicalOriginRedirect } from './canonical-origin.js';
 import type { RegisteredOriginLookup } from './client-directory.js';
 import type { CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
@@ -77,6 +78,9 @@ export interface ApiServerOptions {
 
 export async function createApiServer(options: ApiServerOptions): Promise<FastifyInstance> {
   const server = createFastifyInstance(options);
+  if (options.nodeEnvironment === 'production') {
+    registerCanonicalOriginRedirect(server, options.issuer);
+  }
 
   await registerOpenApi(server, {
     issuer: options.issuer,

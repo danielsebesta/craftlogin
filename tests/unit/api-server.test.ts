@@ -193,6 +193,20 @@ describe('CraftLogin API server', (): void => {
     );
   });
 
+  it('redirects HTTP aliases to the canonical HTTPS origin', async (): Promise<void> => {
+    const server = await buildServer('production', new InteractionStub());
+    const response = await server.inject({
+      headers: { host: 'auth.craftlogin.com' },
+      method: 'GET',
+      url: '/oauth2/authorize?client_id=test',
+    });
+
+    expect(response.statusCode).toBe(308);
+    expect(response.headers.location).toBe(
+      'https://craftlogin.com/oauth2/authorize?client_id=test',
+    );
+  });
+
   it('serves a simple accessible project overview at the default route', async (): Promise<void> => {
     const server = await buildServer('development', new InteractionStub());
     const response = await server.inject({ method: 'GET', url: '/' });
