@@ -30,6 +30,7 @@ import {
   type ApiInteractionService,
   type ClientDirectoryLookup,
 } from './interaction-routes.js';
+import { registerIntegrationRoutes } from './integration-routes.js';
 import { registerLandingRoutes } from './landing-routes.js';
 import { registerMicrosoftIdentityAssociationRoute } from './microsoft-identity-association-route.js';
 import {
@@ -112,6 +113,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     registerAvatarRoutes(server, options.minecraft);
   }
   registerLandingRoutes(server, { showDocumentation: options.nodeEnvironment !== 'production' });
+  registerIntegrationRoutes(server, options.issuer);
   registerHealthRoute(server, options.readiness);
   registerOidcHttpRoutes(server, options.oidcHandler);
   registerInteractionRoutes(server, {

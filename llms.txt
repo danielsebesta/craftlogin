@@ -1,0 +1,27 @@
+# CraftLogin
+
+> CraftLogin is an open-source OpenID Connect provider for Minecraft Java Edition identities. Websites can add “Sign in with Minecraft” without collecting Minecraft passwords or email addresses.
+
+Use OpenID Connect Authorization Code Flow through a maintained OIDC library. CraftLogin requires a fresh state value and PKCE S256 for every public and confidential client. Register exact callback URIs; wildcards are not allowed. Never expose a confidential client secret to browser code or an AI tool.
+
+## Integration
+
+- [Complete integration context](https://craftlogin.com/llms-full.txt): Protocol requirements, identity claims, implementation prompt, and review checklist.
+- [AI prompt generator](https://craftlogin.com/docs/integrations/ai): Generate a stack-aware prompt for Claude Code, Codex, Cursor, Copilot, and similar coding agents.
+- [OIDC discovery](https://craftlogin.com/.well-known/openid-configuration): Authoritative issuer metadata and endpoint URLs.
+- [OpenAPI](https://craftlogin.com/openapi.yaml): CraftLogin HTTP API reference outside the standard OIDC protocol.
+- [Developer Console](https://craftlogin.com/developers): Register public or confidential applications and exact redirect URIs.
+
+## Identity
+
+- Request `openid profile`.
+- Use `sub` (the canonical Minecraft UUID) as the stable account key.
+- Use `preferred_username` only as a changeable display name.
+- `picture` is the current Minecraft avatar URL.
+- `acr` and `amr` identify the completed verification method.
+
+## Optional
+
+- Request `offline_access` only when refresh tokens are genuinely required.
+- Prefer discovery metadata over hard-coded endpoint paths.
+- Do not log codes, tokens, secrets, state, nonce, PKCE verifiers, cookies, or complete callback URLs.

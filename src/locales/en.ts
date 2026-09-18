@@ -12,6 +12,106 @@ export const english = {
     operator: 'Operated independently by Daniel Šebesta. Contact: contact@craftlogin.com.',
     skipToContent: 'Skip to main content',
   },
+  integration: {
+    affiliation:
+      'CraftLogin is independent software and is not approved by or associated with Mojang or Microsoft.',
+    copied: 'Copied',
+    copyPrompt: 'Copy prompt',
+    fields: {
+      clientId: 'Client ID',
+      clientIdHint: 'This is safe to include. Never paste the client secret into an AI tool.',
+      clientType: 'Client type',
+      confidential: 'Confidential server application',
+      framework: 'Framework',
+      issuer: 'Issuer',
+      postLogoutRedirectUri: 'Post-logout redirect URI',
+      public: 'Public client',
+      redirectUri: 'Exact callback URI',
+      stacks: {
+        generic: 'Generic OpenID Connect',
+        nextjs: 'Next.js with Auth.js',
+        node: 'Node.js server',
+        php: 'PHP',
+        python: 'Python',
+        spa: 'Browser-only SPA',
+      },
+    },
+    footer: 'Use OpenID Connect discovery. Never share your client secret with an AI tool.',
+    generate: 'Generate prompt',
+    heading: 'Implement CraftLogin with AI',
+    intro:
+      'Generate a security-focused prompt for Claude Code, Codex, Cursor, Copilot, or another coding agent. The agent will adapt the integration to your existing project.',
+    navigation: {
+      discovery: 'OIDC discovery',
+      llmGuide: 'LLM guide',
+    },
+    navigationLabel: 'Integration navigation',
+    promptHeading: 'Your implementation prompt',
+    promptHint:
+      'Review the values, copy the complete prompt, and run it from the root of your application project.',
+    securityHeading: 'Before you start',
+    securityItems: [
+      'Create an application in the Developer Console and register the callback URI exactly.',
+      'Use a confidential client only when a trusted backend can protect its secret.',
+      'Provide only the secret environment-variable name to the agent, never the secret value.',
+    ],
+    prompt: {
+      labels: {
+        clientId: 'Client ID',
+        clientType: 'Client type',
+        configuration: 'Configuration',
+        discovery: 'Discovery document',
+        issuer: 'OIDC issuer',
+        postLogoutRedirectUri: 'Post-logout redirect URI',
+        protocolRequirements: 'Protocol and security requirements',
+        redirectUri: 'Exact redirect URI',
+        secretRule: 'Secret rule',
+        stackRequirements: 'Stack-specific requirements',
+      },
+      opening: 'Implement “Sign in with CraftLogin” in this project.',
+      inspect:
+        'First inspect the application framework, routing, session management, environment conventions, tests, and authentication dependencies. Reuse established patterns and do not replace unrelated authentication code. Before editing, summarize the architecture and implementation plan. If a required input or framework fact is missing, stop and ask instead of guessing.',
+      secret: {
+        confidential:
+          'Read the secret only from the server-side CRAFTLOGIN_CLIENT_SECRET environment variable. Never ask me to paste its value.',
+        public: 'This is a public client. Do not configure, request, or invent a client secret.',
+      },
+      requirements: [
+        'Use a maintained OpenID Connect library appropriate for this project. Do not implement OAuth, token exchange, discovery, or JWT validation manually.',
+        'Use Authorization Code Flow and request “openid profile”. Request “offline_access” only if persistent delegated access is genuinely required.',
+        'Generate a cryptographically random state for each attempt, bind it to the initiating browser session, validate it, and consume it exactly once.',
+        'Always use PKCE S256, including for confidential clients. Generate a fresh secure verifier for each attempt.',
+        'Use a nonce when the selected OIDC library supports or requires one.',
+        'Keep state, nonce, and verifier server-side or in Secure, HttpOnly, SameSite=Lax, short-lived cookies. Never store them or provider tokens in localStorage.',
+        'Use the exact registered redirect URI. Do not use wildcards or derive security-critical URLs from untrusted Host, forwarded headers, or query parameters.',
+        'Let the OIDC library validate issuer, signature, audience, expiry, nonce, and authorization errors. Read endpoint URLs from discovery.',
+        'Use “sub” as the stable local account key; it is the canonical Minecraft UUID. Treat “preferred_username” as a changeable display name and “picture” as the avatar. Preserve “acr” and “amr” if useful to policy.',
+        "Rotate the local session identifier after login and retain the application's cookie and CSRF protections.",
+        'Prevent open redirects by allowing only local or explicitly configured return destinations.',
+        'End the local session on logout and use the discovered “end_session_endpoint” when supported. Never accept arbitrary post-logout destinations.',
+        'Never log or expose client secrets, authorization codes, access or refresh tokens, state, nonce, PKCE verifiers, cookies, or complete callback URLs.',
+        'Return useful but non-sensitive callback errors and fail closed when configuration is missing.',
+      ],
+      implement:
+        'Implement the login action, callback, create-or-find user by “sub”, display-data update, local authenticated session, current-user access, logout, configuration validation, environment documentation, and accessible “Sign in with Minecraft” UI.',
+      tests:
+        'Add tests for successful login, provider denial, invalid or missing state, replayed state, and missing configuration. Include a test proving the username is not used as the persistent identity key.',
+      finish:
+        "After editing, run the project's formatter, type checker, linter, and tests. Report changed files, environment variables, the exact callback URI to register in CraftLogin, commands run, and remaining manual setup. Do not claim completion if checks fail.",
+      stackSupplements: {
+        generic:
+          'Choose the maintained OIDC client recommended by the existing framework. Explain the choice before adding a dependency.',
+        nextjs:
+          "Determine the installed Next.js and Auth.js versions and whether App Router or Pages Router is used. Follow those exact APIs. Configure a generic OIDC provider through discovery and use Auth.js's built-in state and PKCE checks. Keep provider configuration server-only, preserve existing adapters and callbacks, and expose only the minimum identity fields to Client Components.",
+        node: 'Detect the existing Node.js framework, module system, session middleware, and package manager. Prefer its established OIDC adapter or a maintained standards-focused client such as openid-client. Keep token operations server-side, integrate with the existing error and proxy configuration, and do not add a second web framework or session store.',
+        php: 'Detect Laravel, Symfony, or the existing PHP framework and reuse its authentication, session, configuration, CSRF, and test conventions. Choose a maintained OIDC-capable package with discovery, state, PKCE S256, and ID-token validation; a generic OAuth profile response alone is not validated OIDC identity. Regenerate the PHP session ID after login.',
+        python:
+          'Detect Django, Flask, FastAPI, or the existing Python framework and reuse its authentication, session, CSRF, and test conventions. Prefer a maintained OIDC integration or Authlib-based framework client. Do not decode a JWT as a substitute for validation, and do not block an async server with synchronous HTTP calls.',
+        spa: 'This must be a public client with no client secret. Prefer an existing backend-for-frontend and server-managed session if this repository has a server component. If it is genuinely browser-only, use a maintained browser OIDC client and keep tokens in memory rather than localStorage or other long-lived script-readable storage. Explain the residual XSS and token-exposure risk.',
+      },
+    },
+    title: 'AI integration prompt',
+  },
   api: {
     documentation: {
       description: 'OAuth 2.0 and OpenID Connect identity for Minecraft Java Edition accounts.',
@@ -409,6 +509,7 @@ export const english = {
       brand: 'CraftLogin',
       developers: 'Console',
       documentation: 'Docs',
+      integration: 'Implement with AI',
       github: 'GitHub',
     },
     quickstart: {

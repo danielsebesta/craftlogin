@@ -1,0 +1,113 @@
+# CraftLogin integration guide for coding agents
+
+> Implement CraftLogin as a standard OpenID Connect provider. This document is for agents modifying a relying website, not for contributors modifying CraftLogin itself.
+
+## Product and protocol
+
+CraftLogin authenticates a Minecraft Java Edition identity. The issuer is `https://craftlogin.com`. Obtain the current authorization, token, UserInfo, JWKS, revocation, introspection, and logout endpoints from `https://craftlogin.com/.well-known/openid-configuration`.
+
+Use a maintained OIDC library. Do not implement OAuth, discovery, token exchange, or JWT validation manually. Use Authorization Code Flow with `response_type=code`, scopes `openid profile`, an exact registered callback URI, a fresh cryptographically random state, and PKCE `code_challenge_method=S256`. CraftLogin requires PKCE for public and confidential clients. Use a nonce when the library supports or requires it.
+
+Request `offline_access` only when persistent delegated access is required. Refresh tokens are credentials and need protected storage and correct rotation handling.
+
+## Client types and registration
+
+The developer registers an application and exact callback URIs in `https://craftlogin.com/developers`.
+
+- A confidential client has a trusted server capable of protecting `CRAFTLOGIN_CLIENT_SECRET`.
+- A public client cannot protect a secret and must not be configured with one.
+- Browser-only, mobile, and distributed binaries are public clients.
+- Never ask a user to paste a client secret into an AI prompt.
+- Never expose a secret in browser JavaScript, source control, logs, rendered errors, or snapshots.
+
+Suggested configuration:
+
+```dotenv
+CRAFTLOGIN_ISSUER=https://craftlogin.com
+CRAFTLOGIN_CLIENT_ID=cl_replace_me
+CRAFTLOGIN_CLIENT_SECRET=
+CRAFTLOGIN_REDIRECT_URI=https://example.com/auth/craftlogin/callback
+CRAFTLOGIN_POST_LOGOUT_REDIRECT_URI=https://example.com/
+```
+
+## Transaction security
+
+Bind state, nonce, and the PKCE verifier to the initiating browser transaction. Store them server-side or in Secure, HttpOnly, SameSite=Lax, short-lived cookies. Validate state and consume the transaction once. Reject missing, changed, expired, or replayed state. Do not use localStorage for protocol transactions or provider tokens.
+
+Do not derive callback or security-critical URLs from untrusted Host, forwarded headers, or query parameters. Prevent open redirects by accepting only local or explicitly configured return locations.
+
+Let the OIDC library validate issuer, signature, audience, expiry, nonce, and protocol error responses. Rotate the relying application's local session identifier after successful login. Preserve its existing CSRF controls.
+
+## Claims and account mapping
+
+- `sub`: stable canonical Minecraft UUID; use this as the persistent account key.
+- `preferred_username`: current Minecraft username; display only because it can change.
+- `picture`: current Minecraft avatar URL.
+- `acr`: authentication context / verification path.
+- `amr`: authentication method.
+
+Never key permissions, purchases, bans, or account links by username. A username change should update display data, not create another account.
+
+## Logout
+
+Always invalidate the local application session. Use the discovery `end_session_endpoint` when RP-initiated provider logout is desired. Only use preconfigured post-logout destinations and never forward arbitrary redirect input.
+
+## Sensitive data
+
+Never log or expose client secrets, authorization codes, access or refresh tokens, state, nonce, PKCE verifiers, session cookies, or complete callback URLs. Return generic callback errors while retaining only sanitized server diagnostics.
+
+## Implementation prompt
+
+Replace placeholders and give this prompt to a coding agent. Do not include a secret value.
+
+```text
+Implement “Sign in with CraftLogin” in this project.
+
+First inspect the framework, routing, session management, environment conventions, tests, and authentication dependencies. Reuse established patterns. Before editing, summarize the architecture and plan. If a required fact is missing, ask instead of guessing.
+
+Configuration:
+- issuer: {{CRAFTLOGIN_ISSUER}}
+- client ID: {{CRAFTLOGIN_CLIENT_ID}}
+- client type: {{public|confidential}}
+- exact callback URI: {{EXACT_REDIRECT_URI}}
+- post-logout URI: {{POST_LOGOUT_REDIRECT_URI}}
+- confidential secret variable: CRAFTLOGIN_CLIENT_SECRET; never ask for its value
+
+Use discovery at {{CRAFTLOGIN_ISSUER}}/.well-known/openid-configuration and a maintained OIDC library. Implement Authorization Code Flow with openid profile, cryptographically random session-bound single-use state, and fresh PKCE S256 for every attempt. Use nonce when applicable. Do not implement token or JWT validation manually.
+
+Keep protocol transaction data protected and short-lived. A confidential secret is server-only; a public client has no secret. Use exact registered URLs, reject open redirects, rotate the local session after login, retain CSRF controls, and use the discovered logout endpoint when appropriate.
+
+Map sub as the stable Minecraft UUID account key. Treat preferred_username as a changeable display name, picture as an avatar, and preserve acr/amr if useful. Never key identity by username.
+
+Do not log or expose secrets, codes, tokens, state, nonce, verifiers, cookies, or complete callback URLs.
+
+Implement login, callback, create/find user, display-data update, local session, current-user access, logout, fail-closed configuration, accessible UI, documentation, and tests for success, provider denial, invalid/missing/replayed state, missing configuration, and username changes.
+
+Run the project's formatter, type checker, linter, and tests. Report changed files, variables, exact callback URI, commands, and manual setup. Do not claim completion while checks fail.
+```
+
+A stack-specific prompt can be generated at `https://craftlogin.com/docs/integrations/ai`.
+
+## Review checklist
+
+Confirm with concrete code and test evidence:
+
+1. Discovery and a maintained OIDC library are used.
+2. Authorization Code Flow, state, and PKCE S256 are mandatory.
+3. State is browser-bound, short-lived, and single-use.
+4. Redirect URIs are exact and trusted.
+5. Secrets and tokens stay out of browser bundles and logs.
+6. The library validates issuer, signature, audience, expiry, nonce, and errors.
+7. `sub`, not username, is the account key.
+8. The local session rotates after login and logout invalidates it.
+9. Return and logout destinations cannot become open redirects.
+10. Refresh-token use and storage are justified and protected.
+11. Automated tests cover success and negative callback cases.
+
+## References
+
+- OIDC discovery: https://craftlogin.com/.well-known/openid-configuration
+- API reference: https://craftlogin.com/openapi.yaml
+- Developer Console: https://craftlogin.com/developers
+- Prompt generator: https://craftlogin.com/docs/integrations/ai
+- Source: https://github.com/danielsebesta/craftlogin

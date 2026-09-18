@@ -189,6 +189,7 @@ ${sections
       navigation: {
         items: [
           { href: '/developers', label: strings.navigation.developers },
+          { href: '/docs/integrations/ai', label: strings.navigation.integration },
           ...(input.showDocumentation
             ? [{ href: '/docs/', label: strings.navigation.documentation }]
             : []),

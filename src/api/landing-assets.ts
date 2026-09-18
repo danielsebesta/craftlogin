@@ -273,6 +273,28 @@ main.container::before {
   text-align: right;
 }
 
+.integration-hero {
+  padding-bottom: var(--s5);
+}
+
+.integration-form {
+  display: grid;
+  gap: var(--s4);
+  max-width: 48rem;
+  margin-top: var(--s5);
+}
+
+.integration-form .button {
+  justify-self: start;
+}
+
+.integration-prompt {
+  max-height: 42rem;
+  margin-top: var(--s4);
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
 @media (min-width: 48rem) {
   .landing-steps,
   .use-list {

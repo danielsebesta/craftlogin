@@ -308,6 +308,72 @@ describe('CraftLogin API server', (): void => {
     });
   });
 
+  it('serves agent-ready OIDC integration guidance and a stack-aware prompt', async (): Promise<void> => {
+    const server = await buildServer('production', new InteractionStub());
+    const page = await server.inject({
+      method: 'GET',
+      url: '/docs/integrations/ai?stack=nextjs&clientType=public&clientId=cl_example&issuer=https%3A%2F%2Fcraftlogin.com&redirectUri=https%3A%2F%2Fexample.com%2Fcallback&postLogoutRedirectUri=https%3A%2F%2Fexample.com%2F',
+    });
+
+    expect(page.statusCode).toBe(200);
+    expect(page.headers['content-type']).toContain('text/html');
+    expect(page.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(page.headers['content-security-policy']).toContain("form-action 'self'");
+    expect(page.body).toContain('<h1 id="integration-heading">Implement CraftLogin with AI</h1>');
+    expect(page.body).toContain('value="nextjs" selected');
+    expect(page.body).toContain('value="public" selected');
+    expect(page.body).toContain('Client ID: cl_example');
+    expect(page.body).toContain('This is a public client. Do not configure');
+    expect(page.body).toContain('Auth.js');
+    expect(page.body).toContain('Use “sub” as the stable local account key');
+    expect(page.body).not.toContain('CRAFTLOGIN_CLIENT_SECRET=');
+
+    const stackShortcut = await server.inject({
+      method: 'GET',
+      url: '/docs/integrations/ai/python',
+    });
+    expect(stackShortcut.statusCode).toBe(302);
+    expect(stackShortcut.headers.location).toBe('/docs/integrations/ai?stack=python');
+
+    const integrationIndex = await server.inject({ method: 'GET', url: '/docs/integrations' });
+    expect(integrationIndex.statusCode).toBe(302);
+    expect(integrationIndex.headers.location).toBe('/docs/integrations/ai');
+
+    const script = await server.inject({ method: 'GET', url: '/assets/integration.js' });
+    expect(script.statusCode).toBe(200);
+    expect(script.headers['content-type']).toContain('text/javascript');
+    expect(script.body).toContain('navigator.clipboard.writeText');
+
+    const concise = await server.inject({ method: 'GET', url: '/llms.txt' });
+    expect(concise.statusCode).toBe(200);
+    expect(concise.headers['content-type']).toContain('text/markdown');
+    expect(concise.headers['cache-control']).toBe('public, max-age=3600');
+    expect(concise.body).toContain('PKCE S256');
+    expect(concise.body).toContain('/llms-full.txt');
+
+    const full = await server.inject({ method: 'GET', url: '/llms-full.txt' });
+    expect(full.statusCode).toBe(200);
+    expect(full.body).toContain('# CraftLogin integration guide for coding agents');
+    expect(full.body).toContain('Never ask a user to paste a client secret');
+    expect(full.body).toContain('## Implementation prompt');
+
+    const openApi = await server.inject({ method: 'GET', url: '/openapi.yaml' });
+    expect(openApi.statusCode).toBe(200);
+    expect(openApi.headers['content-type']).toContain('application/yaml');
+    expect(openApi.body).toContain('openapi: 3.1.0');
+  });
+
+  it('rejects invalid integration prompt generator input without coercion', async (): Promise<void> => {
+    const server = await buildServer('test', new InteractionStub());
+    const response = await server.inject({
+      method: 'GET',
+      url: '/docs/integrations/ai?stack=unsupported',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: 'bad_request' } });
+  });
+
   it('renders a secure semantic interaction page with a no-JavaScript fallback', async (): Promise<void> => {
     const interactions = new InteractionStub();
     const server = await buildServer('test', interactions);

@@ -483,6 +483,72 @@ export const landingAssetRouteSchema: FastifySchema = {
   },
 };
 
+export const integrationPageRouteSchema: FastifySchema = {
+  hide: true,
+  querystring: {
+    additionalProperties: false,
+    properties: {
+      clientId: {
+        maxLength: 256,
+        minLength: 1,
+        pattern: '^cl_[A-Za-z0-9_-]+$',
+        type: 'string',
+      },
+      clientType: { enum: ['confidential', 'public'], type: 'string' },
+      issuer: { format: 'uri', maxLength: 2_048, pattern: '^https?://', type: 'string' },
+      postLogoutRedirectUri: {
+        format: 'uri',
+        maxLength: 2_048,
+        pattern: '^https?://',
+        type: 'string',
+      },
+      redirectUri: {
+        format: 'uri',
+        maxLength: 2_048,
+        pattern: '^https?://',
+        type: 'string',
+      },
+      stack: { enum: ['generic', 'nextjs', 'node', 'php', 'python', 'spa'], type: 'string' },
+    },
+    type: 'object',
+  },
+  response: {
+    200: {
+      content: { 'text/html': { schema: { type: 'string' } } },
+      description: english.integration.intro,
+    },
+  },
+};
+
+export const integrationStackRouteSchema: FastifySchema = {
+  hide: true,
+  params: {
+    additionalProperties: false,
+    properties: {
+      stack: { enum: ['generic', 'nextjs', 'node', 'php', 'python', 'spa'], type: 'string' },
+    },
+    required: ['stack'],
+    type: 'object',
+  },
+  response: {
+    302: { type: 'null' },
+  },
+};
+
+export const integrationIndexRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    302: { type: 'null' },
+  },
+};
+
+export const integrationTextRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+  },
+};
+
 export const currentUserRouteSchema: FastifySchema = {
   description: operations.currentUser.description,
   headers: bearerHeadersSchema,
