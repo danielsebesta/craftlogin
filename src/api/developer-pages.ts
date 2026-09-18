@@ -31,6 +31,7 @@ export interface DeveloperDashboardInput {
   };
   readonly notice?: DashboardNotice;
   readonly role: DeveloperRole;
+  readonly showDocumentation?: boolean;
   readonly username: string;
   readonly userUuid: string;
 }
@@ -56,6 +57,10 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
       ? renderAdministratorPanel(input.developers, input.apps, input.csrfToken, input.notice)
       : '';
   const formOpen = input.apps.length === 0 || input.formError !== undefined;
+  const docsLink =
+    input.showDocumentation === true
+      ? `<a class="button button-secondary console-section-link" href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>`
+      : '';
   const formErrorNotice =
     input.formError === undefined
       ? ''
@@ -85,7 +90,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
         <section class="console-section" aria-labelledby="apps-heading">
           <div class="console-section-head">
             <h2 id="apps-heading">${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
-            <a class="button button-secondary console-section-link" href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>
+            ${docsLink}
           </div>
           ${renderAppList(input.apps, input.role, input.csrfToken)}
         </section>

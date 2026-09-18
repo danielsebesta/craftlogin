@@ -136,6 +136,7 @@ export interface DeveloperRoutesOptions {
   readonly logger: FastifyBaseLogger;
   readonly players?: MinecraftPlayerLookup;
   readonly sessions: Pick<DeveloperSessionService, 'create'>;
+  readonly showDocumentation: boolean;
   readonly users: CurrentUserLookup;
 }
 
@@ -244,6 +245,7 @@ export function registerDeveloperRoutes(
         apps,
         csrfToken: session.csrfToken,
         role: session.role,
+        showDocumentation: options.showDocumentation,
         username: requireDashboardUser(user, session.userUuid).username,
         userUuid: session.userUuid,
         ...(developers === undefined ? {} : { developers }),
@@ -605,6 +607,7 @@ async function renderDashboardError(
     formError: english.developer.app.formErrorNotice,
     formValues: values,
     role: session.role,
+    showDocumentation: options.showDocumentation,
     username: requireDashboardUser(user, session.userUuid).username,
     userUuid: session.userUuid,
     ...(developers === undefined ? {} : { developers }),

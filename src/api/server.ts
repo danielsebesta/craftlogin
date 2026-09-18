@@ -147,6 +147,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     issuer: options.issuer,
     logger: server.log,
     sessions: options.developerSessions,
+    showDocumentation: options.nodeEnvironment !== 'production',
     users: options.users,
     ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });

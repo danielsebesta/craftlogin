@@ -180,6 +180,7 @@ describe('Developer Console', (): void => {
       'href="/developers/apps/123e4567-e89b-42d3-a456-426614174001/verification"',
     );
     expect(response.body).toContain('Request verification');
+    expect(response.body).toContain('href="/docs/"');
     expect(response.body).not.toContain('Verification requests');
   });
 
