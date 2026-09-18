@@ -78,6 +78,13 @@ export function renderLandingPage(input: LandingPageInput): string {
       title: strings.quickstart.heading,
     },
     {
+      body: `<p class="section-intro">${escapeHtml(strings.aiPrompt.text)}</p>
+          <button class="button button-secondary" type="button" data-copy-target="#craftlogin-agent-prompt" data-copied-label="${escapeHtml(strings.aiPrompt.copied)}">${escapeHtml(strings.aiPrompt.copy)}</button>
+          <pre id="craftlogin-agent-prompt" class="code-block landing-ai-prompt" tabindex="0"><code>${escapeHtml(strings.aiPrompt.prompt)}</code></pre>`,
+      id: 'implement-with-ai',
+      title: strings.aiPrompt.heading,
+    },
+    {
       body: `<p class="section-intro">${escapeHtml(claims.text)}</p>
           <div class="table-wrap">
             <table class="table">
@@ -189,7 +196,6 @@ ${sections
       navigation: {
         items: [
           { href: '/developers', label: strings.navigation.developers },
-          { href: '/docs/integrations/ai', label: strings.navigation.integration },
           ...(input.showDocumentation
             ? [{ href: '/docs/', label: strings.navigation.documentation }]
             : []),
@@ -199,6 +205,7 @@ ${sections
       },
     },
     mainClass: 'container',
+    script: '/assets/prompt-copy.js',
     stylesheet: '/assets/landing.css',
     title: `${strings.navigation.brand} · ${strings.hero.heading}`,
   });

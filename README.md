@@ -61,11 +61,11 @@ through `acr_values`; without that parameter, all available methods are offered.
 
 ## Identity and client integration
 
-Developers can use the public [OIDC integration guide](docs/integrations/oidc.md) and
-[AI coding-agent prompts](docs/integrations/ai/README.md) to add CraftLogin to an existing website.
-The deployed service exposes the same machine-readable context at `/llms.txt` and `/llms-full.txt`,
-plus a stack-aware prompt generator at `/docs/integrations/ai`. Never paste a confidential client
-secret into an AI tool.
+Developers can use the public [OIDC integration guide](docs/integrations/oidc.md) to add CraftLogin
+to an existing website. The landing page provides one copyable implementation prompt for Claude
+Code, Codex, Cursor, Copilot, and similar coding agents. The deployed service exposes the complete
+machine-readable integration contract at `/llms.txt` and `/llms-full.txt`. Never paste a
+confidential client secret into an AI tool.
 
 The `profile` scope returns the current Minecraft username as `preferred_username` and a `picture`
 URL that serves a head rendered from the account's current Mojang skin. CraftLogin resolves the skin

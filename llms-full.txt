@@ -56,38 +56,6 @@ Always invalidate the local application session. Use the discovery `end_session_
 
 Never log or expose client secrets, authorization codes, access or refresh tokens, state, nonce, PKCE verifiers, session cookies, or complete callback URLs. Return generic callback errors while retaining only sanitized server diagnostics.
 
-## Implementation prompt
-
-Replace placeholders and give this prompt to a coding agent. Do not include a secret value.
-
-```text
-Implement “Sign in with CraftLogin” in this project.
-
-First inspect the framework, routing, session management, environment conventions, tests, and authentication dependencies. Reuse established patterns. Before editing, summarize the architecture and plan. If a required fact is missing, ask instead of guessing.
-
-Configuration:
-- issuer: {{CRAFTLOGIN_ISSUER}}
-- client ID: {{CRAFTLOGIN_CLIENT_ID}}
-- client type: {{public|confidential}}
-- exact callback URI: {{EXACT_REDIRECT_URI}}
-- post-logout URI: {{POST_LOGOUT_REDIRECT_URI}}
-- confidential secret variable: CRAFTLOGIN_CLIENT_SECRET; never ask for its value
-
-Use discovery at {{CRAFTLOGIN_ISSUER}}/.well-known/openid-configuration and a maintained OIDC library. Implement Authorization Code Flow with openid profile, cryptographically random session-bound single-use state, and fresh PKCE S256 for every attempt. Use nonce when applicable. Do not implement token or JWT validation manually.
-
-Keep protocol transaction data protected and short-lived. A confidential secret is server-only; a public client has no secret. Use exact registered URLs, reject open redirects, rotate the local session after login, retain CSRF controls, and use the discovered logout endpoint when appropriate.
-
-Map sub as the stable Minecraft UUID account key. Treat preferred_username as a changeable display name, picture as an avatar, and preserve acr/amr if useful. Never key identity by username.
-
-Do not log or expose secrets, codes, tokens, state, nonce, verifiers, cookies, or complete callback URLs.
-
-Implement login, callback, create/find user, display-data update, local session, current-user access, logout, fail-closed configuration, accessible UI, documentation, and tests for success, provider denial, invalid/missing/replayed state, missing configuration, and username changes.
-
-Run the project's formatter, type checker, linter, and tests. Report changed files, variables, exact callback URI, commands, and manual setup. Do not claim completion while checks fail.
-```
-
-A stack-specific prompt can be generated at `https://craftlogin.com/docs/integrations/ai`.
-
 ## Review checklist
 
 Confirm with concrete code and test evidence:
@@ -109,5 +77,5 @@ Confirm with concrete code and test evidence:
 - OIDC discovery: https://craftlogin.com/.well-known/openid-configuration
 - API reference: https://craftlogin.com/openapi.yaml
 - Developer Console: https://craftlogin.com/developers
-- Prompt generator: https://craftlogin.com/docs/integrations/ai
+- Copyable implementation prompt: https://craftlogin.com/#implement-with-ai
 - Source: https://github.com/danielsebesta/craftlogin

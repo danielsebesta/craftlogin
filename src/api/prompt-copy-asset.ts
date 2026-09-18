@@ -1,4 +1,4 @@
-export const integrationScript = `
+export const promptCopyScript = `
 (() => {
   'use strict';
   const button = document.querySelector('[data-copy-target]');

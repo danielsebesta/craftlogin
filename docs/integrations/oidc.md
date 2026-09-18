@@ -115,14 +115,9 @@ CRAFTLOGIN_POST_LOGOUT_REDIRECT_URI=https://example.com/
 
 ## AI-assisted implementation
 
-Copy the prompt from [`ai/generic-oidc.md`](ai/generic-oidc.md), or select a stack-specific
-supplement:
-
-- [Next.js and Auth.js](ai/nextjs-authjs.md)
-- [Node.js server applications](ai/node-server.md)
-- [Python applications](ai/python.md)
-- [PHP applications](ai/php.md)
-- [Browser-only applications](ai/spa.md)
-- [Audit an existing integration](ai/review-existing-integration.md)
+The CraftLogin landing page contains one copyable prompt for Claude Code, Codex, Cursor, Copilot,
+and similar coding agents. The prompt directs the agent to the complete machine-readable contract at
+`https://craftlogin.com/llms-full.txt`, so it can inspect the target project and choose the correct
+maintained OIDC library itself.
 
 Do not paste a client secret into an AI tool. Give the agent only the environment-variable name.

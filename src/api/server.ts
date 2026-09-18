@@ -12,6 +12,7 @@ import type { DeveloperSessionService } from '../developers/session-service.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { SkinStore } from '../mojang/skin-store.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
+import { registerAgentGuidanceRoutes } from './agent-guidance-routes.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
 import { registerAvatarRoutes } from './avatar-routes.js';
@@ -30,7 +31,6 @@ import {
   type ApiInteractionService,
   type ClientDirectoryLookup,
 } from './interaction-routes.js';
-import { registerIntegrationRoutes } from './integration-routes.js';
 import { registerLandingRoutes } from './landing-routes.js';
 import { registerMicrosoftIdentityAssociationRoute } from './microsoft-identity-association-route.js';
 import {
@@ -113,7 +113,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     registerAvatarRoutes(server, options.minecraft);
   }
   registerLandingRoutes(server, { showDocumentation: options.nodeEnvironment !== 'production' });
-  registerIntegrationRoutes(server, options.issuer);
+  registerAgentGuidanceRoutes(server);
   registerHealthRoute(server, options.readiness);
   registerOidcHttpRoutes(server, options.oidcHandler);
   registerInteractionRoutes(server, {
