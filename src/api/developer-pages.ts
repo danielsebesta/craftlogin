@@ -68,7 +68,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
           <span class="console-session-role">${escapeHtml(roleLabel)}</span>
           <form action="/developers/logout" method="post">
             ${csrfField(input.csrfToken)}
-            <button class="button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button>
+            <button class="button button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button>
           </form>
         </span>`;
 
@@ -81,21 +81,23 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
         <p class="lead">${escapeHtml(strings.dashboard.lead)}</p>
       </header>
       ${renderDashboardNotice(input.notice)}
-      <section class="console-section" aria-labelledby="apps-heading">
-        <div class="console-section-head">
-          <h2 id="apps-heading">${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
-          <a class="console-section-link" href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>
-        </div>
-        ${renderAppTable(input.apps, input.role, input.csrfToken)}
-      </section>
+      <div class="console-workspace">
+        <section class="console-section" aria-labelledby="apps-heading">
+          <div class="console-section-head">
+            <h2 id="apps-heading">${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
+            <a class="button button-secondary console-section-link" href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>
+          </div>
+          ${renderAppList(input.apps, input.role, input.csrfToken)}
+        </section>
 
-      <details class="disclosure"${formOpen ? ' open' : ''}>
-        <summary>${escapeHtml(strings.app.newHeading)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
-        <div class="disclosure-body">
-          ${formErrorNotice}
-          ${renderRegistrationForm(input.csrfToken, input.formValues)}
-        </div>
-      </details>
+        <details class="disclosure console-create"${formOpen ? ' open' : ''}>
+          <summary>${escapeHtml(strings.app.newHeading)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
+          <div class="disclosure-body">
+            ${formErrorNotice}
+            ${renderRegistrationForm(input.csrfToken, input.formValues)}
+          </div>
+        </details>
+      </div>
       ${adminPanel}`,
     },
     { identity },
@@ -270,7 +272,7 @@ function noticeLine(message: string, alert: boolean): string {
   return `      <p class="notice${alert ? ' notice-error' : ''}" role="${alert ? 'alert' : 'status'}">${escapeHtml(message)}</p>\n`;
 }
 
-function renderAppTable(
+function renderAppList(
   apps: readonly ManagedApp[],
   role: DeveloperRole,
   csrfToken: string,
@@ -280,45 +282,47 @@ function renderAppTable(
     return `<p class="empty-state">${escapeHtml(strings.empty)}</p>`;
   }
 
-  const rows = apps
+  const cards = apps
     .map((app): string => {
       const redirects = app.redirectUris
         .map((uri): string => `<li><code>${escapeHtml(uri)}</code></li>`)
         .join('');
       const owner =
         role === 'admin'
-          ? `<span class="app-meta">${escapeHtml(strings.ownerLabel)}: <code>${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</code></span>`
+          ? `<div>
+                <dt>${escapeHtml(strings.ownerLabel)}</dt>
+                <dd><code>${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</code></dd>
+              </div>`
           : '';
-      return `<tr>
-          <th scope="row">
-            <span class="app-name">${escapeHtml(app.name)}</span>
-            <span class="app-meta">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</span>${owner}
-          </th>
-          <td><code>${escapeHtml(app.clientId)}</code></td>
-          <td><ul class="redirect-list">${redirects}</ul></td>
-          <td>${renderAppVerificationCell(app)}</td>
-          <td class="table-actions">${renderAppActions(app, role, csrfToken)}</td>
-        </tr>`;
+      return `<li class="app-card">
+          <article>
+            <header class="app-card-header">
+              <div>
+                <h3 class="app-name">${escapeHtml(app.name)}</h3>
+                <p class="app-meta">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</p>
+              </div>
+              ${renderAppVerificationCell(app)}
+            </header>
+            <dl class="app-card-details">
+              <div>
+                <dt>${escapeHtml(strings.clientIdLabel)}</dt>
+                <dd><code>${escapeHtml(app.clientId)}</code></dd>
+              </div>
+              <div>
+                <dt>${escapeHtml(strings.redirectLabel)}</dt>
+                <dd><ul class="redirect-list">${redirects}</ul></dd>
+              </div>
+              ${owner}
+            </dl>
+            <footer class="app-card-actions">${renderAppActions(app, role, csrfToken)}</footer>
+          </article>
+        </li>`;
     })
     .join('\n        ');
 
-  return `<div class="table-wrap">
-      <table class="table">
-        <caption class="visually-hidden">${escapeHtml(english.developer.dashboard.applicationsHeading)}</caption>
-        <thead>
-          <tr>
-            <th scope="col">${escapeHtml(strings.nameLabel)}</th>
-            <th scope="col">${escapeHtml(strings.clientIdLabel)}</th>
-            <th scope="col">${escapeHtml(strings.redirectLabel)}</th>
-            <th scope="col">${escapeHtml(english.developer.dashboard.verificationColumnLabel)}</th>
-            <th scope="col"><span class="visually-hidden">${escapeHtml(strings.deleteAction)}</span></th>
-          </tr>
-        </thead>
-        <tbody>
-        ${rows}
-        </tbody>
-      </table>
-    </div>`;
+  return `<ul class="app-grid">
+        ${cards}
+      </ul>`;
 }
 
 function renderAppVerificationCell(app: ManagedApp): string {
@@ -466,7 +470,7 @@ function renderAdministratorPanel(
     </div>`;
 
   return `
-    <details class="disclosure"${open ? ' open' : ''}>
+    <details class="disclosure console-admin"${open ? ' open' : ''}>
       <summary>${escapeHtml(admin.summary)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
       <div class="disclosure-body">
         <p class="lead">${escapeHtml(admin.intro)}</p>

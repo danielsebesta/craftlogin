@@ -171,6 +171,10 @@ describe('Developer Console', (): void => {
     const response = await server.inject({ method: 'GET', url: '/developers' });
 
     expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('class="console-workspace"');
+    expect(response.body).toContain('class="app-grid"');
+    expect(response.body).toContain('class="app-card"');
+    expect(response.body).toContain('<article>');
     expect(response.body).toContain('Not verified');
     expect(response.body).toContain(
       'href="/developers/apps/123e4567-e89b-42d3-a456-426614174001/verification"',
