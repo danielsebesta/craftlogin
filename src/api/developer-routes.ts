@@ -570,7 +570,7 @@ export function registerDeveloperRoutes(
     '/assets/developer.css',
     { schema: developerAssetRouteSchema },
     async (_request, reply): Promise<void> => {
-      void reply.header('cache-control', 'public, max-age=3600');
+      void reply.header('cache-control', 'public, max-age=0, must-revalidate');
       await reply.type('text/css; charset=utf-8').send(developerStyles);
     },
   );

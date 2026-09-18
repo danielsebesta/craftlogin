@@ -459,7 +459,7 @@ export function registerInteractionRoutes(
     '/assets/interaction.css',
     { schema: interactionAssetRouteSchema },
     async (_request, reply): Promise<void> => {
-      void reply.header('cache-control', 'public, max-age=3600');
+      void reply.header('cache-control', 'public, max-age=0, must-revalidate');
       await reply.type('text/css; charset=utf-8').send(interactionStyles);
     },
   );
@@ -468,7 +468,7 @@ export function registerInteractionRoutes(
     '/assets/interaction.js',
     { schema: interactionAssetRouteSchema },
     async (_request, reply): Promise<void> => {
-      void reply.header('cache-control', 'public, max-age=3600');
+      void reply.header('cache-control', 'public, max-age=0, must-revalidate');
       await reply.type('text/javascript; charset=utf-8').send(interactionScript);
     },
   );

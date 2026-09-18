@@ -248,7 +248,7 @@ describe('CraftLogin API server', (): void => {
     const stylesheet = await server.inject({ method: 'GET', url: '/assets/landing.css' });
     expect(stylesheet.statusCode).toBe(200);
     expect(stylesheet.headers['content-type']).toContain('text/css');
-    expect(stylesheet.headers['cache-control']).toBe('public, max-age=3600');
+    expect(stylesheet.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
     expect(stylesheet.body).toContain('@font-face');
     expect(stylesheet.body).toContain('font-family: "Pixeloid Sans"');
     expect(stylesheet.body).toContain(':focus-visible');
