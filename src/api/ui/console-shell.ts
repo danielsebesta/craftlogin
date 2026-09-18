@@ -1,5 +1,5 @@
 import { english } from '../../locales/en.js';
-import { renderPageDocument, type DocumentNavigationItem } from '../ui/document.js';
+import { renderPageDocument } from '../ui/document.js';
 
 export function renderConsoleShell(
   title: string,
@@ -7,21 +7,21 @@ export function renderConsoleShell(
   options: { readonly identity?: string; readonly script?: boolean } = {},
 ): string {
   const strings = english.developer;
-  const navigation: readonly DocumentNavigationItem[] = [
-    { current: true, href: '/developers', label: strings.navigation.console },
-  ];
 
   return renderPageDocument({
     content: main.content,
     footer: [strings.footer],
     header: {
       brand: strings.navigation.brand,
-      brandHref: '/',
-      navigation: {
-        items: navigation,
-        label: strings.navigation.ariaLabel,
-        ...(options.identity === undefined ? {} : { trailing: options.identity }),
-      },
+      ...(options.identity === undefined
+        ? {}
+        : {
+            navigation: {
+              items: [],
+              label: strings.navigation.ariaLabel,
+              trailing: options.identity,
+            },
+          }),
     },
     layout: 'wide',
     mainClass: main.className,

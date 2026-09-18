@@ -4,17 +4,23 @@ import { signInSurfaceStyles } from './ui/surface.js';
 
 const consoleStyles = `
 .console-main {
-  padding-block: var(--s6) var(--s7);
+  width: min(64rem, 100% - (2 * var(--s4)));
+  padding-block: var(--s7);
 }
 
 .console-intro {
   display: grid;
-  gap: var(--s3);
+  gap: var(--s4);
   max-width: var(--measure);
+  padding-bottom: var(--s6);
+}
+
+.console-intro h1 {
+  font-size: var(--t-3xl);
 }
 
 .console-main > .notice {
-  margin-top: var(--s4);
+  margin-bottom: var(--s5);
 }
 
 .console-session {
@@ -52,7 +58,8 @@ const consoleStyles = `
 }
 
 .console-section {
-  margin-top: var(--s6);
+  padding-block: var(--s6);
+  border-top: 1px solid var(--line);
 }
 
 .console-section-head {

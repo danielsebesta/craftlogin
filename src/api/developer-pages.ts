@@ -4,6 +4,7 @@ import { english } from '../locales/en.js';
 import type { RegisteredApp } from './app-registration.js';
 import { escapeHtml } from './html.js';
 import { renderConsoleShell } from './ui/console-shell.js';
+import { renderOAuthErrorPage } from './ui/oauth-error-page.js';
 import { renderVerificationBadge } from './ui/verification-badge.js';
 
 export type DashboardNotice =
@@ -35,16 +36,14 @@ export interface DeveloperDashboardInput {
 }
 
 export function renderDeveloperAccessDeniedPage(): string {
-  const strings = english.developer;
-  return renderConsoleShell(strings.accessDenied.title, {
-    className: 'container message-layout',
-    content: `      <section class="message-card card" aria-labelledby="denied-heading">
-        <h1 id="denied-heading">${escapeHtml(strings.accessDenied.heading)}</h1>
-        <p class="lead">${escapeHtml(strings.accessDenied.detail)}</p>
-        <div class="button-row">
-          <a class="button" href="/developers/login">${escapeHtml(strings.accessDenied.retry)}</a>
-        </div>
-      </section>`,
+  const strings = english.developer.accessDenied;
+  return renderOAuthErrorPage({
+    action: { href: '/developers/login', kind: 'link', label: strings.retry },
+    brand: english.interaction.brand,
+    footer: english.interaction.footer,
+    heading: strings.heading,
+    lead: strings.detail,
+    title: strings.title,
   });
 }
 

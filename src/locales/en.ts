@@ -276,8 +276,7 @@ export const english = {
       signedInAs: 'Signed in as',
       uuidLabel: 'Signed in UUID',
     },
-    footer:
-      'Developer access is verified by Minecraft online mode. No Microsoft password is collected.',
+    footer: 'Developer access is restricted to administrator-approved Minecraft UUIDs.',
     navigation: {
       ariaLabel: 'Developer navigation',
       brand: 'CraftLogin',

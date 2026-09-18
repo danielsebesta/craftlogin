@@ -93,6 +93,9 @@ describe('Developer Console', (): void => {
 
     expect(response.statusCode).toBe(403);
     expect(response.body).toContain('This account is not on the list.');
+    expect(response.body).toContain('class="card consent-card"');
+    expect(response.body).toContain('href="/assets/interaction.css"');
+    expect(response.body).not.toContain('href="/assets/developer.css"');
     expect(setCookies(response.headers['set-cookie'])).not.toContain(
       '__Host-craftlogin_developer_session=',
     );
