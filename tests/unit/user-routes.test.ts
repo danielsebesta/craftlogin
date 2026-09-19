@@ -6,6 +6,7 @@ import { registerErrorHandling } from '../../src/api/errors.js';
 import { registerSharedSchemas } from '../../src/api/schemas.js';
 import { registerUserRoutes } from '../../src/api/user-routes.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
+import { offlinePlayerUuid } from '../../src/mojang/default-skins.js';
 
 const playerUuid = '069a79f4-44e9-4726-a5be-fca90e38aaf5';
 
@@ -63,7 +64,26 @@ describe('public player profile routes', (): void => {
     expect(preflight.headers['access-control-allow-origin']).toBe('*');
   });
 
-  it('returns shared errors for invalid, unknown, and unavailable profiles', async (): Promise<void> => {
+  it('resolves unknown names to offline profiles with a short cache', async (): Promise<void> => {
+    const server = await buildServer({
+      findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
+      findProfileByName: (): Promise<undefined> => Promise.resolve(undefined),
+    });
+
+    const offline = await server.inject({ method: 'GET', url: '/api/users/UnknownPlayer' });
+
+    expect(offline.statusCode).toBe(200);
+    expect(offline.json()).toEqual({
+      username: 'UnknownPlayer',
+      uuid: offlinePlayerUuid('UnknownPlayer'),
+    });
+    expect(offline.headers['cache-control']).toBe(
+      'public, max-age=300, stale-while-revalidate=3600',
+    );
+    expect(offlinePlayerUuid('UnknownPlayer')).toBe(offlinePlayerUuid('UnknownPlayer'));
+  });
+
+  it('returns shared errors for invalid, unknown-UUID, and unavailable profiles', async (): Promise<void> => {
     let unavailable = false;
     const server = await buildServer({
       findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
@@ -76,13 +96,16 @@ describe('public player profile routes', (): void => {
     });
 
     const invalid = await server.inject({ method: 'GET', url: '/api/users/not-a-name!' });
-    const missing = await server.inject({ method: 'GET', url: '/api/users/UnknownPlayer' });
+    const missingUuid = await server.inject({
+      method: 'GET',
+      url: '/api/users/123e4567e89b42d3a456426614174000',
+    });
     unavailable = true;
     const failed = await server.inject({ method: 'GET', url: '/api/users/UnknownPlayer' });
 
     expect(invalid.statusCode).toBe(400);
-    expect(missing.statusCode).toBe(404);
-    expect(missing.json()).toEqual({
+    expect(missingUuid.statusCode).toBe(404);
+    expect(missingUuid.json()).toEqual({
       error: { code: 'not_found', message: 'That Minecraft Java player could not be found.' },
     });
     expect(failed.statusCode).toBe(503);

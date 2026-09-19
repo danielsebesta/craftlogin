@@ -144,9 +144,10 @@ npm start
 
 `npm start` runs the HTTP/OIDC service and the Minecraft ghost server in one process. During focused
 development they can instead be run separately with `npm run start:api` and `npm run start:mc`. The
-developer landing page is available at <http://localhost:3000/>. Swagger UI is available at
-<http://localhost:3000/docs> outside production. The generated OpenAPI 3.1 reference is committed as
-[`openapi.yaml`](openapi.yaml).
+developer landing page is available at <http://localhost:3000/>. The public integration guide is at
+<http://localhost:3000/docs/>. Interactive Swagger UI is available at
+<http://localhost:3000/docs/swagger/> outside production. The generated public OpenAPI 3.1 reference
+is committed as [`openapi.yaml`](openapi.yaml).
 
 OAuth interactions and the Developer Console use `Secure` cookies and therefore require HTTPS even
 in local development. A local reverse proxy such as Caddy can terminate a trusted development

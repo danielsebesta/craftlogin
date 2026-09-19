@@ -89,6 +89,26 @@ svg {
   max-width: 100%;
 }
 
+.ui-icon,
+.heading-icon,
+.button-icon,
+.nav-icon,
+.list-icon {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.icon-heading {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+}
+
+.icon-heading .heading-icon {
+  color: var(--accent);
+}
+
 button,
 input,
 select,
@@ -137,6 +157,7 @@ textarea {
 
 .page-nav a {
   display: inline-flex;
+  gap: var(--s2);
   align-items: center;
   min-height: 2.75rem;
   color: var(--muted);

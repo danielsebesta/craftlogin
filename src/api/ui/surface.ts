@@ -5,6 +5,7 @@ export const signInSurfaceStyles = `
 .method-option { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s3); border: 1px solid var(--line); cursor: pointer; }
 .method-option:focus-within, .method-option:hover { border-color: var(--accent); }
 .method-option input { flex: none; margin-top: .25rem; }
+.method-option .list-icon { color: var(--accent); }
 .method-option span { display: grid; gap: var(--s1); }
 .method-option small { color: var(--muted); }
 [data-method-panel][hidden] { display: none; }
@@ -54,37 +55,57 @@ export const signInSurfaceStyles = `
 }
 
 .consent-app {
-  display: grid;
-  gap: var(--s3);
-  justify-items: center;
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
+}
+
+/* The "Sign in to" prefix stays quiet so the application name carries the
+   heading: regular muted prefix, bold full-color app name. */
+.consent-title h1 {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.consent-app bdi {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .verification-badge {
   display: inline-flex;
-  gap: var(--s2);
   align-items: center;
-  padding: var(--s1) var(--s2);
-  border: 1px solid var(--line-strong);
+  cursor: help;
+}
+
+.verification-badge-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
   color: var(--muted);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  /* Square like every other surface: the shared style contract forbids
+     rounded corners to keep the flat pixel aesthetic. */
+  border-radius: 0;
 }
 
 .verification-badge-icon {
   flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
-.verification-badge-verified {
+.verification-badge-verified .verification-badge-dot {
+  color: var(--control-ink);
+  background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent-strong);
 }
 
 @media (forced-colors: active) {
-  .verification-badge {
+  .verification-badge-dot {
     border-color: currentColor;
   }
 }
@@ -149,15 +170,18 @@ export const signInSurfaceStyles = `
 .consent-scopes li {
   display: flex;
   gap: var(--s3);
-  align-items: baseline;
+  align-items: center;
 }
 
-.consent-marker {
-  flex: none;
-  width: 0.6rem;
-  height: 0.6rem;
-  margin-top: 0.45rem;
-  background: var(--accent);
+.consent-scopes .list-icon,
+.icon-note .list-icon {
+  color: var(--accent);
+}
+
+.icon-note {
+  display: flex;
+  gap: var(--s3);
+  align-items: flex-start;
 }
 
 .consent-verify,

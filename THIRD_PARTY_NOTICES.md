@@ -2,7 +2,7 @@
 
 ## Pixelarticons
 
-The verification badge icons in `src/api/ui/icons.ts` include path data from
+The interface icons in `src/api/ui/icons.ts` include path data from
 [Pixelarticons](https://github.com/halfmage/pixelarticons).
 
 MIT License

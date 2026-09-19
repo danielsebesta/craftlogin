@@ -78,7 +78,7 @@ export const english = {
         },
         playerProfile: {
           description:
-            'Resolve a current Minecraft Java username or UUID to its canonical UUID and username.',
+            'Resolve a Minecraft Java username or UUID. Unknown usernames return an offline-mode UUID with a deterministic default skin; that synthetic profile is never a verified identity.',
           summary: 'Resolve a Minecraft player',
         },
         discovery: { summary: 'Get authorization server metadata' },
@@ -116,6 +116,10 @@ export const english = {
           summary: 'Introspect a token',
         },
         jwks: { summary: 'Get signing keys' },
+        logout: {
+          description: 'End the CraftLogin provider session using RP-initiated logout.',
+          summary: 'End the provider session',
+        },
         revoke: { summary: 'Revoke a token' },
         token: {
           description: 'Redeem a single-use authorization code or rotate a refresh token.',
@@ -128,6 +132,7 @@ export const english = {
         webfinger: { summary: 'Resolve issuer metadata' },
       },
       scopes: {
+        offlineAccess: 'Maintain delegated access with refresh-token rotation.',
         openid: 'Authenticate the Minecraft account.',
         profile: 'Read the current Minecraft username and avatar.',
       },
@@ -169,6 +174,207 @@ export const english = {
     oauthServerError: 'The authorization server could not complete the request.',
     oauthArtifactUnavailable: 'The token is missing, expired, or has already been used.',
     oauthStateRequired: 'state parameter is required and must be at most 1024 characters',
+  },
+  docs: {
+    title: 'CraftLogin developer documentation',
+    description: 'Integrate Minecraft Java Edition sign-in with standard OpenID Connect.',
+    tableOfContents: {
+      heading: 'On this page',
+      items: [
+        { href: '#quickstart', label: 'Quickstart' },
+        { href: '#flow', label: 'Authorization flow' },
+        { href: '#claims', label: 'Scopes and claims' },
+        { href: '#sessions', label: 'Tokens and logout' },
+        { href: '#api', label: 'API reference' },
+        { href: '#avatars', label: 'Avatars' },
+        { href: '#security', label: 'Security checklist' },
+      ],
+    },
+    quickstart: {
+      heading: 'Quickstart',
+      intro:
+        'Register the exact callback URI in the Developer Console, then configure your OIDC library with discovery. Both public and confidential clients must use Authorization Code Flow with PKCE S256.',
+      steps: [
+        {
+          title: 'Register the client',
+          detail:
+            'Choose a public client for browser, desktop, mobile, or distributed software. Choose confidential only when a trusted server can protect the client secret.',
+        },
+        {
+          title: 'Configure discovery',
+          detail:
+            'Use the issuer URL below. Your library discovers the authorization, token, UserInfo, JWKS, revocation, introspection, and logout endpoints automatically.',
+        },
+        {
+          title: 'Map the account',
+          detail:
+            'Persist the sub claim as the account key. It is the canonical Minecraft UUID and remains stable when the player changes username.',
+        },
+      ],
+      configurationHeading: 'Suggested configuration',
+      configurationCode:
+        'CRAFTLOGIN_ISSUER=https://craftlogin.com\nCRAFTLOGIN_CLIENT_ID=cl_replace_me\nCRAFTLOGIN_CLIENT_SECRET=\nCRAFTLOGIN_REDIRECT_URI=https://example.com/auth/craftlogin/callback\nCRAFTLOGIN_POST_LOGOUT_REDIRECT_URI=https://example.com/',
+      libraryNotice:
+        'Do not implement OAuth, token exchange, or ID token validation yourself. Use a maintained OpenID Connect library for your framework.',
+    },
+    flow: {
+      heading: 'Authorization Code Flow',
+      intro:
+        'Create a fresh state value, PKCE verifier, and S256 challenge for every attempt. Bind them to the initiating browser and consume them once in the callback.',
+      authorizeHeading: '1. Redirect to authorization',
+      authorizeCode:
+        'GET https://craftlogin.com/oauth2/authorize\n  ?response_type=code\n  &client_id=cl_replace_me\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fauth%2Fcraftlogin%2Fcallback\n  &scope=openid%20profile\n  &state=<random-value>\n  &code_challenge=<s256-challenge>\n  &code_challenge_method=S256',
+      callbackHeading: '2. Validate the callback',
+      callbackText:
+        'Require the returned state to match the browser-bound, short-lived transaction. Reject missing, changed, expired, or replayed state before exchanging the code.',
+      tokenHeading: '3. Exchange the code',
+      tokenCode:
+        'POST /oauth2/token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\n&client_id=cl_replace_me\n&code=<one-time-code>\n&redirect_uri=https%3A%2F%2Fexample.com%2Fauth%2Fcraftlogin%2Fcallback\n&code_verifier=<original-verifier>',
+      confidentialNote:
+        'Confidential clients authenticate at the token endpoint with client_secret_basic. Never put a client secret in browser code, mobile software, logs, or source control.',
+    },
+    claims: {
+      heading: 'Scopes and claims',
+      intro:
+        'Request only the permissions the application needs. The openid scope is required for sign-in.',
+      scopeHeading: 'Scope',
+      purposeHeading: 'Purpose',
+      scopes: [
+        { name: 'openid', detail: 'Authenticate the Minecraft identity and receive an ID token.' },
+        { name: 'profile', detail: 'Receive the current username and avatar URL.' },
+        {
+          name: 'offline_access',
+          detail: 'Receive a refresh token for justified persistent access.',
+        },
+      ],
+      claimHeading: 'Claim',
+      valueHeading: 'Meaning',
+      claims: [
+        { name: 'sub', detail: 'Permanent canonical Minecraft UUID. Use it as the account key.' },
+        { name: 'preferred_username', detail: 'Current Minecraft username. It can change.' },
+        { name: 'picture', detail: 'Current CraftLogin avatar URL.' },
+        { name: 'acr', detail: 'Authentication context used to verify the account.' },
+        { name: 'amr', detail: 'Authentication method used for this sign-in.' },
+      ],
+      exampleHeading: 'UserInfo example',
+      exampleCode:
+        '{\n  "sub": "069a79f4-44e9-4726-a5be-fca90e38aaf5",\n  "preferred_username": "Notch",\n  "picture": "https://craftlogin.com/avatar/069a79f4-44e9-4726-a5be-fca90e38aaf5"\n}',
+    },
+    sessions: {
+      heading: 'Tokens and logout',
+      intro:
+        'Treat authorization codes, access tokens, refresh tokens, PKCE verifiers, and session cookies as credentials. Keep them out of URLs, browser storage, logs, errors, and analytics.',
+      items: [
+        {
+          title: 'Access tokens',
+          detail:
+            'Send the token as Authorization: Bearer to UserInfo or /api/users/@me. Validate tokens through your OIDC library or the introspection endpoint.',
+        },
+        {
+          title: 'Refresh tokens',
+          detail:
+            'Request offline_access only when needed. Store refresh tokens on a trusted server and replace the stored value after every successful rotation.',
+        },
+        {
+          title: 'Logout',
+          detail:
+            'Always destroy the application’s local session. For provider logout, use the end_session_endpoint returned by discovery and only a registered post-logout URI.',
+        },
+      ],
+    },
+    api: {
+      heading: 'Integration API',
+      intro:
+        'These are the public endpoints an integrating application may need. Prefer discovery over hardcoding OAuth endpoint URLs.',
+      methodHeading: 'Method',
+      endpointHeading: 'Endpoint',
+      purposeHeading: 'Purpose',
+      groups: [
+        {
+          heading: 'OpenID Connect',
+          endpoints: [
+            {
+              method: 'GET',
+              path: '/.well-known/openid-configuration',
+              detail: 'Discover provider metadata and capabilities.',
+            },
+            { method: 'GET', path: '/oauth2/authorize', detail: 'Start Authorization Code Flow.' },
+            {
+              method: 'POST',
+              path: '/oauth2/token',
+              detail: 'Exchange a code or rotate a refresh token.',
+            },
+            {
+              method: 'GET / POST',
+              path: '/oauth2/userinfo',
+              detail: 'Read standard claims for the signed-in player.',
+            },
+            { method: 'GET', path: '/oauth2/jwks', detail: 'Read public ID-token signing keys.' },
+            {
+              method: 'POST',
+              path: '/oauth2/introspect',
+              detail: 'Inspect a token issued to the authenticated client.',
+            },
+            {
+              method: 'POST',
+              path: '/oauth2/revoke',
+              detail: 'Revoke an access or refresh token.',
+            },
+            {
+              method: 'GET / POST',
+              path: '/oauth2/logout',
+              detail: 'End the CraftLogin provider session.',
+            },
+          ],
+        },
+        {
+          heading: 'Identity',
+          endpoints: [
+            {
+              method: 'GET',
+              path: '/api/users/@me',
+              detail: 'Read the UUID and username represented by an access token.',
+            },
+            {
+              method: 'GET',
+              path: '/api/users/{identifier}',
+              detail: 'Resolve a public Minecraft username or UUID.',
+            },
+          ],
+        },
+      ],
+      openApiText:
+        'Machine-readable request and response schemas are available in the public OpenAPI 3.1 document.',
+      openApiAction: 'Open openapi.yaml',
+    },
+    avatars: {
+      heading: 'Avatar and texture API',
+      intro:
+        'Avatar endpoints are public, CORS-enabled, and suitable for images in profiles, member lists, and leaderboards. Use a canonical UUID when possible. Players without a Mojang texture receive a deterministic default skin.',
+      template: '/api/avatars/{uuid}/{view}?size=128&layers=all',
+      parameters: [
+        { name: 'view', detail: 'face, head, bust, body, skin, processed-skin, cape, or elytra' },
+        { name: 'size', detail: '32, 64, 128, or 256 for rendered views' },
+        { name: 'layers', detail: 'all or base for rendered views' },
+      ],
+      exampleAlt: 'Example Minecraft avatar rendered by CraftLogin',
+      showcaseCaption: 'Showcase skin by {player}.',
+      showcaseSourceLabel: 'Meet the players at PaperBoat SMP',
+    },
+    security: {
+      heading: 'Integration checklist',
+      intro: 'Before shipping, verify each property in code and automated tests.',
+      items: [
+        'Use discovery and a maintained OIDC library.',
+        'Require Authorization Code Flow, state, and PKCE S256.',
+        'Bind state, nonce, and the PKCE verifier to one short-lived browser transaction.',
+        'Accept only exact, preconfigured callback and post-logout URIs.',
+        'Validate issuer, signature, audience, expiry, nonce, and protocol errors.',
+        'Use sub, not username, as the permanent account key.',
+        'Rotate the local session after login and invalidate it during logout.',
+        'Keep secrets, codes, tokens, and callback URLs out of logs and browser storage.',
+      ],
+    },
   },
   developer: {
     accessDenied: {
@@ -342,6 +548,8 @@ export const english = {
       face: 'Face',
       head: 'Head',
       exampleAlt: 'Example Minecraft avatar render',
+      showcaseCaption: 'Showcase skin by {player}.',
+      showcaseSourceLabel: 'Meet the players at PaperBoat SMP',
     },
     endpoints: {
       heading: 'Endpoints',

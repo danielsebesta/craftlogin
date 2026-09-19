@@ -1,6 +1,7 @@
 import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
 import { renderPageDocument } from './ui/document.js';
+import { renderIcon, renderMicrosoftIcon, type IconName } from './ui/icons.js';
 
 interface MicrosoftOAuthSuccessPageInput {
   readonly interactionId: string;
@@ -67,12 +68,12 @@ export function renderMicrosoftOAuthResultPage(input: MicrosoftOAuthResultPageIn
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="microsoft-result-heading">
         <div class="consent-title">
-          <h1 id="microsoft-result-heading">${escapeHtml(heading)}</h1>
+          <h1 class="icon-heading" id="microsoft-result-heading">${renderIcon(resultIcon(input), 'heading-icon')}${escapeHtml(heading)}</h1>
           <p class="lead">${escapeHtml(lead)}</p>
         </div>${details}
         <div class="consent-actions">${action}
         </div>
-        <p class="field-hint">${escapeHtml(strings.privacyNote)}</p>
+        <p class="field-hint icon-note">${renderIcon('lock', 'list-icon')}<span>${escapeHtml(strings.privacyNote)}</span></p>
       </section>`,
     footer: [english.interaction.footer],
     header: { brand: english.interaction.brand },
@@ -93,23 +94,27 @@ function renderAction(
     if (interactionPath !== undefined && homeUrl === interactionPath) {
       return `
         <form action="${interactionPath}/complete" method="post">
-          <button class="button" type="submit">${escapeHtml(strings.continueButton)}</button>
+          <button class="button" type="submit">${renderIcon('login', 'button-icon')}${escapeHtml(strings.continueButton)}</button>
         </form>`;
     }
     return `
-        <a class="button" href="${escapeHtml(homeUrl)}">${escapeHtml(strings.continueButton)}</a>`;
+        <a class="button" href="${escapeHtml(homeUrl)}">${renderIcon('login', 'button-icon')}${escapeHtml(strings.continueButton)}</a>`;
   }
   if (input.kind !== 'expired' && interactionPath !== undefined) {
     return `
-        <a class="button" href="${interactionPath}/microsoft/start">${escapeHtml(strings.retryButton)}</a>
-        <a class="button button-secondary" href="${escapeHtml(homeUrl)}">${escapeHtml(strings.otherMethodButton)}</a>`;
+        <a class="button" href="${interactionPath}/microsoft/start">${renderMicrosoftIcon('button-icon')}${escapeHtml(strings.retryButton)}</a>
+        <a class="button button-secondary" href="${escapeHtml(homeUrl)}">${renderIcon('gamepad', 'button-icon')}${escapeHtml(strings.otherMethodButton)}</a>`;
   }
   if (input.kind === 'expired' && interactionPath === undefined) {
     return `
-        <a class="button" href="/">${escapeHtml(strings.homeButton)}</a>`;
+        <a class="button" href="/">${renderIcon('home', 'button-icon')}${escapeHtml(strings.homeButton)}</a>`;
   }
   return `
-        <a class="button button-secondary" href="${escapeHtml(homeUrl)}">${escapeHtml(strings.otherMethodButton)}</a>`;
+        <a class="button button-secondary" href="${escapeHtml(homeUrl)}">${renderIcon('gamepad', 'button-icon')}${escapeHtml(strings.otherMethodButton)}</a>`;
+}
+
+function resultIcon(input: MicrosoftOAuthResultPageInput): IconName {
+  return input.kind === 'success' ? 'check' : 'warning';
 }
 
 function renderHeading(input: MicrosoftOAuthResultPageInput): string {

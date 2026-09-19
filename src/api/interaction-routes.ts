@@ -322,13 +322,23 @@ export function registerInteractionRoutes(
       if (options.interactions.getSkinChallenge === undefined) {
         throw new ApiError(501, 'internal_error', english.api.errors.internal);
       }
-      const challenge = await options.interactions.getSkinChallenge(
-        request.raw,
-        reply.raw,
-        request.params.uid,
-      );
+      let challenge: SkinVerificationChallenge | undefined;
+      try {
+        challenge = await options.interactions.getSkinChallenge(
+          request.raw,
+          reply.raw,
+          request.params.uid,
+        );
+      } catch (error: unknown) {
+        if (isInteractionClientError(error)) {
+          await reply.redirect(interactionPageUrl(request.params.uid), 303);
+          return;
+        }
+        throw error;
+      }
       if (challenge === undefined) {
-        throw new ApiError(404, 'not_found', english.api.errors.notFound);
+        await reply.redirect(interactionPageUrl(request.params.uid), 303);
+        return;
       }
       void reply.headers({
         'cache-control': 'no-store',
@@ -346,13 +356,23 @@ export function registerInteractionRoutes(
       if (options.interactions.getSkinChallenge === undefined) {
         throw new ApiError(501, 'internal_error', english.api.errors.internal);
       }
-      const challenge = await options.interactions.getSkinChallenge(
-        request.raw,
-        reply.raw,
-        request.params.uid,
-      );
+      let challenge: SkinVerificationChallenge | undefined;
+      try {
+        challenge = await options.interactions.getSkinChallenge(
+          request.raw,
+          reply.raw,
+          request.params.uid,
+        );
+      } catch (error: unknown) {
+        if (isInteractionClientError(error)) {
+          await reply.redirect(interactionPageUrl(request.params.uid), 303);
+          return;
+        }
+        throw error;
+      }
       if (challenge?.originalBody === undefined) {
-        throw new ApiError(404, 'not_found', english.api.errors.notFound);
+        await reply.redirect(interactionPageUrl(request.params.uid), 303);
+        return;
       }
       void reply.headers({
         'cache-control': 'no-store',

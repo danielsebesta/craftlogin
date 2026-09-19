@@ -1,9 +1,40 @@
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import type { FastifyInstance } from 'fastify';
+import type { OpenAPIV3_1 } from 'openapi-types';
 
 import { english } from '../locales/en.js';
 import { swaggerThemeStyles } from './swagger-theme.js';
+
+const PUBLIC_PATHS = new Set([
+  '/.well-known/oauth-authorization-server',
+  '/.well-known/openid-configuration',
+  '/.well-known/webfinger',
+  '/api/avatars/{uuid}/body',
+  '/api/avatars/{uuid}/bust',
+  '/api/avatars/{uuid}/cape',
+  '/api/avatars/{uuid}/elytra',
+  '/api/avatars/{uuid}/face',
+  '/api/avatars/{uuid}/head',
+  '/api/avatars/{uuid}/processed-skin',
+  '/api/avatars/{uuid}/skin',
+  '/api/users/@me',
+  '/api/users/{identifier}',
+  '/oauth2/authorize',
+  '/oauth2/introspect',
+  '/oauth2/jwks',
+  '/oauth2/logout',
+  '/oauth2/revoke',
+  '/oauth2/token',
+  '/oauth2/userinfo',
+]);
+
+const PUBLIC_SCHEMAS = new Set(['craftlogin.error-response', 'craftlogin.user-response']);
+const PUBLIC_TAGS = new Set(['Avatars', 'Identity', 'OAuth']);
+
+function publicOpenApiPath(url: string): string {
+  return url.replaceAll(/:([A-Za-z][A-Za-z0-9_]*)/gu, '{$1}');
+}
 
 export interface OpenApiOptions {
   readonly issuer: string;
@@ -24,16 +55,12 @@ export async function registerOpenApi(
             scheme: 'bearer',
             type: 'http',
           },
-          developerSession: {
-            in: 'cookie',
-            name: '__Host-craftlogin_developer_session',
-            type: 'apiKey',
-          },
           oauth2: {
             flows: {
               authorizationCode: {
                 authorizationUrl: `${options.issuer}/oauth2/authorize`,
                 scopes: {
+                  offline_access: documentation.scopes.offlineAccess,
                   openid: documentation.scopes.openid,
                   profile: documentation.scopes.profile,
                 },
@@ -54,11 +81,37 @@ export async function registerOpenApi(
       servers: [{ url: options.issuer }],
       tags: [
         { description: documentation.tags.oauth, name: 'OAuth' },
-        { description: documentation.tags.interactions, name: 'Interactions' },
         { description: documentation.tags.identity, name: 'Identity' },
         { description: documentation.tags.avatars, name: 'Avatars' },
-        { description: documentation.tags.applications, name: 'Applications' },
       ],
+    },
+    transform: ({ schema, url }) => ({
+      schema: PUBLIC_PATHS.has(publicOpenApiPath(url)) ? schema : { ...schema, hide: true },
+      url,
+    }),
+    transformObject: (document) => {
+      if ('swaggerObject' in document) return document.swaggerObject;
+
+      // This plugin instance is configured above to emit OpenAPI 3.1. The upstream callback type
+      // cannot discriminate OpenAPI 3.0 from 3.1, so narrow only at this documented boundary.
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- configuration guarantees OpenAPI 3.1
+      const source = document.openapiObject as Partial<OpenAPIV3_1.Document>;
+      const schemas = Object.fromEntries(
+        Object.entries(source.components?.schemas ?? {}).filter(([name]): boolean =>
+          PUBLIC_SCHEMAS.has(name),
+        ),
+      );
+      const securitySchemes = Object.fromEntries(
+        Object.entries(source.components?.securitySchemes ?? {}).filter(
+          ([name]): boolean => name !== 'developerSession',
+        ),
+      );
+
+      return {
+        ...source,
+        components: { ...source.components, schemas, securitySchemes },
+        tags: (source.tags ?? []).filter((tag): boolean => PUBLIC_TAGS.has(tag.name)),
+      };
     },
     refResolver: {
       buildLocalReference: (schema, _baseUri, _fragment, index): string => {
@@ -72,7 +125,7 @@ export async function registerOpenApi(
 
   if (options.nodeEnvironment !== 'production') {
     await server.register(swaggerUi, {
-      routePrefix: '/docs',
+      routePrefix: '/docs/swagger',
       staticCSP: true,
       theme: {
         css: [{ content: swaggerThemeStyles, filename: 'craftlogin.css' }],

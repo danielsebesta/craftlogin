@@ -6,6 +6,7 @@ import type { SkinTexture } from '../../src/avatars/skin-texture.js';
 import type { AvatarRenderOptions, MinecraftSkinModel } from '../../src/avatars/types.js';
 import type { CachedValue, MinecraftCache } from '../../src/mojang/cache.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
+import { selectDefaultSkin, type DefaultSkinSource } from '../../src/mojang/default-skins.js';
 import type { SkinStore } from '../../src/mojang/skin-store.js';
 import { createSkinPng, decodePng, readFixturePixel } from './support/skin-fixture.js';
 
@@ -54,6 +55,7 @@ describe('CachedAvatarService', (): void => {
     const renderer = new RecordingRenderer();
     const service = new CachedAvatarService({
       cache,
+      defaultSkins: missingDefaultSkins(),
       players: playersWithTexture(),
       renderer,
       skins: skinStore(skin),
@@ -68,7 +70,7 @@ describe('CachedAvatarService', (): void => {
     expect(renderer.calls).toBe(1);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v2:${textureHash}:slim:head:all:128`,
+        key: `avatar-render:v5:${textureHash}:slim:head:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -84,6 +86,7 @@ describe('CachedAvatarService', (): void => {
     const cache = new RecordingCache();
     const service = new CachedAvatarService({
       cache,
+      defaultSkins: missingDefaultSkins(),
       players: playersWithTexture(),
       renderer,
       skins,
@@ -98,15 +101,15 @@ describe('CachedAvatarService', (): void => {
     expect(skins.calls).toBe(3);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v2:${textureHash}:slim:body:all:64`,
+        key: `avatar-render:v5:${textureHash}:slim:body:all:64`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v2:${textureHash}:slim:body:base:64`,
+        key: `avatar-render:v5:${textureHash}:slim:body:base:64`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v2:${textureHash}:slim:body:all:128`,
+        key: `avatar-render:v5:${textureHash}:slim:body:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -114,17 +117,21 @@ describe('CachedAvatarService', (): void => {
 
   it('distinguishes missing and unavailable sources and never caches failed renders', async (): Promise<void> => {
     const skin = await createSkinPng([]);
+    const missingCache = new RecordingCache();
+    const missingRenderer = new RecordingRenderer();
     const missing = new CachedAvatarService({
-      cache: new RecordingCache(),
+      cache: missingCache,
+      defaultSkins: defaultSkins(skin),
       players: {
         findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
         findProfileByName: (): Promise<undefined> => Promise.resolve(undefined),
       },
-      renderer: new RecordingRenderer(),
+      renderer: missingRenderer,
       skins: skinStore(skin),
     });
     const unavailable = new CachedAvatarService({
       cache: new RecordingCache(),
+      defaultSkins: missingDefaultSkins(),
       players: playersWithTexture(),
       renderer: new RecordingRenderer(),
       skins: { fetchSkin: (): Promise<never> => Promise.reject(new Error('offline')) },
@@ -134,18 +141,60 @@ describe('CachedAvatarService', (): void => {
     failedRenderer.fail = true;
     const failed = new CachedAvatarService({
       cache: failedCache,
+      defaultSkins: missingDefaultSkins(),
       players: playersWithTexture(),
       renderer: failedRenderer,
       skins: skinStore(skin),
     });
     const options = { layers: 'all', size: 128, view: 'head' } satisfies AvatarRenderOptions;
 
-    await expect(missing.render(playerUuid, options)).resolves.toEqual({ status: 'not-found' });
+    const fallback = await missing.render(playerUuid, options);
+    expect(fallback.status).toBe('found');
+    expect(missingRenderer.calls).toBe(1);
+    const expectedDefault = selectDefaultSkin(playerUuid);
+    expect(missingCache.writes).toEqual([
+      {
+        key: `avatar-render:v5:default:${expectedDefault.name}:${expectedDefault.model}:head:all:128`,
+        ttlSeconds: 24 * 60 * 60,
+      },
+    ]);
     await expect(unavailable.render(playerUuid, options)).resolves.toEqual({
       status: 'unavailable',
     });
     await expect(failed.render(playerUuid, options)).resolves.toEqual({ status: 'unavailable' });
     expect(failedCache.writes).toEqual([]);
+  });
+
+  it('reports unavailable when the default skin source fails for unknown players', async (): Promise<void> => {
+    const skin = await createSkinPng([]);
+    const missingPlayers: MinecraftPlayerLookup = {
+      findProfileById: (): Promise<undefined> => Promise.resolve(undefined),
+      findProfileByName: (): Promise<undefined> => Promise.resolve(undefined),
+    };
+    const rejected = new CachedAvatarService({
+      cache: new RecordingCache(),
+      defaultSkins: {
+        fetchDefaultSkin: (): Promise<never> => Promise.reject(new Error('offline')),
+      },
+      players: missingPlayers,
+      renderer: new RecordingRenderer(),
+      skins: skinStore(skin),
+    });
+    const absent = new CachedAvatarService({
+      cache: new RecordingCache(),
+      defaultSkins: missingDefaultSkins(),
+      players: missingPlayers,
+      renderer: new RecordingRenderer(),
+      skins: skinStore(skin),
+    });
+    const options = { layers: 'all', size: 128, view: 'head' } satisfies AvatarRenderOptions;
+
+    await expect(rejected.render(playerUuid, options)).resolves.toEqual({
+      status: 'unavailable',
+    });
+    await expect(absent.render(playerUuid, options)).resolves.toEqual({
+      status: 'unavailable',
+    });
   });
 
   it('serves processed skins normalized to the modern opaque-base layout', async (): Promise<void> => {
@@ -171,6 +220,7 @@ describe('CachedAvatarService', (): void => {
     const cache = new RecordingCache();
     const service = new CachedAvatarService({
       cache,
+      defaultSkins: missingDefaultSkins(),
       players: playersWithTexture(),
       renderer: new RecordingRenderer(),
       skins: skinStore(skin),
@@ -196,12 +246,14 @@ describe('CachedAvatarService', (): void => {
     const cache = new RecordingCache();
     const caped = new CachedAvatarService({
       cache,
+      defaultSkins: missingDefaultSkins(),
       players: playersWithCape(),
       renderer: new RecordingRenderer(),
       skins: skinStore(skin),
     });
     const bare = new CachedAvatarService({
       cache: new RecordingCache(),
+      defaultSkins: missingDefaultSkins(),
       players: playersWithTexture(),
       renderer: new RecordingRenderer(),
       skins: skinStore(skin),
@@ -223,6 +275,7 @@ describe('CachedAvatarService', (): void => {
     const renderer = new RecordingRenderer();
     const service = new CachedAvatarService({
       cache: new RecordingCache(),
+      defaultSkins: missingDefaultSkins(),
       players: playersWithTexture(),
       renderer,
       skins: skinStore(unsupported),
@@ -235,6 +288,18 @@ describe('CachedAvatarService', (): void => {
     expect(renderer.calls).toBe(0);
   });
 });
+
+function defaultSkins(body: Buffer): DefaultSkinSource {
+  return {
+    fetchDefaultSkin: (): Promise<Buffer> => Promise.resolve(body),
+  };
+}
+
+function missingDefaultSkins(): DefaultSkinSource {
+  return {
+    fetchDefaultSkin: (): Promise<undefined> => Promise.resolve(undefined),
+  };
+}
 
 function playersWithTexture(): MinecraftPlayerLookup {
   return {

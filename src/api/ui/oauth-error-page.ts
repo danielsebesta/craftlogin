@@ -1,5 +1,6 @@
 import { escapeHtml } from '../html.js';
 import { renderPageDocument } from './document.js';
+import { renderIcon } from './icons.js';
 
 export type OAuthErrorAction =
   | { readonly kind: 'back'; readonly label: string }
@@ -26,7 +27,7 @@ export function renderOAuthErrorPage(input: OAuthErrorPageInput): string {
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="oauth-error-heading">
         <div class="consent-title">
-          <h1 id="oauth-error-heading">${escapeHtml(input.heading)}</h1>
+          <h1 class="icon-heading" id="oauth-error-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(input.heading)}</h1>
           <p class="lead">${escapeHtml(input.lead)}</p>${detail}
         </div>${action}
       </section>`,
@@ -46,8 +47,8 @@ function renderAction(action: OAuthErrorAction | undefined): string {
   }
   const control =
     action.kind === 'back'
-      ? `<button type="button" class="button button-secondary" data-go-back hidden>${escapeHtml(action.label)}</button>`
-      : `<a class="button button-secondary" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`;
+      ? `<button type="button" class="button button-secondary" data-go-back hidden>${renderIcon('refresh', 'button-icon')}${escapeHtml(action.label)}</button>`
+      : `<a class="button button-secondary" href="${escapeHtml(action.href)}">${renderIcon('refresh', 'button-icon')}${escapeHtml(action.label)}</a>`;
   return `
         <div class="consent-actions">
           ${control}

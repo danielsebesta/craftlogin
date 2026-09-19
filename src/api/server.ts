@@ -22,6 +22,7 @@ import type { RegisteredOriginLookup } from './client-directory.js';
 import type { CurrentUserLookup } from './current-user.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
 import { registerDeveloperRoutes } from './developer-routes.js';
+import { registerDocsRoutes } from './docs-routes.js';
 import { registerErrorHandling } from './errors.js';
 import { registerFaviconAssetRoutes } from './favicon-assets.js';
 import { registerFontAssetRoutes } from './font-assets.js';
@@ -112,7 +113,8 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   if (options.minecraft !== undefined) {
     registerAvatarRoutes(server, options.minecraft);
   }
-  registerLandingRoutes(server, { showDocumentation: options.nodeEnvironment !== 'production' });
+  registerLandingRoutes(server, { showDocumentation: true });
+  registerDocsRoutes(server);
   registerAgentGuidanceRoutes(server);
   registerHealthRoute(server, options.readiness);
   registerOidcHttpRoutes(server, options.oidcHandler);
@@ -149,7 +151,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     issuer: options.issuer,
     logger: server.log,
     sessions: options.developerSessions,
-    showDocumentation: options.nodeEnvironment !== 'production',
+    showDocumentation: true,
     users: options.users,
     ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });

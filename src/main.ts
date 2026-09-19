@@ -28,6 +28,7 @@ import { getErrorKind } from './logging/error-kind.js';
 import { createLogger } from './logging/logger.js';
 import { RedisMinecraftCache } from './mojang/cache.js';
 import { HttpMojangClient, type MojangLogger } from './mojang/client.js';
+import { HttpDefaultSkinStore } from './mojang/default-skins.js';
 import { HttpSkinStore } from './mojang/skin-store.js';
 import { startGhostServer, type MinecraftGhostServer } from './mc-server/ghost-server.js';
 import { createOAuthRuntime } from './oauth/runtime.js';
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
     const skins = new HttpSkinStore({ cache: mojangCache, logger });
     const avatars = new CachedAvatarService({
       cache: mojangCache,
+      defaultSkins: new HttpDefaultSkinStore({ cache: mojangCache, logger }),
       logger,
       players,
       renderer: new CanvasAvatarRenderer(),

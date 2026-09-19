@@ -1,6 +1,7 @@
 import { english } from '../../locales/en.js';
 import { escapeHtml } from '../html.js';
 import { renderPageDocument } from './document.js';
+import { renderIcon, renderMicrosoftIcon, type IconName } from './icons.js';
 import { renderVerificationBadge } from './verification-badge.js';
 
 // Forty gentle polls cover the five-minute verification code lifetime.
@@ -122,9 +123,20 @@ export interface SignInPageInput {
 
 function renderPermission(permission: ConsentPermission): string {
   if (permission.kind === 'code') {
-    return `<li><span class="consent-marker" aria-hidden="true"></span><code>${escapeHtml(permission.code)}</code></li>`;
+    return `<li>${renderIcon('check', 'list-icon')}<code>${escapeHtml(permission.code)}</code></li>`;
   }
-  return `<li><span class="consent-marker" aria-hidden="true"></span><span>${escapeHtml(permission.text)}</span></li>`;
+  return `<li>${renderIcon('check', 'list-icon')}<span>${escapeHtml(permission.text)}</span></li>`;
+}
+
+function verificationMethodIcon(id: string): IconName | 'microsoft' {
+  if (id === 'online') return 'gamepad';
+  if (id === 'microsoft') return 'microsoft';
+  return 'user';
+}
+
+function renderMethodIcon(id: string, className: string): string {
+  const icon = verificationMethodIcon(id);
+  return icon === 'microsoft' ? renderMicrosoftIcon(className) : renderIcon(icon, className);
 }
 
 function renderFormAction(cancel: SignInCancel | undefined, className?: string): string {
@@ -179,7 +191,7 @@ function renderVerification(input: SignInPageInput): string {
           <h2 id="address-heading">${escapeHtml(verification.addressLabel)}</h2>
           <div class="signin-address-row">
             <code class="signin-address" data-address>${escapeHtml(verification.address)}</code>
-            <button type="button" class="button button-secondary" data-copy-target="[data-address]" data-copied-label="${escapeHtml(input.copiedLabel)}" hidden>${escapeHtml(input.copyLabel)}</button>
+            <button type="button" class="button button-secondary" data-copy-target="[data-address]" data-copied-label="${escapeHtml(input.copiedLabel)}" hidden>${renderIcon('code', 'button-icon')}${escapeHtml(input.copyLabel)}</button>
           </div>`;
 
   return `
@@ -204,7 +216,7 @@ function renderMethodChooser(input: SignInPageInput): string {
                 (choice): string => `
             <label class="method-option">
               <input type="radio" name="verification-method" value="${escapeHtml(choice.id)}" data-method-choice${input.selectedMethod === choice.id ? ' checked' : ''}>
-              <span><strong>${escapeHtml(choice.label)}</strong><small>${escapeHtml(choice.detail)}</small></span>
+              ${renderMethodIcon(choice.id, 'list-icon')}<span><strong>${escapeHtml(choice.label)}</strong><small>${escapeHtml(choice.detail)}</small></span>
             </label>`,
               )
               .join('')}
@@ -224,7 +236,7 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
             <label for="skin-username">${escapeHtml(input.accountLabel)}</label>
             <div class="skin-start-controls">
               <input id="skin-username" name="username" type="text" minlength="3" maxlength="16" pattern="[A-Za-z0-9_]+" placeholder="${escapeHtml(input.accountPlaceholder)}" autocomplete="username" required data-skin-username>
-              <button class="button button-secondary" type="submit" data-skin-start>${escapeHtml(input.startLabel)}</button>
+              <button class="button button-secondary" type="submit" data-skin-start>${renderIcon('user', 'button-icon')}${escapeHtml(input.startLabel)}</button>
             </div>
             <p class="field-hint" data-skin-lookup-status role="status" aria-live="polite"></p>
           </form>`
@@ -247,14 +259,14 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
             ${challenge.steps.map((step): string => `<li>${escapeHtml(step)}</li>`).join('\n            ')}
           </ol>
           <div class="skin-actions">
-            <a class="button button-secondary" href="${escapeHtml(challenge.originalDownloadUrl)}" download>${escapeHtml(challenge.originalDownloadLabel)}</a>
-            <a class="button button-secondary" href="${escapeHtml(challenge.downloadUrl)}" download>${escapeHtml(challenge.downloadLabel)}</a>
-            <a class="button button-secondary" href="${escapeHtml(challenge.changeSkinUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(challenge.changeSkinLabel)}</a>
+            <a class="button button-secondary" href="${escapeHtml(challenge.originalDownloadUrl)}" download>${renderIcon('user', 'button-icon')}${escapeHtml(challenge.originalDownloadLabel)}</a>
+            <a class="button button-secondary" href="${escapeHtml(challenge.downloadUrl)}" download>${renderIcon('check', 'button-icon')}${escapeHtml(challenge.downloadLabel)}</a>
+            <a class="button button-secondary" href="${escapeHtml(challenge.changeSkinUrl)}" target="_blank" rel="noopener noreferrer">${renderIcon('externalLink', 'button-icon')}${escapeHtml(challenge.changeSkinLabel)}</a>
           </div>`;
 
   return `
         <section class="skin-verification" data-method-panel="skin" aria-labelledby="skin-verification-heading">
-          <h2 id="skin-verification-heading">${escapeHtml(input.heading)}</h2>
+          <h2 class="icon-heading" id="skin-verification-heading">${renderIcon('user', 'heading-icon')}${escapeHtml(input.heading)}</h2>
           <p class="field-hint">${escapeHtml(input.hint)}</p>
           ${input.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(input.error)}</p>`}${challengeMarkup}${input.status === undefined ? '' : renderVerificationStatus(input.status, input.statusMessages)}
         </section>`;
@@ -280,10 +292,10 @@ function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefi
   }
   return `
         <section class="microsoft-verification" data-method-panel="microsoft" aria-labelledby="microsoft-verification-heading">
-          <h2 id="microsoft-verification-heading">${escapeHtml(input.heading)}</h2>
+          <h2 class="icon-heading" id="microsoft-verification-heading">${renderMicrosoftIcon('heading-icon')}${escapeHtml(input.heading)}</h2>
           <p class="field-hint">${escapeHtml(input.hint)}</p>
           ${input.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(input.error)}</p>`}
-          <a class="button button-secondary" href="${escapeHtml(input.startAction)}">${escapeHtml(input.startLabel)}</a>
+          <a class="button button-secondary" href="${escapeHtml(input.startAction)}">${renderMicrosoftIcon('button-icon')}${escapeHtml(input.startLabel)}</a>
         </section>`;
 }
 
@@ -303,7 +315,7 @@ export function renderSignInPage(input: SignInPageInput): string {
   const securityNote =
     input.securityNote === undefined
       ? ''
-      : `<p class="field-hint">${escapeHtml(input.securityNote)}</p>`;
+      : `<p class="field-hint icon-note">${renderIcon('shield', 'list-icon')}<span>${escapeHtml(input.securityNote)}</span></p>`;
   const singular =
     input.verification === undefined &&
     input.skinVerification === undefined &&
@@ -319,14 +331,14 @@ export function renderSignInPage(input: SignInPageInput): string {
           </div>${renderAccountChip(input)}
         </div>
         <div class="consent-scopes">
-          <h2>${escapeHtml(input.allowsHeading)}</h2>
+          <h2 class="icon-heading">${renderIcon('user', 'heading-icon')}${escapeHtml(input.allowsHeading)}</h2>
           <ul>
             ${input.permissions.map(renderPermission).join('\n            ')}
           </ul>
         </div>${renderMethodChooser(input)}${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
         <div class="consent-actions">${renderFormAction(input.cancel)}${renderFormAction(input.switchAccount)}
           <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
-            <button class="button" type="submit">${escapeHtml(input.continueLabel)}</button>
+            <button class="button" type="submit">${renderIcon('login', 'button-icon')}${escapeHtml(input.continueLabel)}</button>
           </form>
         </div>
         <noscript><p class="field-hint">${escapeHtml(input.noJavaScript)}</p></noscript>

@@ -19,12 +19,15 @@ describe('consent page verification badge', (): void => {
     const page = renderInteractionPage({ ...baseInput, appVerified: true });
 
     expect(page).toContain(
-      `<span class="consent-app"><bdi>Maps &amp; More</bdi><span class="verification-badge verification-badge-verified">`,
+      `<span class="consent-app"><bdi>Maps &amp; More</bdi><span class="verification-badge verification-badge-verified"`,
     );
-    expect(page).toContain(english.interaction.verifiedAppBadge);
+    expect(page).toContain(`title="${english.interaction.verifiedAppBadge}"`);
+    expect(page).toContain(
+      `<span class="visually-hidden">${english.interaction.verifiedAppBadge}</span>`,
+    );
     // The icon is inlined so it inherits the surrounding text color; an <img>
     // reference to a vendored SVG would not and would add a second request.
-    expect(page).toContain('<span class="verification-badge verification-badge-verified"><svg');
+    expect(page).toContain('<span class="verification-badge-dot"><svg');
     expect(page).toContain('fill="currentColor"');
     expect(page).toContain('aria-hidden="true"');
   });

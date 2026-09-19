@@ -120,7 +120,10 @@ describe('page accessibility contract', (): void => {
     expect(html).toContain('<label for="app-redirects">');
     expect(html).toContain('<label for="admin-identifier">');
     expect(html).toContain('<label for="admin-role">');
-    expect(html).toContain('<h1>Developer Console</h1>');
+    expect(html).toContain('class="icon-heading"');
+    expect(html).toContain('Developer Console</h1>');
+    expect(html).toContain('class="heading-icon"');
+    expect(html).toContain('aria-hidden="true"');
     expect(html).not.toContain('href="/docs/"');
     expect(html).toContain('/api/avatars/123e4567-e89b-42d3-a456-426614174000/face');
     expect(html).not.toContain('<code>123e4567-e89b-42d3-a456-426614174000</code>');

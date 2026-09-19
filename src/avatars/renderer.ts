@@ -48,21 +48,17 @@ export class CanvasAvatarRenderer implements AvatarRenderer {
     model: MinecraftSkinModel,
     options: AvatarRenderOptions,
   ): Promise<Buffer> {
-    // Every view is a flat front projection with nearest-neighbor texels: the
-    // face fills the canvas, the head is a plain front head, and bust/body lay
-    // the figure out exactly like the skin file. Nothing here is perspective
-    // projected, so edges never need antialiasing.
-    if (options.view === 'face') {
-      return await renderFace(texture, options.layers, options.size);
-    }
-    if (options.view === 'head') {
-      return await renderFlatHead(texture, options.layers, options.size);
+    // Every view is a front orthographic projection with nearest-neighbor texels.
+    // Vanilla renders skin overlays on separately inflated cuboids, so their
+    // projected texture is centered over, but larger than, the base surface.
+    if (options.view === 'face' || options.view === 'head') {
+      return await renderProjectedHead(texture, options.layers, options.size);
     }
     return await renderFlatFigure(texture, model, options.view, options.layers, options.size);
   }
 }
 
-async function renderFace(
+async function renderProjectedHead(
   texture: SkinTexture,
   layers: AvatarLayers,
   outputSize: number,
@@ -70,89 +66,35 @@ async function renderFace(
   const canvas = createCanvas(outputSize, outputSize);
   const context = canvas.getContext('2d');
   const output = context.createImageData(outputSize, outputSize);
-  const pixelSize = outputSize / 8;
-  const extrusion = Math.max(1, Math.round(pixelSize / 3));
-
-  for (let y = 0; y < outputSize; y += 1) {
-    const sourceY = Math.floor((y * 8) / outputSize);
-    for (let x = 0; x < outputSize; x += 1) {
-      const sourceX = Math.floor((x * 8) / outputSize);
-      const base = { ...readColor(texture, 8 + sourceX, 8 + sourceY), alpha: 255 };
-      writeColor(output.data, (y * outputSize + x) * 4, base);
-    }
-  }
-
-  if (layers === 'all') {
-    for (let y = 0; y < outputSize; y += 1) {
-      const sourceY = Math.floor((y * 8) / outputSize);
-      for (let x = 0; x < outputSize; x += 1) {
-        const sourceX = Math.floor((x * 8) / outputSize);
-        const overlay = readColor(texture, 40 + sourceX, 8 + sourceY);
-        if (overlay.alpha === 0) {
-          continue;
-        }
-        const shadowX = Math.min(outputSize - 1, x + extrusion);
-        const shadowY = Math.min(outputSize - 1, y + extrusion);
-        writeColor(
-          output.data,
-          (shadowY * outputSize + shadowX) * 4,
-          compositeColor(
-            readOutputColor(output.data, (shadowY * outputSize + shadowX) * 4),
-            overlay,
-          ),
-        );
-      }
-    }
-  }
-
-  for (let y = 0; y < outputSize; y += 1) {
-    const sourceY = Math.floor((y * 8) / outputSize);
-    for (let x = 0; x < outputSize; x += 1) {
-      const sourceX = Math.floor((x * 8) / outputSize);
-      const color =
-        layers === 'all'
-          ? compositeColor(
-              readOutputColor(output.data, (y * outputSize + x) * 4),
-              readColor(texture, 40 + sourceX, 8 + sourceY),
-            )
-          : readOutputColor(output.data, (y * outputSize + x) * 4);
-      const outputIndex = (y * outputSize + x) * 4;
-      writeColor(output.data, outputIndex, color);
-    }
-  }
-
-  context.putImageData(output, 0, 0);
-  return await canvas.encode('png');
-}
-
-async function renderFlatHead(
-  texture: SkinTexture,
-  layers: AvatarLayers,
-  outputSize: number,
-): Promise<Buffer> {
-  const canvas = createCanvas(outputSize, outputSize);
-  const context = canvas.getContext('2d');
-  const output = context.createImageData(outputSize, outputSize);
-  const scale = outputSize / 8;
+  // A flat face benefits from the same small visible separation as established
+  // avatar services: the helmet fills the frame while the face is inset by 5%.
+  // Full figure projections below retain the exact vanilla cuboid dimensions.
+  const overlayRect = { height: 8, u: 40, v: 8, width: 8 };
+  const showOverlay = layers === 'all' && hasVisiblePixels(texture, overlayRect);
+  const overlayRatio = showOverlay ? 1.05 : 1;
+  const baseSize = outputSize / overlayRatio;
+  const baseOffset = (outputSize - baseSize) / 2;
   paintFlatRect(
     output.data,
     outputSize,
     texture,
     { height: 8, u: 8, v: 8, width: 8 },
-    0,
-    0,
-    scale,
+    baseOffset,
+    baseOffset,
+    baseSize,
+    baseSize,
     true,
   );
-  if (layers === 'all') {
+  if (showOverlay) {
     paintFlatRect(
       output.data,
       outputSize,
       texture,
-      { height: 8, u: 40, v: 8, width: 8 },
+      overlayRect,
       0,
       0,
-      scale,
+      outputSize,
+      outputSize,
       false,
     );
   }
@@ -190,32 +132,87 @@ async function renderFlatFigure(
 ): Promise<Buffer> {
   const scene = buildAvatarScene(view, model, layers, texture.legacy);
   const armWidth = model === 'slim' ? 3 : 4;
-  const figureWidth = 8 + armWidth * 2;
-  const figureHeight = view === 'body' ? 32 : 20;
-  const scale = outputSize / figureHeight;
-  const offsetX = (outputSize - figureWidth * scale) / 2;
+  const projected = scene
+    .map((cuboid): ProjectedCuboid => projectCuboid(cuboid, armWidth))
+    .filter(
+      (cuboid): boolean => cuboid.layer === 'base' || hasVisiblePixels(texture, cuboid.texture),
+    );
+  // Frame against the vanilla base model, not its inflated overlays. Otherwise
+  // enabling layers shrinks and shifts the entire player, which is especially
+  // visible as detached seams at small output sizes.
+  const bounds = projectedBounds(projected.filter((cuboid): boolean => cuboid.layer === 'base'));
+  const scale = Math.min(
+    outputSize / (bounds.maxX - bounds.minX),
+    outputSize / (bounds.maxY - bounds.minY),
+  );
+  const offsetX = (outputSize - (bounds.maxX - bounds.minX) * scale) / 2 - bounds.minX * scale;
+  const offsetY = (outputSize - (bounds.maxY - bounds.minY) * scale) / 2 - bounds.minY * scale;
 
   const canvas = createCanvas(outputSize, outputSize);
   const context = canvas.getContext('2d');
   const output = context.createImageData(outputSize, outputSize);
 
-  for (const cuboid of scene) {
-    const layout = flatLayout(cuboid.part, armWidth);
-    const rect = frontTextureRect(cuboid.texture);
+  // Outer surfaces all sit in front of the base model. Painting every base first
+  // prevents a neighboring limb base from incorrectly covering an inflated layer.
+  const paintOrder = [
+    ...projected.filter((cuboid): boolean => cuboid.layer === 'base'),
+    ...projected.filter((cuboid): boolean => cuboid.layer === 'outer'),
+  ];
+  for (const cuboid of paintOrder) {
     paintFlatRect(
       output.data,
       outputSize,
       texture,
-      rect,
-      offsetX + layout.x * scale,
-      layout.y * scale,
-      scale,
+      cuboid.texture,
+      offsetX + cuboid.x * scale,
+      offsetY + cuboid.y * scale,
+      cuboid.width * scale,
+      cuboid.height * scale,
       cuboid.layer === 'base',
     );
   }
 
   context.putImageData(output, 0, 0);
   return await canvas.encode('png');
+}
+
+interface ProjectedCuboid {
+  readonly height: number;
+  readonly layer: AvatarLayer;
+  readonly texture: TextureRect;
+  readonly width: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+function projectCuboid(cuboid: AvatarCuboid, armWidth: number): ProjectedCuboid {
+  const layout = flatLayout(cuboid.part, armWidth);
+  const texture = frontTextureRect(cuboid.texture);
+  return {
+    height: cuboid.size.height,
+    layer: cuboid.layer,
+    texture,
+    width: cuboid.size.width,
+    x: layout.x + (texture.width - cuboid.size.width) / 2,
+    y: layout.y + (texture.height - cuboid.size.height) / 2,
+  };
+}
+
+function projectedBounds(projected: readonly ProjectedCuboid[]): {
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly minX: number;
+  readonly minY: number;
+} {
+  if (projected.length === 0) {
+    throw new RangeError('Avatar projection has no cuboids');
+  }
+  return {
+    maxX: Math.max(...projected.map((cuboid): number => cuboid.x + cuboid.width)),
+    maxY: Math.max(...projected.map((cuboid): number => cuboid.y + cuboid.height)),
+    minX: Math.min(...projected.map((cuboid): number => cuboid.x)),
+    minY: Math.min(...projected.map((cuboid): number => cuboid.y)),
+  };
 }
 
 function paintFlatRect(
@@ -225,17 +222,20 @@ function paintFlatRect(
   rect: TextureRect,
   destX: number,
   destY: number,
-  scale: number,
+  destWidth: number,
+  destHeight: number,
   base: boolean,
 ): void {
   const startX = Math.max(0, Math.floor(destX));
-  const endX = Math.min(outputSize, Math.ceil(destX + rect.width * scale));
+  const endX = Math.min(outputSize, Math.ceil(destX + destWidth));
   const startY = Math.max(0, Math.floor(destY));
-  const endY = Math.min(outputSize, Math.ceil(destY + rect.height * scale));
+  const endY = Math.min(outputSize, Math.ceil(destY + destHeight));
   for (let y = startY; y < endY; y += 1) {
-    const sourceY = rect.v + Math.min(rect.height - 1, Math.floor((y - destY) / scale));
+    const sourceY =
+      rect.v + Math.min(rect.height - 1, Math.floor(((y - destY) * rect.height) / destHeight));
     for (let x = startX; x < endX; x += 1) {
-      const sourceX = rect.u + Math.min(rect.width - 1, Math.floor((x - destX) / scale));
+      const sourceX =
+        rect.u + Math.min(rect.width - 1, Math.floor(((x - destX) * rect.width) / destWidth));
       const sampled = readColor(texture, sourceX, sourceY);
       const outputIndex = (y * outputSize + x) * 4;
       if (base) {
@@ -426,6 +426,17 @@ function frontTextureRect(texture: TextureBox): TextureRect {
     v: texture.v + texture.depth,
     width: texture.width,
   };
+}
+
+function hasVisiblePixels(texture: SkinTexture, rect: TextureRect): boolean {
+  for (let y = rect.v; y < rect.v + rect.height; y += 1) {
+    for (let x = rect.u; x < rect.u + rect.width; x += 1) {
+      if (readColor(texture, x, y).alpha !== 0) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function readColor(texture: SkinTexture, x: number, y: number): Color {

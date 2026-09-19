@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type Provider from 'oidc-provider';
+import { errors as oidcErrors } from 'oidc-provider';
 import { z } from 'zod';
 
 import type { AuthenticatedMinecraftPlayer, VerificationMethod } from '../verification/types.js';
@@ -76,7 +77,7 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
   }
 
   public async switchAccount(request: IncomingMessage, response: ServerResponse): Promise<string> {
-    const interaction = await this.provider.interactionDetails(request, response);
+    const interaction = await this.details(request, response);
     if (interaction.session?.uid !== undefined) {
       const session = await this.provider.Session.findByUid(interaction.session.uid);
       if (session !== undefined) {
@@ -97,11 +98,26 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
     return authorizationUrl.toString();
   }
 
+  // An expired or otherwise unknown OIDC interaction surfaces as the
+  // provider's SessionNotFound (HTTP 400). Convert it into the shared
+  // interaction state error so browser pages render the friendly card or
+  // redirect to it instead of leaking a raw JSON envelope.
+  private async details(
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<InteractionDetails> {
+    try {
+      return await this.provider.interactionDetails(request, response);
+    } catch (error: unknown) {
+      throw asInteractionStateError(error);
+    }
+  }
+
   public async inspect(
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<OAuthInteractionContext> {
-    const interaction = await this.provider.interactionDetails(request, response);
+    const interaction = await this.details(request, response);
     return interactionContextSchema.parse({
       clientId: interaction.params['client_id'],
       interactionId: interaction.uid,
@@ -121,7 +137,7 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
     response: ServerResponse,
     expectedInteractionId: string,
   ): Promise<string> {
-    const interaction = await this.provider.interactionDetails(request, response);
+    const interaction = await this.details(request, response);
     const context = interactionContextSchema.parse({
       clientId: interaction.params['client_id'],
       interactionId: interaction.uid,
@@ -194,7 +210,7 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
     resolvedAt: string,
     method: VerificationMethod,
   ): Promise<string> {
-    const interaction = await this.provider.interactionDetails(request, response);
+    const interaction = await this.details(request, response);
     const context = interactionContextSchema.parse({
       clientId: interaction.params['client_id'],
       interactionId: interaction.uid,
@@ -268,6 +284,17 @@ function authenticationContextForMethod(method: VerificationMethod): string {
 export class OAuthInteractionStateError extends Error {
   public override readonly name = 'OAuthInteractionStateError';
 }
+
+export function asInteractionStateError(error: unknown): unknown {
+  if (error instanceof oidcErrors.SessionNotFound) {
+    return new OAuthInteractionStateError('The OIDC interaction is no longer available', {
+      cause: error,
+    });
+  }
+  return error;
+}
+
+type InteractionDetails = Awaited<ReturnType<Provider['interactionDetails']>>;
 
 function toEpochSeconds(timestamp: string): number {
   const milliseconds = Date.parse(timestamp);

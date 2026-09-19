@@ -136,11 +136,22 @@ export function registerMicrosoftOAuthRoutes(
         throw error;
       }
       clearTransactionCookie(reply, transaction.cookieName);
-      await options.interactions.prepareMicrosoft(
-        request.raw,
-        reply.raw,
-        transaction.interactionId,
-      );
+      try {
+        await options.interactions.prepareMicrosoft(
+          request.raw,
+          reply.raw,
+          transaction.interactionId,
+        );
+      } catch (error: unknown) {
+        // The interaction may have expired while the user was at Microsoft.
+        // Like every other browser navigation here, that becomes a redirect
+        // to the friendly interaction page instead of a JSON envelope.
+        if (isInteractionClientError(error)) {
+          await reply.redirect(homeUrlForInteraction(transaction.interactionId), 303);
+          return;
+        }
+        throw error;
+      }
 
       const homeUrl = homeUrlForInteraction(transaction.interactionId);
       if (request.query.error !== undefined) {

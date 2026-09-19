@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { getErrorKind } from '../logging/error-kind.js';
 import type { CachedValue, MinecraftCache } from '../mojang/cache.js';
 import type { MinecraftPlayerLookup, MinecraftSkinTexture } from '../mojang/client.js';
+import { selectDefaultSkin, type DefaultSkinSource } from '../mojang/default-skins.js';
+import { canonicalMinecraftUuid } from '../mojang/uuid.js';
 import type { SkinStore } from '../mojang/skin-store.js';
 import type { AvatarRenderer } from './renderer.js';
 import {
@@ -15,7 +17,7 @@ import type { AvatarRenderOptions } from './types.js';
 
 const RENDER_CACHE_SECONDS = 24 * 60 * 60;
 // Bump whenever the pixel output changes so stale renders are never served.
-const RENDERER_VERSION = 'v2';
+const RENDERER_VERSION = 'v5';
 
 export interface AvatarImage {
   readonly body: Buffer;
@@ -37,6 +39,7 @@ export interface AvatarService {
 
 export interface CachedAvatarServiceOptions {
   readonly cache: MinecraftCache;
+  readonly defaultSkins: DefaultSkinSource;
   readonly logger?: AvatarLogger;
   readonly players: MinecraftPlayerLookup;
   readonly renderer: AvatarRenderer;
@@ -198,17 +201,46 @@ export class CachedAvatarService implements AvatarService {
   private async findSource(uuid: string): Promise<AvatarSourceResult> {
     try {
       const profile = await this.options.players.findProfileById(uuid);
-      if (profile?.texture === undefined) {
-        return { status: 'not-found' };
+      if (profile?.texture !== undefined) {
+        const image = await this.options.skins.fetchSkin(profile.texture.hash);
+        if (image !== undefined) {
+          inspectSkinPng(image.body);
+          return { body: image.body, status: 'found', texture: profile.texture };
+        }
       }
-      const image = await this.options.skins.fetchSkin(profile.texture.hash);
-      if (image === undefined) {
-        return { status: 'not-found' };
-      }
-      inspectSkinPng(image.body);
-      return { body: image.body, status: 'found', texture: profile.texture };
     } catch (error: unknown) {
       this.logFailure(error, 'resolve-skin');
+      return { status: 'unavailable' };
+    }
+    return await this.findDefaultSource(uuid);
+  }
+
+  private async findDefaultSource(uuid: string): Promise<AvatarSourceResult> {
+    // Players without a Mojang texture receive a deterministic vanilla default
+    // skin instead of an error. Transient Mojang failures above return
+    // unavailable, never a default that could mask a real custom skin.
+    const canonical = canonicalMinecraftUuid(uuid);
+    if (canonical === undefined) {
+      return { status: 'not-found' };
+    }
+    const skin = selectDefaultSkin(canonical);
+    try {
+      const body = await this.options.defaultSkins.fetchDefaultSkin(skin);
+      if (body === undefined) {
+        this.logFailure(
+          new Error(`Default skin asset is missing: ${skin.name}`),
+          'fetch-default-skin',
+        );
+        return { status: 'unavailable' };
+      }
+      inspectSkinPng(body);
+      return {
+        body,
+        status: 'found',
+        texture: { hash: `default:${skin.name}`, model: skin.model },
+      };
+    } catch (error: unknown) {
+      this.logFailure(error, 'fetch-default-skin');
       return { status: 'unavailable' };
     }
   }

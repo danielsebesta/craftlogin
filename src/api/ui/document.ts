@@ -1,10 +1,12 @@
 import { english } from '../../locales/en.js';
 import { escapeHtml } from '../html.js';
+import { renderIcon, type IconName } from './icons.js';
 
 export const THEME_COLOR = '#0b0e0b';
 
 export interface DocumentNavigationItem {
   readonly href: string;
+  readonly icon?: IconName;
   readonly label: string;
   readonly current?: boolean;
 }
@@ -58,7 +60,7 @@ export function renderPageDocument(page: PageDocument): string {
 ${page.header.navigation.items
   .map(
     (item): string =>
-      `        <a href="${escapeHtml(item.href)}"${item.current === true ? ' aria-current="page"' : ''}>${escapeHtml(item.label)}</a>`,
+      `        <a href="${escapeHtml(item.href)}"${item.current === true ? ' aria-current="page"' : ''}>${item.icon === undefined ? '' : renderIcon(item.icon, 'nav-icon')}${escapeHtml(item.label)}</a>`,
   )
   .join('\n')}
 ${page.header.navigation.trailing ?? ''}

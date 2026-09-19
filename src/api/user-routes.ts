@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { english } from '../locales/en.js';
 import { getErrorKind } from '../logging/error-kind.js';
 import type { MinecraftPlayerLookup, MinecraftPlayerProfile } from '../mojang/client.js';
+import { offlinePlayerUuid } from '../mojang/default-skins.js';
 import { canonicalMinecraftUuid } from '../mojang/uuid.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
 import type { CurrentUserLookup } from './current-user.js';
@@ -15,6 +16,9 @@ import {
 } from './schemas.js';
 
 const PUBLIC_PROFILE_CACHE = 'public, max-age=3600, stale-while-revalidate=86400';
+// Offline fallback mappings are synthetic: cache them briefly so a later real
+// registration of the same name becomes visible quickly.
+const OFFLINE_PROFILE_CACHE = 'public, max-age=300, stale-while-revalidate=3600';
 const PUBLIC_PROFILE_CORS = {
   credentials: false,
   methods: ['GET'],
@@ -67,9 +71,9 @@ export function registerUserRoutes(
       schema: playerProfileRouteSchema,
     },
     async (request, reply): Promise<void> => {
+      const uuid = canonicalMinecraftUuid(request.params.identifier);
       let profile: MinecraftPlayerProfile | undefined;
       try {
-        const uuid = canonicalMinecraftUuid(request.params.identifier);
         profile =
           uuid === undefined
             ? await players.findProfileByName(request.params.identifier)
@@ -88,7 +92,19 @@ export function registerUserRoutes(
       }
 
       if (profile === undefined) {
-        throw new ApiError(404, 'not_found', english.api.errors.minecraftPlayerNotFound);
+        if (uuid !== undefined) {
+          throw new ApiError(404, 'not_found', english.api.errors.minecraftPlayerNotFound);
+        }
+        // A well-formed but unregistered name resolves to an offline-mode UUID
+        // with a deterministic default skin. Verified identity still comes only
+        // from the OIDC flow; this synthetic profile must never be trusted as one.
+        const offline: MinecraftPlayerProfile = {
+          username: request.params.identifier,
+          uuid: offlinePlayerUuid(request.params.identifier),
+        };
+        void reply.header('cache-control', OFFLINE_PROFILE_CACHE);
+        await reply.send(offline);
+        return;
       }
 
       void reply.header('cache-control', PUBLIC_PROFILE_CACHE);

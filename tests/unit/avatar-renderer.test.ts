@@ -158,6 +158,66 @@ describe('Minecraft avatar geometry', (): void => {
     expect(countPixels(layered, isFlatBaseRed)).toBeGreaterThan(0);
   });
 
+  it('insets the face beneath the larger centered helmet layer', async (): Promise<void> => {
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        ...BASE_REGIONS,
+        { color: { blue: 10, green: 230, red: 230 }, height: 1, width: 1, x: 40, y: 8 },
+      ]),
+    );
+    const renderer = new CanvasAvatarRenderer();
+    const base = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'base', size: 128, view: 'head' }),
+    );
+    const layered = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'head' }),
+    );
+
+    expect(readFixturePixel(base, 127, 0).alpha).toBe(255);
+    expect(readFixturePixel(layered, 127, 0).alpha).toBe(0);
+    expect(readFixturePixel(layered, 64, 64)).toEqual({
+      alpha: 255,
+      blue: 20,
+      green: 20,
+      red: 220,
+    });
+  });
+
+  it('does not inset a head whose outer face is completely transparent', async (): Promise<void> => {
+    const texture = await decodeSkinTexture(await createSkinPng(BASE_REGIONS));
+    const image = await decodePng(
+      await new CanvasAvatarRenderer().render(texture, 'classic', {
+        layers: 'all',
+        size: 128,
+        view: 'head',
+      }),
+    );
+
+    expect(readFixturePixel(image, 0, 0).alpha).toBe(255);
+    expect(readFixturePixel(image, 127, 127).alpha).toBe(255);
+  });
+
+  it('keeps full-figure framing anchored to the base model when an outer layer is visible', async (): Promise<void> => {
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        ...BASE_REGIONS,
+        { color: { blue: 10, green: 230, red: 230 }, height: 1, width: 1, x: 40, y: 8 },
+      ]),
+    );
+    const renderer = new CanvasAvatarRenderer();
+    const base = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'base', size: 128, view: 'body' }),
+    );
+    const layered = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'body' }),
+    );
+
+    expect(readFixturePixel(base, 64, 0).alpha).toBe(255);
+    expect(readFixturePixel(layered, 64, 0).alpha).toBe(255);
+    expect(readFixturePixel(base, 64, 127).alpha).toBe(255);
+    expect(readFixturePixel(layered, 64, 127).alpha).toBe(255);
+  });
+
   it('renders a crisp front face with the Minecraft head overlay and no interpolation', async (): Promise<void> => {
     const texture = await decodeSkinTexture(
       await createSkinPng([

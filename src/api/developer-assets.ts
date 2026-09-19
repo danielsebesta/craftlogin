@@ -183,10 +183,6 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
-.app-card .verification-badge {
-  border-radius: 0;
-}
-
 .app-name {
   display: block;
   margin: 0;

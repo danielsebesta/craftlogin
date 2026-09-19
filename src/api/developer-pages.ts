@@ -4,6 +4,7 @@ import { english } from '../locales/en.js';
 import type { RegisteredApp } from './app-registration.js';
 import { escapeHtml } from './html.js';
 import { renderConsoleShell } from './ui/console-shell.js';
+import { renderIcon } from './ui/icons.js';
 import { renderOAuthErrorPage } from './ui/oauth-error-page.js';
 import { renderVerificationBadge } from './ui/verification-badge.js';
 
@@ -59,7 +60,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
   const formOpen = input.apps.length === 0 || input.formError !== undefined;
   const docsLink =
     input.showDocumentation === true
-      ? `<a class="button button-secondary console-section-link" href="/docs/">${escapeHtml(strings.dashboard.docsLink)}</a>`
+      ? `<a class="button button-secondary console-section-link" href="/docs/">${renderIcon('bookOpen', 'button-icon')}${escapeHtml(strings.dashboard.docsLink)}</a>`
       : '';
   const formErrorNotice =
     input.formError === undefined
@@ -73,7 +74,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
           <span class="console-session-role">${escapeHtml(roleLabel)}</span>
           <form action="/developers/logout" method="post">
             ${csrfField(input.csrfToken)}
-            <button class="button button-quiet" type="submit">${escapeHtml(strings.dashboard.logout)}</button>
+            <button class="button button-quiet" type="submit">${renderIcon('logout', 'button-icon')}${escapeHtml(strings.dashboard.logout)}</button>
           </form>
         </span>`;
 
@@ -82,14 +83,14 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
     {
       className: 'container console-main',
       content: `      <header class="console-intro">
-        <h1>${escapeHtml(strings.dashboard.heading)}</h1>
+        <h1 class="icon-heading">${renderIcon('briefcase', 'heading-icon')}${escapeHtml(strings.dashboard.heading)}</h1>
         <p class="lead">${escapeHtml(strings.dashboard.lead)}</p>
       </header>
       ${renderDashboardNotice(input.notice)}
       <div class="console-workspace">
         <section class="console-section" aria-labelledby="apps-heading">
           <div class="console-section-head">
-            <h2 id="apps-heading">${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
+            <h2 class="icon-heading" id="apps-heading">${renderIcon('key', 'heading-icon')}${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
             ${docsLink}
           </div>
           ${renderAppList(input.apps, input.role, input.csrfToken)}
@@ -123,7 +124,7 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
           <p class="field-label">${escapeHtml(strings.app.secretLabel)}</p>
           <code id="client-secret">${escapeHtml(app.clientSecret)}</code>
           <div class="button-row">
-            <button type="button" class="button button-secondary" data-copy-target="#client-secret" data-copied-label="${escapeHtml(interaction.copied)}" hidden>${escapeHtml(strings.app.copyLabel)}</button>
+            <button type="button" class="button button-secondary" data-copy-target="#client-secret" data-copied-label="${escapeHtml(interaction.copied)}" hidden>${renderIcon('code', 'button-icon')}${escapeHtml(strings.app.copyLabel)}</button>
           </div>
         </div>`;
 
@@ -132,7 +133,7 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
     {
       className: 'container message-layout',
       content: `      <section class="message-card card" aria-labelledby="created-heading">
-        <h1 id="created-heading">${escapeHtml(strings.app.createdHeading)}</h1>
+        <h1 class="icon-heading" id="created-heading">${renderIcon('check', 'heading-icon')}${escapeHtml(strings.app.createdHeading)}</h1>
         <p class="lead">${escapeHtml(strings.app.createdIntro)}</p>
         <dl class="summary-list">
           <div>
@@ -149,7 +150,7 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
           </div>
         </dl>${secret}
         <div class="button-row">
-          <a class="button" href="/developers">${escapeHtml(strings.navigation.console)}</a>
+          <a class="button" href="/developers">${renderIcon('briefcase', 'button-icon')}${escapeHtml(strings.navigation.console)}</a>
         </div>
       </section>`,
     },
@@ -162,7 +163,7 @@ export function renderRequestVerificationPage(app: ManagedApp, csrfToken: string
   return renderConsoleShell(strings.app.requestTitle, {
     className: 'container message-layout',
     content: `      <section class="message-card card" aria-labelledby="request-heading">
-        <h1 id="request-heading">${escapeHtml(strings.app.requestHeading)}</h1>
+        <h1 class="icon-heading" id="request-heading">${renderIcon('shield', 'heading-icon')}${escapeHtml(strings.app.requestHeading)}</h1>
         <p class="lead">${escapeHtml(strings.app.requestIntro)}</p>
         <dl class="summary-list">
           <div>
@@ -182,7 +183,7 @@ export function renderRequestVerificationPage(app: ManagedApp, csrfToken: string
             <small class="field-hint">${escapeHtml(strings.app.requestNoteHint)}</small>
           </div>
           <div class="button-row">
-            <button class="button" type="submit">${escapeHtml(strings.app.requestAction)}</button>
+            <button class="button" type="submit">${renderIcon('shield', 'button-icon')}${escapeHtml(strings.app.requestAction)}</button>
             <a class="button button-secondary" href="/developers">${escapeHtml(strings.app.requestCancel)}</a>
           </div>
         </form>
@@ -195,7 +196,7 @@ export function renderDeleteAppPage(app: ManagedApp, csrfToken: string): string 
   return renderConsoleShell(strings.confirm.appTitle, {
     className: 'container message-layout',
     content: `      <section class="message-card card" aria-labelledby="confirm-heading">
-        <h1 id="confirm-heading">${escapeHtml(strings.confirm.appHeading)}</h1>
+        <h1 class="icon-heading" id="confirm-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(strings.confirm.appHeading)}</h1>
         <p class="lead">${escapeHtml(strings.confirm.appBody)}</p>
         <dl class="summary-list">
           <div>
@@ -225,7 +226,7 @@ export function renderRemoveDeveloperPage(developer: DeveloperAccess, csrfToken:
   return renderConsoleShell(strings.confirm.developerTitle, {
     className: 'container message-layout',
     content: `      <section class="message-card card" aria-labelledby="confirm-heading">
-        <h1 id="confirm-heading">${escapeHtml(strings.confirm.developerHeading)}</h1>
+        <h1 class="icon-heading" id="confirm-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(strings.confirm.developerHeading)}</h1>
         <p class="lead">${escapeHtml(strings.confirm.developerBody)}</p>
         <dl class="summary-list">
           <div>
@@ -418,7 +419,7 @@ function renderRegistrationForm(
       <small class="field-hint">${escapeHtml(strings.redirectHelp)}</small>
     </div>
     <div class="button-row">
-      <button class="button" type="submit">${escapeHtml(strings.createAction)}</button>
+      <button class="button" type="submit">${renderIcon('key', 'button-icon')}${escapeHtml(strings.createAction)}</button>
     </div>
   </form>`;
 }
@@ -492,7 +493,7 @@ function renderAdministratorPanel(
               <option value="admin">${escapeHtml(admin.adminRole)}</option>
             </select>
           </div>
-          <button class="button" type="submit">${escapeHtml(admin.addAction)}</button>
+          <button class="button" type="submit">${renderIcon('user', 'button-icon')}${escapeHtml(admin.addAction)}</button>
         </form>
         ${entries}
         ${renderVerificationQueue(apps, csrfToken)}

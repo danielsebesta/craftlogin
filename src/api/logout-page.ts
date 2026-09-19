@@ -3,6 +3,7 @@ import type { LogoutSourceRenderer, PostLogoutSuccessRenderer } from '../oauth/p
 import { escapeHtml } from './html.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import { renderPageDocument } from './ui/document.js';
+import { renderIcon } from './ui/icons.js';
 
 export const renderLogoutPage: LogoutSourceRenderer = (context, form): void => {
   const strings = english.logout;
@@ -10,14 +11,14 @@ export const renderLogoutPage: LogoutSourceRenderer = (context, form): void => {
   context.type = 'html';
   context.body = renderPageDocument({
     content: `      <div class="signin-intro">
-        <h1>${escapeHtml(strings.heading)}</h1>
+        <h1 class="icon-heading">${renderIcon('logout', 'heading-icon')}${escapeHtml(strings.heading)}</h1>
         <p class="lead">${escapeHtml(strings.body)}</p>
       </div>
       <section class="signin-action">
         ${form}
         <div class="button-row">
-          <button class="button" type="submit" form="op.logoutForm" name="logout" value="yes">${escapeHtml(strings.confirm)}</button>
-          <button class="button button-secondary" type="submit" form="op.logoutForm">${escapeHtml(strings.decline)}</button>
+          <button class="button" type="submit" form="op.logoutForm" name="logout" value="yes">${renderIcon('logout', 'button-icon')}${escapeHtml(strings.confirm)}</button>
+          <button class="button button-secondary" type="submit" form="op.logoutForm">${renderIcon('refresh', 'button-icon')}${escapeHtml(strings.decline)}</button>
         </div>
       </section>`,
     footer: [english.interaction.footer],
@@ -35,12 +36,12 @@ export const renderLogoutSuccessPage: PostLogoutSuccessRenderer = (context): voi
   context.type = 'html';
   context.body = renderPageDocument({
     content: `      <div class="signin-intro">
-        <h1>${escapeHtml(strings.heading)}</h1>
+        <h1 class="icon-heading">${renderIcon('check', 'heading-icon')}${escapeHtml(strings.heading)}</h1>
         <p class="lead">${escapeHtml(strings.body)}</p>
       </div>
       <section class="signin-action">
         <div class="button-row">
-          <a class="button button-secondary" href="/">${escapeHtml(strings.returnAction)}</a>
+          <a class="button button-secondary" href="/">${renderIcon('home', 'button-icon')}${escapeHtml(strings.returnAction)}</a>
         </div>
       </section>`,
     footer: [english.interaction.footer],

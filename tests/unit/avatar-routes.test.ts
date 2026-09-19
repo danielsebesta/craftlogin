@@ -162,6 +162,9 @@ describe('avatar routes', (): void => {
     };
     const avatars = new CachedAvatarService({
       cache: new MemoryMinecraftCache(),
+      defaultSkins: {
+        fetchDefaultSkin: (): Promise<undefined> => Promise.resolve(undefined),
+      },
       players,
       renderer: new CanvasAvatarRenderer(),
       skins,

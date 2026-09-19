@@ -1,6 +1,7 @@
 import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
 import { renderPageDocument } from './ui/document.js';
+import { renderIcon } from './ui/icons.js';
 
 /**
  * Same-origin hand-off page after a form POST whose destination may be
@@ -14,10 +15,10 @@ export function renderAutoForwardPage(targetUrl: string): string {
   const strings = english.interaction;
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="forward-heading">
-        <h1 id="forward-heading">${escapeHtml(strings.forwardHeading)}</h1>
+        <h1 class="icon-heading" id="forward-heading">${renderIcon('login', 'heading-icon')}${escapeHtml(strings.forwardHeading)}</h1>
         <p class="lead">${escapeHtml(strings.forwardHint)}</p>
         <div class="consent-actions">
-          <a class="button" href="${escapeHtml(targetUrl)}">${escapeHtml(strings.forwardAction)}</a>
+          <a class="button" href="${escapeHtml(targetUrl)}">${renderIcon('login', 'button-icon')}${escapeHtml(strings.forwardAction)}</a>
         </div>
       </section>`,
     footer: [strings.footer],

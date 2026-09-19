@@ -420,7 +420,7 @@ export const skinVerificationDownloadRouteSchema: FastifySchema = {
       content: { 'image/png': { schema: { format: 'binary', type: 'string' } } },
       description: operations.skinVerificationDownload.summary,
     },
-    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    303: { type: 'null' },
     409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
@@ -1077,7 +1077,7 @@ export const oauthIntrospectionRouteSchema: FastifySchema = {
 };
 
 export const oauthEndSessionRouteSchema: FastifySchema = {
-  hide: true,
+  description: operations.logout.description,
   response: {
     200: { type: 'string' },
     303: { type: 'null' },
@@ -1085,6 +1085,8 @@ export const oauthEndSessionRouteSchema: FastifySchema = {
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
+  summary: operations.logout.summary,
+  tags: ['OAuth'],
 };
 
 export const oauthEndSessionConfirmRouteSchema: FastifySchema = {

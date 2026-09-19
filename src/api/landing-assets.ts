@@ -157,6 +157,7 @@ main.container::before {
 }
 
 .landing-section > h2 {
+  justify-content: center;
   margin-bottom: var(--s4);
 }
 
@@ -197,6 +198,11 @@ main.container::before {
 .landing-steps h3,
 .use-list h3 {
   margin: 0;
+}
+
+.landing-steps .list-icon,
+.use-list .list-icon {
+  color: var(--accent);
 }
 
 .landing-steps p,
@@ -244,6 +250,13 @@ main.container::before {
 .avatar-card code {
   font-size: var(--t-xs);
   overflow-wrap: anywhere;
+}
+
+.avatar-credit {
+  margin-top: var(--s4);
+  color: var(--muted);
+  font-size: var(--t-sm);
+  text-align: center;
 }
 
 .endpoint-list {

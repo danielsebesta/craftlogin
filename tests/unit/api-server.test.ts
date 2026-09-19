@@ -345,6 +345,9 @@ describe('CraftLogin API server', (): void => {
     expect(openApi.statusCode).toBe(200);
     expect(openApi.headers['content-type']).toContain('application/yaml');
     expect(openApi.body).toContain('openapi: 3.1.0');
+    expect(openApi.body).toContain('/oauth2/authorize:');
+    expect(openApi.body).not.toContain('/interaction/{uid}:');
+    expect(openApi.body).not.toContain('/api/apps:');
   });
 
   it('renders a secure semantic interaction page with a no-JavaScript fallback', async (): Promise<void> => {
@@ -445,6 +448,73 @@ describe('CraftLogin API server', (): void => {
 
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/interaction/dead-id');
+  });
+
+  it('redirects expired Microsoft callbacks back to the friendly interaction page', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    // server.ts binds prepareMicrosoft at registration, so the expiry must be
+    // armed before buildServer: the start call succeeds, the callback fails.
+    const workingPrepare = interactions.prepareMicrosoft.bind(interactions);
+    let prepareCalls = 0;
+    interactions.prepareMicrosoft = (
+      request: IncomingMessage,
+      response: ServerResponse,
+      expectedInteractionId?: string,
+    ): Promise<{ readonly interactionId: string }> => {
+      prepareCalls += 1;
+      return prepareCalls === 1
+        ? workingPrepare(request, response, expectedInteractionId)
+        : Promise.reject(new OAuthInteractionStateError('The interaction is gone'));
+    };
+    const server = await buildServer(
+      'test',
+      interactions,
+      [],
+      undefined,
+      undefined,
+      new MicrosoftVerificationStub(),
+    );
+    const started = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/microsoft/start',
+    });
+    expect(started.statusCode).toBe(303);
+    const state = new URL(requiredHeader(started, 'location')).searchParams.get('state');
+    const transactionCookie = requiredHeader(started, 'set-cookie').split(';', 1)[0];
+
+    const callback = await server.inject({
+      headers: { cookie: transactionCookie },
+      method: 'GET',
+      url: `/interaction/microsoft/callback?code=microsoft-code&state=${encodeURIComponent(state ?? '')}`,
+    });
+
+    expect(callback.statusCode).toBe(303);
+    expect(callback.headers.location).toBe('/interaction/interaction-id');
+    expect(callback.body).not.toContain('"error"');
+  });
+
+  it('redirects expired skin downloads back to the friendly interaction page', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.getSkinChallenge = (): Promise<never> =>
+      Promise.reject(new OAuthInteractionStateError('The interaction is gone'));
+    const server = await buildServer('test', interactions);
+    const expired = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/skin/download',
+    });
+    expect(expired.statusCode).toBe(303);
+    expect(expired.headers.location).toBe('/interaction/interaction-id');
+    expect(expired.body).not.toContain('"error"');
+
+    const missingInteractions = new InteractionStub();
+    missingInteractions.skinChallenge = undefined;
+    const missingServer = await buildServer('test', missingInteractions);
+    const missing = await missingServer.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id/skin/download',
+    });
+    expect(missing.statusCode).toBe(303);
+    expect(missing.headers.location).toBe('/interaction/interaction-id');
   });
 
   it('redirects expired completions back to the friendly interaction page', async (): Promise<void> => {
@@ -866,7 +936,7 @@ describe('CraftLogin API server', (): void => {
     expect(registeredInputs).toHaveLength(1);
   });
 
-  it('generates OpenAPI 3.1 from routes and exposes Swagger UI outside production', async (): Promise<void> => {
+  it('publishes integration documentation and keeps interactive Swagger outside production', async (): Promise<void> => {
     const development = await buildServer('development', new InteractionStub());
     const document: unknown = development.swagger();
     const parsed = z
@@ -877,8 +947,8 @@ describe('CraftLogin API server', (): void => {
       .parse(document);
     expect(parsed.paths).toHaveProperty('/api/users/@me');
     expect(parsed.paths).toHaveProperty('/api/users/{identifier}');
-    expect(parsed.paths).toHaveProperty('/api/apps');
     expect(parsed.paths).toHaveProperty('/oauth2/token');
+    expect(parsed.paths).toHaveProperty('/oauth2/logout');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/skin');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/processed-skin');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/cape');
@@ -887,24 +957,36 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/head');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/bust');
     expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/body');
+    expect(parsed.paths).not.toHaveProperty('/api/apps');
+    expect(parsed.paths).not.toHaveProperty('/interaction/{uid}');
     expect(parsed.paths).not.toHaveProperty('/avatar/{uuid}');
     expect(parsed.paths).not.toHaveProperty('/skin/{hash}');
+
     const documentation = await development.inject({ method: 'GET', url: '/docs/' });
     expect(documentation.statusCode).toBe(200);
-    expect(documentation.body).toContain('craftlogin.css');
+    expect(documentation.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(documentation.body).toContain('CraftLogin developer documentation');
+    expect(documentation.body).toContain('/assets/docs.css');
+    expect(documentation.body).toContain('id="security"');
     const documentationTheme = await development.inject({
       method: 'GET',
-      url: '/docs/static/theme/craftlogin.css',
+      url: '/assets/docs.css',
     });
     expect(documentationTheme.statusCode).toBe(200);
     expect(documentationTheme.body).toContain('font-family: "Pixeloid Sans"');
-    expect(documentationTheme.body).toContain('color: var(--text)');
+    expect(documentationTheme.body).toContain('.docs-shell');
+    expect((await development.inject({ method: 'GET', url: '/docs/swagger/' })).statusCode).toBe(
+      200,
+    );
 
     const production = await buildServer('production', new InteractionStub());
-    expect((await production.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(404);
+    expect((await production.inject({ method: 'GET', url: '/docs/' })).statusCode).toBe(200);
+    expect((await production.inject({ method: 'GET', url: '/docs/swagger/' })).statusCode).toBe(
+      404,
+    );
     const productionLanding = await production.inject({ method: 'GET', url: '/' });
     expect(productionLanding.statusCode).toBe(200);
-    expect(productionLanding.body).not.toContain('href="/docs/"');
+    expect(productionLanding.body).toContain('href="/docs/"');
   });
 
   it('forwards OIDC routes before Fastify consumes their request bodies', async (): Promise<void> => {

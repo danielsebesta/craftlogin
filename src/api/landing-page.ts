@@ -1,21 +1,27 @@
 import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
 import { renderPageDocument } from './ui/document.js';
+import { renderIcon, type IconName } from './ui/icons.js';
+import { selectDemoPlayer, formatShowcaseCaption, type DemoPlayer } from './demo-players.js';
+import { siteFooter, siteHeader } from './ui/site-chrome.js';
 
 const SOURCE_URL = 'https://github.com/danielsebesta/craftlogin';
-
-// Public, long-lived demo identity whose signed skin showcases the avatar renders.
-const AVATAR_DEMO_UUID = '069a79f4-44e9-4726-a5be-fca90e38aaf5';
+const SHOWCASE_SOURCE_URL = 'https://paperboat.yt/';
 
 export interface LandingPageInput {
+  readonly demoPlayer?: DemoPlayer;
   readonly showDocumentation: boolean;
 }
 
 interface Section {
   readonly body: string;
+  readonly icon: IconName;
   readonly id: string;
   readonly title: string;
 }
+
+const FLOW_ICONS = ['login', 'gamepad', 'user'] as const;
+const USE_CASE_ICONS = ['shield', 'briefcase', 'users'] as const;
 
 function renderSteps(): string {
   return english.landing.flow.items
@@ -23,6 +29,7 @@ function renderSteps(): string {
       (item, index): string => `
             <li>
               <span class="step-index" aria-hidden="true">${(index + 1).toString()}.</span>
+              ${renderIcon(FLOW_ICONS[index] ?? 'check', 'list-icon')}
               <h3>${escapeHtml(item.title)}</h3>
               <p>${escapeHtml(item.detail)}</p>
             </li>`,
@@ -33,10 +40,11 @@ function renderSteps(): string {
 export function renderLandingPage(input: LandingPageInput): string {
   const strings = english.landing;
   const claims = strings.claims;
+  const demoPlayer = input.demoPlayer ?? selectDemoPlayer();
 
   const secondaryAction = input.showDocumentation
-    ? `<a class="button button-secondary" href="/docs/">${escapeHtml(strings.hero.documentationAction)}</a>`
-    : `<a class="button button-secondary" href="${SOURCE_URL}">${escapeHtml(strings.hero.githubAction)}</a>`;
+    ? `<a class="button button-secondary" href="/docs/">${renderIcon('bookOpen', 'button-icon')}${escapeHtml(strings.hero.documentationAction)}</a>`
+    : `<a class="button button-secondary" href="${SOURCE_URL}">${renderIcon('externalLink', 'button-icon')}${escapeHtml(strings.hero.githubAction)}</a>`;
 
   const sections: readonly Section[] = [
     {
@@ -52,20 +60,23 @@ export function renderLandingPage(input: LandingPageInput): string {
               <dd><code>${escapeHtml(strings.flow.claimValue)}</code></dd>
             </div>
           </dl>`,
+      icon: 'login',
       id: 'flow',
       title: strings.flow.heading,
     },
     {
       body: `<ul class="use-list">${strings.useCases.items
         .map(
-          (item): string => `
+          (item, index): string => `
             <li>
+              ${renderIcon(USE_CASE_ICONS[index] ?? 'check', 'list-icon')}
               <h3>${escapeHtml(item.title)}</h3>
               <p>${escapeHtml(item.detail)}</p>
             </li>`,
         )
         .join('')}
           </ul>`,
+      icon: 'users',
       id: 'uses',
       title: strings.useCases.heading,
     },
@@ -74,6 +85,7 @@ export function renderLandingPage(input: LandingPageInput): string {
           <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.quickstart.heading)}"><code>${escapeHtml(strings.hero.request)}</code></pre>
           <h3>${escapeHtml(strings.quickstart.exchangeHeading)}</h3>
           <pre class="code-block" tabindex="0" aria-label="${escapeHtml(strings.quickstart.exchangeHeading)}"><code>${escapeHtml(strings.quickstart.exchangeCode)}</code></pre>`,
+      icon: 'code',
       id: 'quickstart',
       title: strings.quickstart.heading,
     },
@@ -81,6 +93,7 @@ export function renderLandingPage(input: LandingPageInput): string {
       body: `<p class="section-intro">${escapeHtml(strings.aiPrompt.text)}</p>
           <button class="button button-secondary" type="button" data-copy-target="#craftlogin-agent-prompt" data-copied-label="${escapeHtml(strings.aiPrompt.copied)}">${escapeHtml(strings.aiPrompt.copy)}</button>
           <pre id="craftlogin-agent-prompt" class="code-block landing-ai-prompt" tabindex="0"><code>${escapeHtml(strings.aiPrompt.prompt)}</code></pre>`,
+      icon: 'refresh',
       id: 'implement-with-ai',
       title: strings.aiPrompt.heading,
     },
@@ -120,6 +133,7 @@ export function renderLandingPage(input: LandingPageInput): string {
               )
               .join('\n            ')}
           </dl>`,
+      icon: 'user',
       id: 'claims',
       title: claims.heading,
     },
@@ -136,13 +150,15 @@ export function renderLandingPage(input: LandingPageInput): string {
             )
               .map(
                 (item): string => `<li class="avatar-card">
-              <img src="/api/avatars/${AVATAR_DEMO_UUID}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async">
+              <img src="/api/avatars/${demoPlayer.uuid}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async">
               <h3>${escapeHtml(item.label)}</h3>
               <code>/api/avatars/:uuid/${item.view}</code>
             </li>`,
               )
               .join('\n            ')}
-          </ul>`,
+          </ul>
+          <p class="avatar-credit">${escapeHtml(formatShowcaseCaption(strings.avatars.showcaseCaption, demoPlayer))} <a href="${SHOWCASE_SOURCE_URL}">${escapeHtml(strings.avatars.showcaseSourceLabel)}</a></p>`,
+      icon: 'gamepad',
       id: 'avatars',
       title: strings.avatars.heading,
     },
@@ -155,11 +171,13 @@ export function renderLandingPage(input: LandingPageInput): string {
               )
               .join('\n            ')}
           </ul>`,
+      icon: 'server',
       id: 'endpoints',
       title: strings.endpoints.heading,
     },
     {
       body: `<p class="section-intro">${escapeHtml(strings.security.text)}</p>`,
+      icon: 'shield',
       id: 'security',
       title: strings.security.heading,
     },
@@ -171,7 +189,7 @@ export function renderLandingPage(input: LandingPageInput): string {
         <p class="landing-lead">${escapeHtml(strings.hero.lead)}</p>
         <p class="notice">${escapeHtml(strings.affiliation)}</p>
         <div class="button-row landing-actions">
-          <a class="button" href="/developers">${escapeHtml(strings.hero.consoleAction)}</a>
+          <a class="button" href="/developers">${renderIcon('key', 'button-icon')}${escapeHtml(strings.hero.consoleAction)}</a>
           ${secondaryAction}
         </div>
         <figure class="landing-request">
@@ -183,27 +201,14 @@ ${sections
   .map(
     (section): string => `
       <section class="landing-section" aria-labelledby="${section.id}-heading">
-        <h2 id="${section.id}-heading">${escapeHtml(section.title)}</h2>
+        <h2 class="icon-heading" id="${section.id}-heading">${renderIcon(section.icon, 'heading-icon')}${escapeHtml(section.title)}</h2>
         ${section.body}
       </section>`,
   )
   .join('')}`,
     description: strings.hero.lead,
-    footer: [`${strings.navigation.brand} · ${strings.footer.license}`],
-    header: {
-      brand: strings.navigation.brand,
-      brandHref: '/',
-      navigation: {
-        items: [
-          { href: '/developers', label: strings.navigation.developers },
-          ...(input.showDocumentation
-            ? [{ href: '/docs/', label: strings.navigation.documentation }]
-            : []),
-          { href: SOURCE_URL, label: strings.navigation.github },
-        ],
-        label: strings.navigation.ariaLabel,
-      },
-    },
+    footer: siteFooter(),
+    header: siteHeader('/'),
     mainClass: 'container',
     script: '/assets/prompt-copy.js',
     stylesheet: '/assets/landing.css',
