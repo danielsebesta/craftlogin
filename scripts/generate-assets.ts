@@ -64,6 +64,81 @@ function renderSquareIcon(
   };
 }
 
+interface ContentBounds {
+  readonly height: number;
+  readonly width: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+// Alpha above this threshold counts as content. The master mark carries a soft
+// drop shadow, so near-invisible pixels must not extend the measured bounds.
+const CONTENT_ALPHA_THRESHOLD = 8;
+
+function readContentBounds(image: Image): ContentBounds {
+  const canvas = createCanvas(image.width, image.height);
+  const context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, image.width, image.height);
+  let minX = image.width;
+  let minY = image.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const alpha = data[(y * image.width + x) * 4 + 3];
+      if (alpha !== undefined && alpha > CONTENT_ALPHA_THRESHOLD) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    throw new Error('The source image has no visible content');
+  }
+
+  return { height: maxY - minY + 1, width: maxX - minX + 1, x: minX, y: minY };
+}
+
+// Renders a transparent square icon whose content survives a circular crop, so
+// round launchers and avatar-like tiles never cut the mark. A centered w×h box
+// fits inside a circle of diameter d when sqrt(w² + h²) ≤ d, so the content
+// bounds diagonal is scaled to the requested circle diameter.
+function renderCircularSafeIcon(
+  sourceImage: Image,
+  size: number,
+  circleDiameterFactor: number,
+): { png: Buffer; webp: Buffer } {
+  const bounds = readContentBounds(sourceImage);
+  const scale = (size * circleDiameterFactor) / Math.hypot(bounds.width, bounds.height);
+  const targetWidth = Math.max(1, Math.round(bounds.width * scale));
+  const targetHeight = Math.max(1, Math.round(bounds.height * scale));
+  const canvas = createCanvas(size, size);
+  const context = canvas.getContext('2d');
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(
+    sourceImage,
+    bounds.x,
+    bounds.y,
+    bounds.width,
+    bounds.height,
+    Math.round((size - targetWidth) / 2),
+    Math.round((size - targetHeight) / 2),
+    targetWidth,
+    targetHeight,
+  );
+
+  return {
+    png: canvas.toBuffer('image/png'),
+    webp: canvas.encodeSync('webp', 95),
+  };
+}
+
 function renderResized(
   sourceImage: Image,
   width: number,
@@ -87,10 +162,10 @@ export async function generateAssets(options?: {
   readonly smallTitlePath?: string;
   readonly titlePath?: string;
 }): Promise<void> {
-  const smallTitlePath =
-    options?.smallTitlePath ?? 'C:/Users/dast/Documents/minecraft_small_title.png';
-  const titlePath = options?.titlePath ?? 'C:/Users/dast/Documents/minecraft_title.png';
-  const outputDir = options?.outputDir ?? resolve(import.meta.dirname, '../public');
+  const publicDir = resolve(import.meta.dirname, '../public');
+  const smallTitlePath = options?.smallTitlePath ?? resolve(publicDir, 'brand-icon-master.png');
+  const titlePath = options?.titlePath ?? resolve(publicDir, 'craftlogin-title-master.png');
+  const outputDir = options?.outputDir ?? publicDir;
 
   process.stdout.write('Loading source images...\n');
   const [smallTitleImg, titleImg] = await Promise.all([
@@ -177,6 +252,9 @@ export async function generateAssets(options?: {
   );
 
   // 9. CraftLogin Title (Landing hero / titlescreen)
+  // The title master PNG is the committed source asset; regenerate only its
+  // derived sizes and its WebP copy, otherwise every run would re-encode the
+  // master and the generated assets would drift between runs.
   const titleHero1x = renderResized(titleImg, 640, 97, 98);
   const titleHero2x = renderResized(titleImg, 1280, 194, 98);
   const titleMaster = renderResized(titleImg, titleImg.width, titleImg.height, 98);
@@ -184,10 +262,19 @@ export async function generateAssets(options?: {
   await writeFile(resolve(outputDir, 'craftlogin-title.webp'), titleHero1x.webp);
   await writeFile(resolve(outputDir, 'craftlogin-title-2x.png'), titleHero2x.png);
   await writeFile(resolve(outputDir, 'craftlogin-title-2x.webp'), titleHero2x.webp);
-  await writeFile(resolve(outputDir, 'craftlogin-title-master.png'), titleMaster.png);
   await writeFile(resolve(outputDir, 'craftlogin-title-master.webp'), titleMaster.webp);
   process.stdout.write(
     `Wrote craftlogin-title hero 1x/2x/master (WebP 1x: ${titleHero1x.webp.length.toString()}b, 2x: ${titleHero2x.webp.length.toString()}b, master: ${titleMaster.webp.length.toString()}b)\n`,
+  );
+
+  // 10. Brand icon (transparent, square, safe inside a circular crop)
+  const brandIcon = renderCircularSafeIcon(smallTitleImg, 512, 0.92);
+  const brandIconSmall = renderCircularSafeIcon(smallTitleImg, 192, 0.92);
+  await writeFile(resolve(outputDir, 'brand-icon.png'), brandIcon.png);
+  await writeFile(resolve(outputDir, 'brand-icon.webp'), brandIcon.webp);
+  await writeFile(resolve(outputDir, 'brand-icon-192.png'), brandIconSmall.png);
+  process.stdout.write(
+    `Wrote brand-icon 512/192 (PNG 512: ${brandIcon.png.length.toString()}b, 192: ${brandIconSmall.png.length.toString()}b)\n`,
   );
 
   process.stdout.write('Asset generation complete.\n');
