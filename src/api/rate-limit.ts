@@ -1,5 +1,5 @@
 import rateLimit from '@fastify/rate-limit';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Redis } from 'ioredis';
 
 import { english } from '../locales/en.js';
@@ -23,6 +23,35 @@ export const developerAppVerificationRateLimit = {
 export const tokenRateLimit = {
   groupId: 'oauth-token',
   max: 30,
+  timeWindow: 60 * 1_000,
+};
+
+// Confidential-client authentication costs an Argon2 verification per request.
+// A shared ceiling bounds worst-case CPU when many addresses abuse the token
+// and introspection endpoints at once. It runs through server.createRateLimit()
+// because a second rateLimit() hook would be skipped after the first one runs;
+// the constant key makes the bucket global rather than per address.
+export const tokenEndpointGlobalRateLimit = {
+  groupId: 'oauth-grant-global',
+  keyGenerator: (): string => 'oauth-grant-global',
+  max: 600,
+  timeWindow: 60 * 1_000,
+};
+
+// Each authorize call creates an interaction record in Redis, so the endpoint
+// gets its own volumetric bucket. The keyGenerator prefix keeps it separate
+// from the other manual limiters, which share one store prefix.
+export const authorizeRateLimit = {
+  groupId: 'oauth-authorize',
+  keyGenerator: (request: FastifyRequest): string => `authorize:${request.ip}`,
+  max: 120,
+  timeWindow: 60 * 1_000,
+};
+
+// The interaction page render hits Postgres (client + owner) on every load.
+export const interactionPageRateLimit = {
+  groupId: 'interaction-page',
+  max: 120,
   timeWindow: 60 * 1_000,
 };
 

@@ -344,6 +344,19 @@ describe('Developer Console', (): void => {
     expect(response.body).toContain('Verified');
   });
 
+  it('renders the application owner avatar and nickname for an administrator', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true });
+    const dashboard = await server.inject({ method: 'GET', url: '/developers' });
+
+    expect(dashboard.statusCode).toBe(200);
+    expect(dashboard.body).toContain('<dt>Owner</dt>');
+    expect(dashboard.body).toContain('class="app-owner-chip"');
+    expect(dashboard.body).toContain(
+      `/api/avatars/${developerSession.userUuid}/face?size=32&amp;layers=all`,
+    );
+    expect(dashboard.body).toContain('class="app-owner-name">VerifiedPlayer</span>');
+  });
+
   it('verifies and unverifies a developer from the administration panel', async (): Promise<void> => {
     const verificationChanges: { uuid: string; verified: boolean }[] = [];
     const server = await buildServer({

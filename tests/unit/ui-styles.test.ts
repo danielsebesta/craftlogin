@@ -43,11 +43,9 @@ describe('shared UI styles', (): void => {
     }
   });
 
-  it('keeps the ambient background a quiet token-based mask', (): void => {
-    expect(uiBaseStyles).toContain('body::before');
-    expect(uiBaseStyles).toContain('var(--pattern)');
-    expect(uiBaseStyles).toContain('url("/assets/background.svg")');
-    expect(uiBaseStyles).toContain('prefers-contrast: more');
+  it('keeps accessibility overrides in place', (): void => {
+    expect(uiBaseStyles).toContain('prefers-reduced-motion: reduce');
+    expect(uiBaseStyles).toContain('forced-colors: active');
   });
 
   it('keeps green a signal instead of decoration', (): void => {
@@ -156,6 +154,9 @@ describe('page accessibility contract', (): void => {
       expect(html).toContain('<header class="page-header">');
       expect(html).toContain('<footer class="page-footer">');
       expect(html).toContain(
+        '<link rel="icon" type="image/webp" href="/favicon-96x96.webp" sizes="96x96" />',
+      );
+      expect(html).toContain(
         '<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />',
       );
       expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
@@ -174,11 +175,14 @@ describe('page accessibility contract', (): void => {
 describe('interaction consent permissions', (): void => {
   it('describes known scopes and falls back to code for unknown scopes', (): void => {
     expect(permissionsForScope('openid profile')).toEqual([
-      { kind: 'text', text: english.interaction.scopeIdentity },
-      { kind: 'text', text: english.interaction.scopeProfile },
+      { kind: 'text', text: english.interaction.scopeIdentityCombined },
     ]);
     expect(permissionsForScope('openid custom')).toEqual([
       { kind: 'text', text: english.interaction.scopeIdentity },
+      { code: 'custom', kind: 'code' },
+    ]);
+    expect(permissionsForScope('profile custom')).toEqual([
+      { kind: 'text', text: english.interaction.scopeProfile },
       { code: 'custom', kind: 'code' },
     ]);
   });
@@ -195,5 +199,9 @@ describe('interaction consent permissions', (): void => {
 describe('user-facing copy', (): void => {
   it('avoids em dashes', (): void => {
     expect(JSON.stringify(english)).not.toContain('—');
+  });
+
+  it('uses only straight quotes', (): void => {
+    expect(JSON.stringify(english)).not.toMatch(/[\u2018-\u201f\u00ab\u00bb\u2039\u203a]/u);
   });
 });

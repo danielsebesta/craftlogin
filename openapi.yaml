@@ -53,19 +53,105 @@ components:
         - uuid
         - username
       type: object
+    craftlogin.capes-response:
+      additionalProperties: false
+      properties:
+        capes:
+          additionalProperties: false
+          properties:
+            5zig:
+              additionalProperties: false
+              properties:
+                available:
+                  type: boolean
+                url:
+                  type: string
+              required:
+                - available
+              type: object
+            labymod:
+              additionalProperties: false
+              properties:
+                available:
+                  type: boolean
+                url:
+                  type: string
+              required:
+                - available
+              type: object
+            minecraftcapes:
+              additionalProperties: false
+              properties:
+                available:
+                  type: boolean
+                url:
+                  type: string
+              required:
+                - available
+              type: object
+            mojang:
+              additionalProperties: false
+              properties:
+                available:
+                  type: boolean
+                url:
+                  type: string
+              required:
+                - available
+              type: object
+            optifine:
+              additionalProperties: false
+              properties:
+                available:
+                  type: boolean
+                url:
+                  type: string
+              required:
+                - available
+              type: object
+            skinmc:
+              additionalProperties: false
+              properties:
+                available:
+                  type: boolean
+                url:
+                  type: string
+              required:
+                - available
+              type: object
+          required:
+            - 5zig
+            - labymod
+            - minecraftcapes
+            - mojang
+            - optifine
+            - skinmc
+          type: object
+        username:
+          maxLength: 16
+          minLength: 1
+          type: string
+        uuid:
+          format: uuid
+          type: string
+      required:
+        - capes
+        - username
+        - uuid
+      type: object
 paths:
-  /api/avatars/{uuid}/skin:
+  /api/avatars/{identifier}/skin:
     get:
       summary: Get a Minecraft skin
       tags:
         - Avatars
-      description: Return the current signed Mojang skin for a Minecraft UUID.
+      description: Return the current signed skin for a Minecraft player or texture hash.
       parameters:
         - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
             type: string
           in: path
-          name: uuid
+          name: identifier
           required: true
       responses:
         "200":
@@ -120,7 +206,66 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
-  /api/avatars/{uuid}/face:
+  /api/avatars/{identifier}/capes:
+    get:
+      summary: List available Minecraft capes
+      tags:
+        - Avatars
+      description: List available capes across supported providers (Mojang, OptiFine,
+        LabyMod, MinecraftCapes, 5zig, SkinMC).
+      parameters:
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            type: string
+          in: path
+          name: identifier
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.capes-response"
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{identifier}/face:
     get:
       summary: Render a Minecraft face
       tags:
@@ -138,6 +283,31 @@ paths:
           name: layers
           required: false
         - schema:
+            enum:
+              - classic
+              - slim
+            type: string
+          in: query
+          name: model
+          required: false
+          description: Arm model for texture-hash subjects (player subjects always use
+            their signed profile model).
+        - schema:
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider for cape-bearing views (back, duo, wings); defaults
+            to any.
+        - schema:
             default: "128"
             enum:
               - "32"
@@ -149,10 +319,10 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
             type: string
           in: path
-          name: uuid
+          name: identifier
           required: true
       responses:
         "200":
@@ -207,93 +377,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
-  /api/avatars/{uuid}/head:
-    get:
-      summary: Render a Minecraft head
-      tags:
-        - Avatars
-      description: Render a flat front-facing head from its current signed skin.
-      parameters:
-        - schema:
-            default: all
-            enum:
-              - base
-              - all
-            type: string
-          in: query
-          name: layers
-          required: false
-        - schema:
-            default: "128"
-            enum:
-              - "32"
-              - "64"
-              - "128"
-              - "256"
-            type: string
-          in: query
-          name: size
-          required: false
-        - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
-            type: string
-          in: path
-          name: uuid
-          required: true
-      responses:
-        "200":
-          description: Default Response
-          headers:
-            cache-control:
-              schema:
-                type: string
-            etag:
-              schema:
-                type: string
-          content:
-            image/png:
-              schema:
-                format: binary
-                type: string
-        "304":
-          description: Default Response
-        "400":
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
-        "404":
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
-        "429":
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
-        "500":
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
-        "503":
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
-        default:
-          description: Default Response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/craftlogin.error-response"
-  /api/avatars/{uuid}/bust:
+  /api/avatars/{identifier}/bust:
     get:
       summary: Render a Minecraft bust
       tags:
@@ -310,6 +394,31 @@ paths:
           name: layers
           required: false
         - schema:
+            enum:
+              - classic
+              - slim
+            type: string
+          in: query
+          name: model
+          required: false
+          description: Arm model for texture-hash subjects (player subjects always use
+            their signed profile model).
+        - schema:
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider for cape-bearing views (back, duo, wings); defaults
+            to any.
+        - schema:
             default: "128"
             enum:
               - "32"
@@ -321,10 +430,10 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
             type: string
           in: path
-          name: uuid
+          name: identifier
           required: true
       responses:
         "200":
@@ -379,7 +488,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
-  /api/avatars/{uuid}/body:
+  /api/avatars/{identifier}/body:
     get:
       summary: Render a Minecraft body
       tags:
@@ -396,6 +505,31 @@ paths:
           name: layers
           required: false
         - schema:
+            enum:
+              - classic
+              - slim
+            type: string
+          in: query
+          name: model
+          required: false
+          description: Arm model for texture-hash subjects (player subjects always use
+            their signed profile model).
+        - schema:
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider for cape-bearing views (back, duo, wings); defaults
+            to any.
+        - schema:
             default: "128"
             enum:
               - "32"
@@ -407,10 +541,10 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
             type: string
           in: path
-          name: uuid
+          name: identifier
           required: true
       responses:
         "200":
@@ -465,7 +599,454 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
-  /api/avatars/{uuid}/processed-skin:
+  /api/avatars/{identifier}/back:
+    get:
+      summary: Render a Minecraft back view
+      tags:
+        - Avatars
+      description: Render a flat back view of the full player, including the worn cape
+        when the account has one.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            enum:
+              - classic
+              - slim
+            type: string
+          in: query
+          name: model
+          required: false
+          description: Arm model for texture-hash subjects (player subjects always use
+            their signed profile model).
+        - schema:
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider for cape-bearing views (back, duo, wings); defaults
+            to any.
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            type: string
+          in: path
+          name: identifier
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{identifier}/side:
+    get:
+      summary: Render a Minecraft side profile
+      tags:
+        - Avatars
+      description: Render a flat left-side profile of the full player.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            enum:
+              - classic
+              - slim
+            type: string
+          in: query
+          name: model
+          required: false
+          description: Arm model for texture-hash subjects (player subjects always use
+            their signed profile model).
+        - schema:
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider for cape-bearing views (back, duo, wings); defaults
+            to any.
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            type: string
+          in: path
+          name: identifier
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{identifier}/duo:
+    get:
+      summary: Render a Minecraft front and back pair
+      tags:
+        - Avatars
+      description: Render the flat front and back views of the full player side by
+        side in one image, including the worn cape when the account has one.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            enum:
+              - classic
+              - slim
+            type: string
+          in: query
+          name: model
+          required: false
+          description: Arm model for texture-hash subjects (player subjects always use
+            their signed profile model).
+        - schema:
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider for cape-bearing views (back, duo, wings); defaults
+            to any.
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            type: string
+          in: path
+          name: identifier
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{identifier}/wings:
+    get:
+      summary: Render Minecraft elytra wings
+      tags:
+        - Avatars
+      description: Render a flat back view of the full player with deployed elytra
+        wings, drawn from the wing region of the worn cape texture.
+      parameters:
+        - schema:
+            default: all
+            enum:
+              - base
+              - all
+            type: string
+          in: query
+          name: layers
+          required: false
+        - schema:
+            enum:
+              - classic
+              - slim
+            type: string
+          in: query
+          name: model
+          required: false
+          description: Arm model for texture-hash subjects (player subjects always use
+            their signed profile model).
+        - schema:
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider for cape-bearing views (back, duo, wings); defaults
+            to any.
+        - schema:
+            default: "128"
+            enum:
+              - "32"
+              - "64"
+              - "128"
+              - "256"
+            type: string
+          in: query
+          name: size
+          required: false
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            type: string
+          in: path
+          name: identifier
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+  /api/avatars/{identifier}/processed-skin:
     get:
       summary: Get a normalized Minecraft skin
       tags:
@@ -474,10 +1055,10 @@ paths:
         layers opaque, fully-opaque overlays cleared."
       parameters:
         - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
             type: string
           in: path
-          name: uuid
+          name: identifier
           required: true
       responses:
         "200":
@@ -532,18 +1113,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
-  /api/avatars/{uuid}/cape:
+  /api/avatars/{identifier}/cape:
     get:
       summary: Get a Minecraft cape
       tags:
         - Avatars
-      description: Return the account's current cape texture, if the player wears one.
+      description: Return the account's current cape texture from Mojang or modloaders
+        (OptiFine, LabyMod, MinecraftCapes, 5zig, SkinMC).
       parameters:
         - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider to query (mojang, optifine, labymod, minecraftcapes,
+            5zig, skinmc, or any).
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
             type: string
           in: path
-          name: uuid
+          name: identifier
           required: true
       responses:
         "200":
@@ -598,18 +1195,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
-  /api/avatars/{uuid}/elytra:
+  /api/avatars/{identifier}/elytra:
     get:
       summary: Get a Minecraft elytra texture
       tags:
         - Avatars
-      description: Return the elytra wing texture, which matches the worn cape texture.
+      description: Return the elytra wing texture, matching the worn cape texture
+        across supported providers.
       parameters:
         - schema:
-            pattern: ^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$
+            enum:
+              - 5zig
+              - any
+              - labymod
+              - minecraftcapes
+              - mojang
+              - optifine
+              - skinmc
+            type: string
+          in: query
+          name: provider
+          required: false
+          description: Cape provider to query (mojang, optifine, labymod, minecraftcapes,
+            5zig, skinmc, or any).
+        - schema:
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
             type: string
           in: path
-          name: uuid
+          name: identifier
           required: true
       responses:
         "200":

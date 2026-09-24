@@ -21,6 +21,7 @@ import { RedisMinecraftCache } from '../mojang/cache.js';
 import { HttpMojangClient } from '../mojang/client.js';
 import { HttpDefaultSkinStore } from '../mojang/default-skins.js';
 import { HttpSkinStore } from '../mojang/skin-store.js';
+import { ExpiredRefreshTokenSweeper } from '../oauth/refresh-token-sweeper.js';
 import { createOAuthRuntime } from '../oauth/runtime.js';
 import { installSessionSignalLogging } from '../oauth/session-security.js';
 import { RedisVerificationStore } from '../verification/redis-verification-store.js';
@@ -53,8 +54,10 @@ async function main(): Promise<void> {
   });
 
   let server: Awaited<ReturnType<typeof createApiServer>> | null = null;
+  const sweeper = new ExpiredRefreshTokenSweeper(database, logger);
   try {
     await Promise.all([database.$connect(), redis.connect()]);
+    sweeper.start();
     const [developerSessionKey] = credentials.cookieKeys;
     if (developerSessionKey === undefined) {
       throw new TypeError('A cookie key is required for developer sessions');
@@ -149,7 +152,7 @@ async function main(): Promise<void> {
     );
   } catch (error: unknown) {
     try {
-      await closeResources(server, redis, database, logger);
+      await closeResources(server, sweeper, redis, database, logger);
     } catch (cleanupError: unknown) {
       throw new AggregateError([error, cleanupError], 'API startup and cleanup failed', {
         cause: cleanupError,
@@ -164,7 +167,7 @@ async function main(): Promise<void> {
       return;
     }
     shuttingDown = true;
-    void closeResources(server, redis, database, logger)
+    void closeResources(server, sweeper, redis, database, logger)
       .then((): void => {
         logger.info({ signal }, 'CraftLogin API stopped');
       })
@@ -179,12 +182,14 @@ async function main(): Promise<void> {
 
 async function closeResources(
   server: Awaited<ReturnType<typeof createApiServer>> | null,
+  sweeper: ExpiredRefreshTokenSweeper,
   redis: Redis,
   database: PrismaClient,
   logger: Logger,
 ): Promise<void> {
   const failures: unknown[] = [];
 
+  sweeper.stop();
   if (server !== null) {
     try {
       await server.close();

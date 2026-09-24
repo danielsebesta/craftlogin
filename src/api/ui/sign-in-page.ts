@@ -97,8 +97,10 @@ export interface SignInPageInput {
   readonly continueLabel: string;
   readonly copiedLabel: string;
   readonly copyLabel: string;
+  readonly disallowed?: readonly string[];
+  readonly disallowedHeading?: string;
   readonly documentTitle: string;
-  readonly footer: string;
+  readonly footer?: string;
   readonly heading: string;
   readonly lead: string;
   readonly messages: SignInMessages;
@@ -128,7 +130,7 @@ function renderPermission(permission: ConsentPermission): string {
   return `<li>${renderIcon('check', 'list-icon')}<span>${escapeHtml(permission.text)}</span></li>`;
 }
 
-function verificationMethodIcon(id: string): IconName | 'microsoft' {
+function verificationMethodIcon(id: string): IconName {
   if (id === 'online') return 'gamepad';
   if (id === 'microsoft') return 'microsoft';
   return 'user';
@@ -136,7 +138,7 @@ function verificationMethodIcon(id: string): IconName | 'microsoft' {
 
 function renderMethodIcon(id: string, className: string): string {
   const icon = verificationMethodIcon(id);
-  return icon === 'microsoft' ? renderMicrosoftIcon(className) : renderIcon(icon, className);
+  return renderIcon(icon, className);
 }
 
 function renderFormAction(cancel: SignInCancel | undefined, className?: string): string {
@@ -308,6 +310,10 @@ export function renderSignInPage(input: SignInPageInput): string {
           state: 'verified',
         })
       : '';
+  const headingPrefix =
+    input.appName === undefined
+      ? escapeHtml(input.heading)
+      : `<span class="consent-prefix">${escapeHtml(input.heading)}</span>`;
   const headingSuffix =
     input.appName === undefined
       ? ''
@@ -325,16 +331,29 @@ export function renderSignInPage(input: SignInPageInput): string {
     content: `      <section class="card consent-card" aria-labelledby="${SIGN_IN_HEADING_ID}">
         <div class="consent-identity">
           <div class="consent-title">
-            <h1 id="${SIGN_IN_HEADING_ID}">${escapeHtml(input.heading)}${headingSuffix}</h1>
+            <h1 id="${SIGN_IN_HEADING_ID}">${headingPrefix}${headingSuffix}</h1>
             ${renderOwner(input)}
             <p class="lead">${escapeHtml(input.lead)}</p>
           </div>${renderAccountChip(input)}
         </div>
-        <div class="consent-scopes">
-          <h2 class="icon-heading">${renderIcon('user', 'heading-icon')}${escapeHtml(input.allowsHeading)}</h2>
-          <ul>
-            ${input.permissions.map(renderPermission).join('\n            ')}
-          </ul>
+        <div class="consent-permissions-grid">
+          <div class="consent-scopes">
+            <h2 class="icon-heading">${renderIcon('user', 'heading-icon')}${escapeHtml(input.allowsHeading)}</h2>
+            <ul>
+              ${input.permissions.map(renderPermission).join('\n              ')}
+            </ul>
+          </div>
+          ${
+            input.disallowed === undefined || input.disallowed.length === 0
+              ? ''
+              : `
+          <div class="consent-disallowed">
+            <h2 class="icon-heading">${renderIcon('userX', 'heading-icon heading-icon-disallowed')}${escapeHtml(input.disallowedHeading ?? '')}</h2>
+            <ul>
+              ${input.disallowed.map((item): string => `<li>${renderIcon('close', 'list-icon list-icon-disallowed')}<span>${escapeHtml(item)}</span></li>`).join('\n              ')}
+            </ul>
+          </div>`
+          }
         </div>${renderMethodChooser(input)}${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
         <div class="consent-actions">${renderFormAction(input.cancel)}${renderFormAction(input.switchAccount)}
           <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
@@ -344,7 +363,7 @@ export function renderSignInPage(input: SignInPageInput): string {
         <noscript><p class="field-hint">${escapeHtml(input.noJavaScript)}</p></noscript>
         ${securityNote}
       </section>`,
-    footer: [input.footer],
+    ...(input.footer === undefined || input.footer.length === 0 ? {} : { footer: [input.footer] }),
     header: { brand: input.brand },
     layout: 'narrow',
     ...(input.methodChoices === undefined ? {} : { mainAttributes: ' data-methods' }),

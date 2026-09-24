@@ -68,7 +68,7 @@ machine-readable integration contract at `/llms.txt` and `/llms-full.txt`. Never
 confidential client secret into an AI tool.
 
 The `profile` scope returns the current Minecraft username as `preferred_username` and a `picture`
-URL that serves a head rendered from the account's current Mojang skin. CraftLogin resolves the skin
+URL that serves a face rendered from the account's current Mojang skin. CraftLogin resolves the skin
 through the Mojang session profile endpoint, verifies the signed texture property against Mojang's
 published keys, and caches the result in Redis for an hour. When Mojang is unavailable, the last
 known profile is served instead of failing.
@@ -98,18 +98,26 @@ only the signed Mojang skin descriptor and returns transparent PNGs:
 ```text
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/skin
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/face?size=32&layers=all
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/head?size=128&layers=all
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/bust?size=128&layers=all
 GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/body?size=256&layers=all
+GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/back?size=128&layers=all
+GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/side?size=128&layers=all
+GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/duo?size=256&layers=all
+GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/wings?size=128&layers=all
 ```
 
 Rendered views accept only `size=32|64|128|256` and `layers=base|all`; omitted values default to
 `128` and `all`. The `face` view composites the exact front 8×8 face and transparent head overlay
-without interpolation, perspective, shading, or blur. For the three-dimensional views, `all` renders
-the hat, jacket, sleeves, and trousers as independently inflated Minecraft cuboids, including their
-transparent pixels, rather than flattening them onto the base texture. These five routes allow
-cross-origin image reads and publish cache validators; unknown skins and temporary Minecraft service
-failures return the shared JSON error envelope.
+without interpolation, perspective, shading, or blur. For the full-figure views, `all` renders the
+hat, jacket, sleeves, and trousers as independently inflated Minecraft cuboids, including their
+transparent pixels, rather than flattening them onto the base texture. `back` and `duo` drape the
+worn cape over the body and `wings` draws elytra wings from that same cape texture. Cape-bearing
+views resolve the cape across supported providers
+(`provider=mojang|optifine|labymod|minecraftcapes|5zig|skinmc|any`), defaulting to `any` so the
+official Mojang cape wins when present and third-party capes are tried otherwise; cape textures that
+match no known atlas layout degrade to a plain render. These routes allow cross-origin image reads
+and publish cache validators; unknown skins and temporary Minecraft service failures return the
+shared JSON error envelope.
 
 ## Requirements
 

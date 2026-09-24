@@ -134,6 +134,11 @@ export class HttpMojangClient implements MinecraftPlayerLookup, FreshMinecraftPl
 
     const key = `profile-by-name:${normalized.toLowerCase()}`;
     const cached = await this.cache.read(key);
+    // A null value is the negative-lookup marker: its short Redis TTL already
+    // bounds it, so it answers without another Mojang request.
+    if (cached?.value === null) {
+      return undefined;
+    }
     const fresh = this.readFreshProfile(cached);
     if (fresh !== undefined) {
       return fresh;
@@ -166,6 +171,9 @@ export class HttpMojangClient implements MinecraftPlayerLookup, FreshMinecraftPl
 
     const key = `profile-by-id:${canonical}`;
     const cached = await this.cache.read(key);
+    if (cached?.value === null) {
+      return undefined;
+    }
     const fresh = this.readFreshProfileWithSkin(cached);
     if (fresh !== undefined) {
       return fresh;

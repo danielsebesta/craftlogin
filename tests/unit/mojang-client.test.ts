@@ -362,4 +362,40 @@ describe('HttpMojangClient', (): void => {
     });
     await expect(client.findProfileByName('not a name')).resolves.toBeUndefined();
   });
+
+  it('answers repeated name misses from the negative cache without another request', async (): Promise<void> => {
+    const { calls, fetch } = stubFetch(() => ({ body: { error: 'not found' }, status: 404 }));
+    const client = new HttpMojangClient({
+      cache: new MemoryMinecraftCache(),
+      fetch,
+      logger: silentLogger(),
+    });
+
+    await expect(client.findProfileByName('Nobody_Real')).resolves.toBeUndefined();
+    await expect(client.findProfileByName('Nobody_Real')).resolves.toBeUndefined();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('answers repeated UUID misses from the negative cache without another request', async (): Promise<void> => {
+    const { calls, fetch } = stubFetch(() => ({ body: { error: 'not found' }, status: 404 }));
+    const client = new HttpMojangClient({
+      cache: new MemoryMinecraftCache(),
+      fetch,
+      logger: silentLogger(),
+    });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toBeUndefined();
+    await expect(client.findProfileById(playerUuid)).resolves.toBeUndefined();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('honors a negative cache entry written by another instance', async (): Promise<void> => {
+    const cache = new MemoryMinecraftCache();
+    await cache.write(`profile-by-id:${playerUuid}`, null, 60);
+    const { calls, fetch } = stubFetch(() => ({ body: {} }));
+    const client = new HttpMojangClient({ cache, fetch, logger: silentLogger() });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toBeUndefined();
+    expect(calls).toHaveLength(0);
+  });
 });

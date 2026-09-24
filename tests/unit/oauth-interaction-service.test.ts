@@ -3,9 +3,10 @@ import { Socket } from 'node:net';
 
 import { describe, expect, it } from 'vitest';
 
-import type {
-  OAuthInteractionContext,
-  OAuthInteractionGateway,
+import {
+  OAuthInteractionStateError,
+  type OAuthInteractionContext,
+  type OAuthInteractionGateway,
 } from '../../src/oauth/interaction-gateway.js';
 import { OAuthInteractionService } from '../../src/oauth/interaction-service.js';
 import type { OAuthInteractionLogger } from '../../src/oauth/interaction-service.js';
@@ -33,6 +34,15 @@ class RecordingGateway implements OAuthInteractionGateway {
   };
 
   public inspect(): Promise<OAuthInteractionContext> {
+    return Promise.resolve(this.context);
+  }
+
+  public findInteraction(interactionId: string): Promise<OAuthInteractionContext> {
+    if (interactionId !== this.context.interactionId) {
+      return Promise.reject(
+        new OAuthInteractionStateError('The OIDC interaction is no longer available'),
+      );
+    }
     return Promise.resolve(this.context);
   }
 
@@ -251,6 +261,44 @@ describe('OAuthInteractionService', (): void => {
     });
     const denied = createTransport();
     await expect(service.prepareMicrosoft(denied.request, denied.response)).rejects.toThrow(
+      'does not permit Microsoft OAuth verification',
+    );
+  });
+
+  it('prepares the Microsoft callback without request cookies', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    const service = new OAuthInteractionService(
+      gateway,
+      store,
+      new RecordingLogger(),
+      undefined,
+      true,
+    );
+
+    await expect(service.prepareMicrosoftCallback('interaction-id')).resolves.toEqual({
+      interactionId: 'interaction-id',
+    });
+    expect(store.allocations).toEqual(['interaction-id']);
+
+    await expect(service.prepareMicrosoftCallback('unknown-id')).rejects.toThrow(
+      'The OIDC interaction is no longer available',
+    );
+
+    gateway.context = { ...gateway.context, promptName: 'consent' };
+    await expect(service.prepareMicrosoftCallback('interaction-id')).rejects.toThrow(
+      'Verification requires a login interaction',
+    );
+
+    gateway.context = {
+      clientId: 'test-client',
+      interactionId: 'interaction-id',
+      promptName: 'login',
+      promptDetails: {},
+      scope: 'openid profile',
+      acrValues: 'urn:craftlogin:minecraft-profile-skin',
+    };
+    await expect(service.prepareMicrosoftCallback('interaction-id')).rejects.toThrow(
       'does not permit Microsoft OAuth verification',
     );
   });

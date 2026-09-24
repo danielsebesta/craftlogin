@@ -32,7 +32,7 @@ describe('public OIDC integration guidance', (): void => {
       readFile(resolve(process.cwd(), 'llms-full.txt'), 'utf8'),
     ]);
 
-    expect(concise).toContain('Websites can add “Sign in with Minecraft”');
+    expect(concise).toContain('Websites can add "Sign in with Minecraft"');
     expect(concise).toContain('https://craftlogin.com/#implement-with-ai');
     expect(full).toContain('not for contributors modifying CraftLogin itself');
     expect(full).toContain('## Review checklist');

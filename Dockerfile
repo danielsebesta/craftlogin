@@ -32,6 +32,9 @@ COPY --chown=node:node prisma ./prisma
 COPY --chown=node:node public ./public
 COPY --chown=node:node llms.txt llms-full.txt openapi.yaml ./
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/craftlogin-entrypoint
+# Normalize line endings: a CRLF working tree would otherwise leave a \r in the
+# shebang and the container would fail to exec its entrypoint.
+RUN sed -i 's/\r$//' /usr/local/bin/craftlogin-entrypoint
 
 USER node
 EXPOSE 3000 25565

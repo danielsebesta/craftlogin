@@ -24,6 +24,7 @@ import type { DeveloperAuthentication } from './developer-authentication.js';
 import { registerDeveloperRoutes } from './developer-routes.js';
 import { registerDocsRoutes } from './docs-routes.js';
 import { registerErrorHandling } from './errors.js';
+import { registerBrandAssetRoutes } from './brand-assets.js';
 import { registerFaviconAssetRoutes } from './favicon-assets.js';
 import { registerFontAssetRoutes } from './font-assets.js';
 import { registerHealthRoute, type ReadinessCheck } from './health-route.js';
@@ -106,6 +107,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerErrorHandling(server);
   registerFontAssetRoutes(server);
   registerFaviconAssetRoutes(server);
+  registerBrandAssetRoutes(server);
   registerBackgroundAssetRoute(server);
   if (options.microsoftOAuth !== undefined) {
     registerMicrosoftIdentityAssociationRoute(server, options.microsoftOAuth.clientId);
@@ -127,11 +129,15 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   });
   if (
     options.microsoftVerification !== undefined &&
-    options.interactions.prepareMicrosoft !== undefined
+    options.interactions.prepareMicrosoft !== undefined &&
+    options.interactions.prepareMicrosoftCallback !== undefined
   ) {
     registerMicrosoftOAuthRoutes(server, {
       interactions: {
         prepareMicrosoft: options.interactions.prepareMicrosoft.bind(options.interactions),
+        prepareMicrosoftCallback: options.interactions.prepareMicrosoftCallback.bind(
+          options.interactions,
+        ),
       },
       logger: server.log,
       verification: options.microsoftVerification,

@@ -33,6 +33,19 @@ describe('parseAppRegistrationInput', (): void => {
     }).toThrow();
   });
 
+  it.each(['Developer Console', 'developer console', 'DEVELOPER CONSOLE'])(
+    'rejects the reserved first-party console name %s',
+    (name): void => {
+      expect((): void => {
+        parseAppRegistrationInput({
+          clientType: 'public',
+          name,
+          redirectUris: ['https://app.example/callback'],
+        });
+      }).toThrow();
+    },
+  );
+
   it('rejects silently normalized app names and unknown properties', (): void => {
     expect((): void => {
       parseAppRegistrationInput({

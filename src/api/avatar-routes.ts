@@ -1,15 +1,22 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { AvatarLookupResult, AvatarService } from '../avatars/service.js';
-import type { AvatarLayers, AvatarSize, AvatarView } from '../avatars/types.js';
+import type {
+  AvatarLayers,
+  AvatarSize,
+  AvatarView,
+  CapeProvider,
+  MinecraftSkinModel,
+} from '../avatars/types.js';
 import { english } from '../locales/en.js';
 import type { SkinImage, SkinStore } from '../mojang/skin-store.js';
-import { canonicalMinecraftUuid } from '../mojang/uuid.js';
 import { ApiError } from './errors.js';
 import { avatarRawRateLimit, avatarRenderRateLimit } from './rate-limit.js';
 import {
   avatarPreflightRouteSchema,
   avatarRouteSchema,
+  capeAvatarRouteSchema,
+  capesOverviewRouteSchema,
   rawAvatarRouteSchema,
   renderedAvatarRouteSchema,
   skinRouteSchema,
@@ -27,12 +34,18 @@ const PUBLIC_IMAGE_CORS = {
 };
 
 interface AvatarParams {
-  readonly uuid: string;
+  readonly identifier: string;
 }
 
 interface AvatarQuery {
   readonly layers?: AvatarLayers;
+  readonly model?: MinecraftSkinModel;
+  readonly provider?: CapeProvider;
   readonly size?: '128' | '256' | '32' | '64';
+}
+
+interface CapeQuery {
+  readonly provider?: CapeProvider;
 }
 
 interface SkinParams {
@@ -45,58 +58,82 @@ export interface AvatarRoutesOptions {
 }
 
 export function registerAvatarRoutes(server: FastifyInstance, options: AvatarRoutesOptions): void {
-  registerPublicPreflight(server, '/api/avatars/:uuid/skin');
-  registerPublicPreflight(server, '/api/avatars/:uuid/processed-skin');
-  registerPublicPreflight(server, '/api/avatars/:uuid/cape');
-  registerPublicPreflight(server, '/api/avatars/:uuid/elytra');
-  registerPublicPreflight(server, '/api/avatars/:uuid/face');
-  registerPublicPreflight(server, '/api/avatars/:uuid/head');
-  registerPublicPreflight(server, '/api/avatars/:uuid/bust');
-  registerPublicPreflight(server, '/api/avatars/:uuid/body');
+  registerPublicPreflight(server, '/api/avatars/:identifier/skin');
+  registerPublicPreflight(server, '/api/avatars/:identifier/processed-skin');
+  registerPublicPreflight(server, '/api/avatars/:identifier/capes');
+  registerPublicPreflight(server, '/api/avatars/:identifier/cape');
+  registerPublicPreflight(server, '/api/avatars/:identifier/elytra');
+  registerPublicPreflight(server, '/api/avatars/:identifier/face');
+  registerPublicPreflight(server, '/api/avatars/:identifier/bust');
+  registerPublicPreflight(server, '/api/avatars/:identifier/body');
+  registerPublicPreflight(server, '/api/avatars/:identifier/back');
+  registerPublicPreflight(server, '/api/avatars/:identifier/side');
+  registerPublicPreflight(server, '/api/avatars/:identifier/duo');
+  registerPublicPreflight(server, '/api/avatars/:identifier/wings');
 
   server.get<{ Params: AvatarParams }>(
-    '/avatar/:uuid',
+    '/avatar/:identifier',
     {
       config: { rateLimit: avatarRenderRateLimit },
       schema: avatarRouteSchema,
     },
     async (request, reply): Promise<void> => {
-      const uuid = requireCanonicalUuid(request.params.uuid);
       await sendAvatarResult(
         request,
         reply,
-        await options.avatars.render(uuid, { layers: 'all', size: 128, view: 'head' }),
+        await options.avatars.render(request.params.identifier, {
+          layers: 'all',
+          size: 128,
+          view: 'face',
+        }),
       );
     },
   );
 
   server.get<{ Params: AvatarParams }>(
-    '/api/avatars/:uuid/skin',
+    '/api/avatars/:identifier/skin',
     {
       config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRawRateLimit },
       schema: rawAvatarRouteSchema,
     },
     async (request, reply): Promise<void> => {
-      const uuid = requireCanonicalUuid(request.params.uuid);
-      await sendAvatarResult(request, reply, await options.avatars.findRawSkin(uuid));
+      await sendAvatarResult(
+        request,
+        reply,
+        await options.avatars.findRawSkin(request.params.identifier),
+      );
+    },
+  );
+
+  server.get<{ Params: AvatarParams }>(
+    '/api/avatars/:identifier/capes',
+    {
+      config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRawRateLimit },
+      schema: capesOverviewRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const result = await options.avatars.findAvailableCapes(request.params.identifier);
+      if (result.status === 'not-found') {
+        throw new ApiError(404, 'not_found', english.api.errors.avatarNotFound);
+      }
+      if (result.status === 'unavailable') {
+        throw new ApiError(503, 'service_unavailable', english.api.errors.avatarUnavailable);
+      }
+      void reply.header('cache-control', UUID_IMAGE_CACHE);
+      await reply.send(result.data);
     },
   );
 
   registerRenderedRoute(server, options.avatars, 'face', 'avatarFace');
-  registerRenderedRoute(server, options.avatars, 'head', 'avatarHead');
   registerRenderedRoute(server, options.avatars, 'bust', 'avatarBust');
   registerRenderedRoute(server, options.avatars, 'body', 'avatarBody');
-  registerTextureRoute(
-    server,
-    options.avatars,
-    'processed-skin',
-    'avatarProcessedSkin',
-    'processed',
-  );
-  // Vanilla renders elytra wings with the account's cape texture, so both
-  // endpoints serve the same texture under their own path.
-  registerTextureRoute(server, options.avatars, 'cape', 'avatarCape', 'cape');
-  registerTextureRoute(server, options.avatars, 'elytra', 'avatarElytra', 'cape');
+  registerRenderedRoute(server, options.avatars, 'back', 'avatarBack');
+  registerRenderedRoute(server, options.avatars, 'side', 'avatarSide');
+  registerRenderedRoute(server, options.avatars, 'duo', 'avatarDuo');
+  registerRenderedRoute(server, options.avatars, 'wings', 'avatarWings');
+  registerProcessedSkinRoute(server, options.avatars);
+  registerCapeRoute(server, options.avatars, 'cape', 'avatarCape');
+  registerCapeRoute(server, options.avatars, 'elytra', 'avatarElytra');
 
   registerHashSkinRoute(server, options.skins, '/skin/:hash');
   registerHashSkinRoute(server, options.skins, '/skin/:hash.png');
@@ -116,47 +153,68 @@ function registerRenderedRoute(
   server: FastifyInstance,
   avatars: AvatarService,
   view: AvatarView,
-  operation: 'avatarBody' | 'avatarBust' | 'avatarFace' | 'avatarHead',
+  operation:
+    | 'avatarBack'
+    | 'avatarBody'
+    | 'avatarBust'
+    | 'avatarDuo'
+    | 'avatarFace'
+    | 'avatarSide'
+    | 'avatarWings',
 ): void {
   server.get<{ Params: AvatarParams; Querystring: AvatarQuery }>(
-    `/api/avatars/:uuid/${view}`,
+    `/api/avatars/:identifier/${view}`,
     {
       config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRenderRateLimit },
       schema: renderedAvatarRouteSchema(operation),
     },
     async (request, reply): Promise<void> => {
-      const uuid = requireCanonicalUuid(request.params.uuid);
       const size = parseAvatarSize(request.query.size);
       await sendAvatarResult(
         request,
         reply,
-        await avatars.render(uuid, {
+        await avatars.render(request.params.identifier, {
           layers: request.query.layers ?? 'all',
           size,
           view,
+          ...(request.query.provider !== undefined ? { capeProvider: request.query.provider } : {}),
+          ...(request.query.model !== undefined ? { model: request.query.model } : {}),
         }),
       );
     },
   );
 }
 
-function registerTextureRoute(
-  server: FastifyInstance,
-  avatars: AvatarService,
-  view: 'cape' | 'elytra' | 'processed-skin',
-  operation: 'avatarCape' | 'avatarElytra' | 'avatarProcessedSkin',
-  kind: 'cape' | 'processed',
-): void {
+function registerProcessedSkinRoute(server: FastifyInstance, avatars: AvatarService): void {
   server.get<{ Params: AvatarParams }>(
-    `/api/avatars/:uuid/${view}`,
+    '/api/avatars/:identifier/processed-skin',
     {
       config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRawRateLimit },
-      schema: textureAvatarRouteSchema(operation),
+      schema: textureAvatarRouteSchema('avatarProcessedSkin'),
     },
     async (request, reply): Promise<void> => {
-      const uuid = requireCanonicalUuid(request.params.uuid);
-      const result =
-        kind === 'cape' ? await avatars.findCape(uuid) : await avatars.findProcessedSkin(uuid);
+      const result = await avatars.findProcessedSkin(request.params.identifier);
+      await sendAvatarResult(request, reply, result);
+    },
+  );
+}
+
+function registerCapeRoute(
+  server: FastifyInstance,
+  avatars: AvatarService,
+  view: 'cape' | 'elytra',
+  operation: 'avatarCape' | 'avatarElytra',
+): void {
+  server.get<{ Params: AvatarParams; Querystring: CapeQuery }>(
+    `/api/avatars/:identifier/${view}`,
+    {
+      config: { cors: PUBLIC_IMAGE_CORS, rateLimit: avatarRawRateLimit },
+      schema: capeAvatarRouteSchema(operation),
+    },
+    async (request, reply): Promise<void> => {
+      const result = await avatars.findCape(request.params.identifier, {
+        ...(request.query.provider !== undefined ? { provider: request.query.provider } : {}),
+      });
       await sendAvatarResult(request, reply, result);
     },
   );
@@ -217,14 +275,6 @@ async function sendAvatarResult(
   }
 
   await reply.type(result.image.contentType).send(result.image.body);
-}
-
-function requireCanonicalUuid(value: string): string {
-  const uuid = canonicalMinecraftUuid(value);
-  if (uuid === undefined) {
-    throw new ApiError(400, 'bad_request', english.api.errors.badRequest);
-  }
-  return uuid;
 }
 
 function parseAvatarSize(value: AvatarQuery['size']): AvatarSize {

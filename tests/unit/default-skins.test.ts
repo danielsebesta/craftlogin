@@ -5,6 +5,7 @@ import {
   DEFAULT_SKINS,
   defaultSkinUrl,
   HttpDefaultSkinStore,
+  isOfflinePlayerUuid,
   javaUuidHashCode,
   offlinePlayerUuid,
   selectDefaultSkin,
@@ -53,6 +54,16 @@ describe('Minecraft default skins', (): void => {
     expect(offlinePlayerUuid('Notch')).toBe('b50ad385-829d-3141-a216-7e7d7539ba7f');
     expect(offlinePlayerUuid('XqzFakeName99')).toBe('2a20a507-2d72-3353-a507-8b1cc4b70764');
     expect(offlinePlayerUuid('Notch')).not.toBe(offlinePlayerUuid('notch'));
+  });
+
+  it('detects offline-mode UUIDs by their version-3 name-hash shape', (): void => {
+    expect(isOfflinePlayerUuid(offlinePlayerUuid('Notch'))).toBe(true);
+    expect(isOfflinePlayerUuid(offlinePlayerUuid('XqzFakeName99'))).toBe(true);
+    // Version-4 Mojang account IDs are never offline identities.
+    expect(isOfflinePlayerUuid('069a79f4-44e9-4726-a5be-fca90e38aaf5')).toBe(false);
+    expect(isOfflinePlayerUuid('853c80ef-3c37-49fd-aa49-938b674adae6')).toBe(false);
+    // A version-3 nibble without the RFC 4122 variant bits is not a name hash.
+    expect(isOfflinePlayerUuid('069a79f4-44e9-3726-05be-fca90e38aaf5')).toBe(false);
   });
 
   it('selects a deterministic catalogue entry for any UUID', (): void => {

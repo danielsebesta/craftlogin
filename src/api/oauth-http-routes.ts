@@ -4,7 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { english } from '../locales/en.js';
 import { getErrorKind } from '../logging/error-kind.js';
-import { tokenRateLimit } from './rate-limit.js';
+import { ApiError } from './errors.js';
+import { authorizeRateLimit, tokenEndpointGlobalRateLimit, tokenRateLimit } from './rate-limit.js';
 import {
   oauthAuthorizationRouteSchema,
   oauthDiscoveryRouteSchema,
@@ -28,33 +29,53 @@ export type OidcHttpHandler = (
 export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHttpHandler): void {
   const forward = createOidcForwarder(handler);
   const limitTokenRequests = server.rateLimit(tokenRateLimit);
+  const limitAuthorizeRequests = server.rateLimit(authorizeRateLimit);
+  // Hook limiters skip the rest of the chain once one has run, so the shared
+  // ceiling goes through createRateLimit(), which only inspects the store.
+  const checkGlobalTokenBudget = server.createRateLimit(tokenEndpointGlobalRateLimit);
+  const enforceGlobalTokenBudget = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    const result = await checkGlobalTokenBudget(request);
+    if (!result.isAllowed && result.isExceeded) {
+      void reply
+        .header('x-ratelimit-limit', result.max)
+        .header('x-ratelimit-remaining', 0)
+        .header('x-ratelimit-reset', result.ttlInSeconds)
+        .header('retry-after', result.ttlInSeconds);
+      throw new ApiError(429, 'rate_limited', english.api.errors.rateLimited);
+    }
+  };
 
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    onRequest: forward,
+    // The limiter must precede the raw bridge because the bridge hijacks the Fastify lifecycle.
+    onRequest: [limitAuthorizeRequests, forward],
     schema: oauthAuthorizationRouteSchema,
     url: '/oauth2/authorize',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    onRequest: forward,
+    onRequest: [limitAuthorizeRequests, forward],
     schema: oauthResumeRouteSchema,
     url: '/oauth2/authorize/:uid',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    // The limiter must precede the raw bridge because the bridge hijacks the Fastify lifecycle.
-    onRequest: [limitTokenRequests, forward],
+    // The global ceiling runs first so an over-limit request does not spend
+    // per-address budget; both precede the hijacking bridge.
+    onRequest: [enforceGlobalTokenBudget, limitTokenRequests, forward],
     schema: oauthTokenRouteSchema,
     url: '/oauth2/token',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    onRequest: [limitTokenRequests, forward],
+    onRequest: [enforceGlobalTokenBudget, limitTokenRequests, forward],
     schema: oauthIntrospectionRouteSchema,
     url: '/oauth2/introspect',
   });

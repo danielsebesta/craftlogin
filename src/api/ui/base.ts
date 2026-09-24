@@ -130,6 +130,11 @@ textarea {
   outline-offset: 2px;
 }
 
+main {
+  position: relative;
+  isolation: isolate;
+}
+
 .container,
 .page-column,
 .page-header-inner,
@@ -140,6 +145,10 @@ textarea {
 
 .page-narrow {
   --page-width: 42rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .page-header {
@@ -194,11 +203,85 @@ textarea {
   height: 1.25rem;
 }
 
+.brand-wordmark {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-wordmark-image {
+  display: block;
+  width: auto;
+  height: 1.85rem;
+  max-width: 100%;
+  aspect-ratio: 2048 / 311;
+}
+
+.page-narrow .page-header {
+  border-bottom: 0;
+  margin-top: auto;
+  padding-top: var(--s5);
+}
+
+.page-narrow .page-header-inner {
+  justify-content: center;
+  min-height: auto;
+  padding-block: var(--s2);
+}
+
+.page-narrow .brand {
+  justify-content: center;
+}
+
+.page-narrow .brand-wordmark-image {
+  height: 2.75rem;
+  max-width: 85vw;
+}
+
+.page-narrow .page-footer {
+  border-top: 0;
+  margin-top: auto;
+  padding-block: var(--s4) var(--s6);
+  text-align: center;
+}
+
+.page-narrow .page-footer-inner {
+  align-items: center;
+  text-align: center;
+  max-width: 36rem;
+}
+
 .page-footer {
   padding-block: var(--s5);
   color: var(--muted);
   font-size: var(--t-xs);
   border-top: 1px solid var(--line);
+}
+
+.page-footer p {
+  margin: 0;
+  line-height: var(--leading-normal);
+}
+
+.page-footer-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.page-footer .footer-legal {
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+.page-footer .footer-operator {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.page-footer .footer-note {
+  font-size: 0.75rem;
+  opacity: 0.9;
 }
 
 .skip-link {
@@ -230,42 +313,6 @@ textarea {
   clip-path: inset(50%);
 }
 
-/* The ambient cube texture is a wide-screen detail: the center rail covers it
-   everywhere else, so narrow viewports skip both layers entirely. */
-@media (min-width: 74.01rem) {
-  body::before {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    content: "";
-    background-color: var(--pattern);
-    pointer-events: none;
-    -webkit-mask-image: url("/assets/background.svg");
-    mask-image: url("/assets/background.svg");
-    -webkit-mask-repeat: repeat;
-    mask-repeat: repeat;
-    -webkit-mask-size: 8.5rem auto;
-    mask-size: 8.5rem auto;
-  }
-
-  body::after {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    width: min(calc(var(--container) + (2 * var(--s4))), 100%);
-    margin-inline: auto;
-    content: "";
-    background: var(--bg);
-    border-inline: 1px solid var(--line);
-    pointer-events: none;
-  }
-
-  body > * {
-    position: relative;
-    z-index: 1;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -274,13 +321,6 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-@media (prefers-contrast: more) {
-  body::before,
-  body::after {
-    display: none;
   }
 }
 

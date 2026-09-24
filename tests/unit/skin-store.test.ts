@@ -31,16 +31,31 @@ function stubFetch(route: (url: string) => StubRoute): {
   return { calls, fetch: fetchImplementation };
 }
 
+const PNG_BODY = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
 describe('HttpSkinStore', (): void => {
   it('fetches a skin once and serves later requests from cache', async (): Promise<void> => {
-    const { calls, fetch } = stubFetch(() => ({ body: new Uint8Array([1, 2, 3]) }));
+    const { calls, fetch } = stubFetch(() => ({ body: PNG_BODY }));
     const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
 
     const first = await store.fetchSkin(hash);
     expect(first?.contentType).toBe('image/png');
-    expect(first?.body.equals(Buffer.from([1, 2, 3]))).toBe(true);
+    expect(first?.body.equals(Buffer.from(PNG_BODY))).toBe(true);
     await expect(store.fetchSkin(hash)).resolves.toBeDefined();
     expect(calls).toHaveLength(1);
+  });
+
+  it('accepts PNG bytes served as application/octet-stream, as Mojang cape textures are', async (): Promise<void> => {
+    const { fetch } = stubFetch(() => ({
+      body: PNG_BODY,
+      contentType: 'application/octet-stream',
+    }));
+    const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
+
+    await expect(store.fetchSkin(hash)).resolves.toEqual({
+      body: Buffer.from(PNG_BODY),
+      contentType: 'image/png',
+    });
   });
 
   it('negatively caches a missing skin', async (): Promise<void> => {
@@ -62,6 +77,16 @@ describe('HttpSkinStore', (): void => {
 
   it('rejects a non-PNG response', async (): Promise<void> => {
     const { fetch } = stubFetch(() => ({ body: new Uint8Array([1]), contentType: 'text/html' }));
+    const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
+
+    await expect(store.fetchSkin(hash)).rejects.toBeInstanceOf(MinecraftSkinUnavailableError);
+  });
+
+  it('rejects a mislabeled body that lacks a PNG signature', async (): Promise<void> => {
+    const { fetch } = stubFetch(() => ({
+      body: new Uint8Array([60, 33, 68, 79, 67]),
+      contentType: 'application/octet-stream',
+    }));
     const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
 
     await expect(store.fetchSkin(hash)).rejects.toBeInstanceOf(MinecraftSkinUnavailableError);

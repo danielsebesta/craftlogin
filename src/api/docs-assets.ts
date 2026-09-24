@@ -51,18 +51,10 @@ body {
   overflow-x: clip;
 }
 
-/* Like the landing page, docs drop the app-shell chrome (the repeating cube
-   texture and the single-color center rail with its side borders) for a
-   clean edge-free page floating over the grid glow. */
-@media (min-width: 74.01rem) {
-  body::before,
-  body::after {
-    display: none;
-  }
-}
 
 .docs-shell {
   position: relative;
+  isolation: isolate;
 }
 
 /* Same grid glow as the landing hero, melting into the page background. */
@@ -78,15 +70,15 @@ body {
   background-repeat: no-repeat;
   background-position: top center;
   background-size: cover;
-  opacity: 0.15;
+  opacity: 0.35;
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
     black 18%,
-    black 45%,
+    black 50%,
     transparent 100%
   );
-  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 50%, transparent 100%);
   pointer-events: none;
 }
 

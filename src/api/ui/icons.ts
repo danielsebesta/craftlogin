@@ -15,6 +15,8 @@ const ICON_PATHS = {
     'M10 18H8v-2h2v2Zm-2-2H6v-2h2v2Zm4-2v2h-2v-2h2Zm-6 0H4v-2h2v2Zm8 0h-2v-2h2v2Zm2-2h-2v-2h2v2Zm2-2h-2V8h2v2Zm2-2h-2V6h2v2Z',
   clock:
     'M18 22H6v-2h12v2ZM6 20H4v-2h2v2Zm14 0h-2v-2h2v2ZM4 18H2V6h2v12Zm18 0h-2V6h2v12Zm-5-1h-2v-2h2v2Zm-2-2h-2v-2h2v2Zm-2-2h-2V6h2v7ZM6 6H4V4h2v2Zm14 0h-2V4h2v2Zm-2-2H6V2h12v2Z',
+  close:
+    'M7 19H5V17H7V19ZM19 19H17V17H19V19ZM9 15V17H7V15H9ZM17 17H15V15H17V17ZM11 15H9V13H11V15ZM15 15H13V13H15V15ZM13 13H11V11H13V13ZM11 11H9V9H11V11ZM15 11H13V9H15V11ZM9 9H7V7H9V9ZM17 9H15V7H17V9ZM7 7H5V5H7V7ZM19 7H17V5H19V7Z',
   code: 'M11 18H9v-4h2v4Zm-4-1H5v-2h2v2Zm12-2v2h-2v-2h2ZM5 15H3v-2h2v2Zm16 0h-2v-2h2v2Zm-8-1h-2v-4h2v4ZM3 13H1v-2h2v2Zm20 0h-2v-2h2v2ZM5 11H3V9h2v2Zm16 0h-2V9h2v2Zm-6-1h-2V6h2v4ZM7 9H5V7h2v2Zm12 0h-2V7h2v2Z',
   externalLink:
     'M11 5H5v2h6V5ZM5 7H3v12h2V7Zm12 12H5v2h12v-2Zm2-6h-2v6h2v-6Zm-8 0H9v2h2v-2Zm2-2h-2v2h2v-2Zm2-2h-2v2h2V9Zm2-2h-2v2h2V7Zm2-2h-2v2h2V5Zm2-2h-2v8h2V3ZM21 3h-8v2h8V3Z',
@@ -29,12 +31,17 @@ const ICON_PATHS = {
     'M2 11h14v2H2zm10-2h2v2h-2zM10 7h2v10h-2zm2 6h2v2h-2zM6 2h12v2H6zm0 18h12v2H6zM4 4h2v5H4zm0 11h2v5H4zM18 4h2v16h-2z',
   logout:
     'M8 11h12v2H8zm8-2h2v2h-2zM14 7h2v10h-2zm2 6h2v2h-2zM6 2h12v2H6zm0 18h12v2H6zM4 4h2v16H4zm14 0h2v3h-2zm0 13h2v3h-2z',
+  microsoft: 'M2 2h9v9H2zM13 2h9v9h-9zM2 13h9v9H2zM13 13h9v9h-9z',
   refresh:
     'M13 20H9V18H13V20ZM19 16H21V18H19V20H17V18H15V16H17V8H19V16ZM9 18H7V16H9V18ZM7 6H9V8H7V16H5V8H3V6H5V4H7V6ZM15 16H13V14H15V16ZM23 16H21V14H23V16ZM3 10H1V8H3V10ZM11 10H9V8H11V10ZM17 8H15V6H17V8ZM15 6H11V4H15V6Z',
   server: 'M6 7h4v2H6zm0 8h4v2H6zM2 5h2v14H2zm18 0h2v14h-2zM4 19h16v2H4zM4 3h16v2H4zm0 8h16v2H4z',
   shield:
     'M14 22h-4v-2h4v2Zm-4-4v2H8v-2h2Zm6 2h-2v-2h2v2Zm-8-2H6v-2h2v2Zm10 0h-2v-2h2v2ZM6 16H4v-2h2v2Zm14 0h-2v-2h2v2ZM4 14H2V4h2v10Zm18 0h-2V4h2v10ZM20 4H4V2h16v2Z',
+  sparkles:
+    'M5 23H3v-2h2v2Zm8 0h-2v-4h2v4ZM3 21H1v-2h2v2Zm4 0H5v-2h2v2Zm-2-2H3v-2h2v2Zm6 0H9v-4h2v4Zm4 0h-2v-4h2v4Zm-6-4H5v-2h4v2Zm10 0h-4v-2h4v2ZM5 13H1v-2h4v2Zm18 0h-4v-2h4v2ZM9 11H5V9h4v2Zm10 0h-4V9h4v2Zm-8-2H9V5h2v4Zm4 0h-2V5h2v4Zm6-6h2v2h-2v2h-2V5h-2V3h2V1h2v2Zm-8 2h-2V1h2v4Z',
   user: 'M9 2h6v2H9zm0 8h6v2H9zm6-6h2v6h-2zM7 4h2v6H7zM4 18h2v4H4zm14 0h2v4h-2zM8 14h8v2H8zm-2 2h2v2H6zm10 0h2v2h-2z',
+  userX:
+    'M9 2h6v2H9zm0 8h6v2H9zm6-6h2v6h-2zM7 4h2v6H7zM4 18h2v4H4zm16 2h2v2h-2zM8 14h6v2H8zm-2 2h2v2H6zm10 0h2v2h-2zm2 2h2v2h-2zm2-2h2v2h-2zm-4 4h2v2h-2z',
   users:
     'M5 2h6v2H5zm10 0h4v2h-4zM5 10h6v2H5zm10 0h4v2h-4zm4-6h2v6h-2zm-8 0h2v6h-2zM3 4h2v6H3zM0 18h2v4H0zm14 0h2v4h-2zm8 0h2v4h-2zM4 14h8v2H4zm12 0h4v2h-4zM2 16h2v2H2zm10 0h2v2h-2zm8 0h2v2h-2z',
   warning:
@@ -51,24 +58,11 @@ export function renderIcon(name: IconName, className = 'ui-icon'): string {
   return `<svg aria-hidden="true" class="${className}" fill="currentColor" focusable="false" height="24" viewBox="0 0 24 24" width="24"><path d="${ICON_PATHS[name]}"/></svg>`;
 }
 
-// Microsoft logo redrawn for the 24x24 pixel grid: four 10x10 brand squares
-// with 2px gaps. Unlike the single-color set above, each square keeps its
-// brand fill so the mark stays recognizable at small sizes.
-const MICROSOFT_SQUARES: readonly {
-  readonly color: string;
-  readonly x: number;
-  readonly y: number;
-}[] = [
-  { color: '#f25022', x: 2, y: 2 },
-  { color: '#7fba00', x: 12, y: 2 },
-  { color: '#00a4ef', x: 2, y: 12 },
-  { color: '#ffb900', x: 12, y: 12 },
-];
-
+/**
+ * Convenience helper for the Microsoft logo. Rendered through `renderIcon`
+ * so it stays single-color (`fill="currentColor"`), inherits text/icon styling,
+ * and preserves the exact 4-square alignment of the original Microsoft mark.
+ */
 export function renderMicrosoftIcon(className = 'ui-icon'): string {
-  const squares = MICROSOFT_SQUARES.map(
-    (square): string =>
-      `<rect x="${square.x}" y="${square.y}" width="10" height="10" fill="${square.color}"/>`,
-  ).join('');
-  return `<svg aria-hidden="true" class="${className}" focusable="false" height="24" viewBox="0 0 24 24" width="24">${squares}</svg>`;
+  return renderIcon('microsoft', className);
 }

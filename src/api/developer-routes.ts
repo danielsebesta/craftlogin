@@ -241,9 +241,19 @@ export function registerDeveloperRoutes(
         session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
         options.users.findCurrentUser(session.userUuid),
       ]);
+      const ownerUuids = apps
+        .map((app): string | undefined => app.ownerUuid)
+        .filter((uuid): uuid is string => uuid !== undefined);
+      const playerNames = await resolvePlayerNicknames(
+        ownerUuids,
+        options.users,
+        options.players,
+        user,
+      );
       const dashboard: DeveloperDashboardInput = {
         apps,
         csrfToken: session.csrfToken,
+        playerNames,
         role: session.role,
         showDocumentation: options.showDocumentation,
         username: requireDashboardUser(user, session.userUuid).username,
@@ -601,11 +611,21 @@ async function renderDashboardError(
     session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
     options.users.findCurrentUser(session.userUuid),
   ]);
+  const ownerUuids = apps
+    .map((app): string | undefined => app.ownerUuid)
+    .filter((uuid): uuid is string => uuid !== undefined);
+  const playerNames = await resolvePlayerNicknames(
+    ownerUuids,
+    options.users,
+    options.players,
+    user,
+  );
   const dashboard: DeveloperDashboardInput = {
     apps,
     csrfToken: session.csrfToken,
     formError: english.developer.app.formErrorNotice,
     formValues: values,
+    playerNames,
     role: session.role,
     showDocumentation: options.showDocumentation,
     username: requireDashboardUser(user, session.userUuid).username,
@@ -617,6 +637,48 @@ async function renderDashboardError(
     .status(400)
     .type('text/html; charset=utf-8')
     .send(renderDeveloperDashboard(dashboard));
+}
+
+async function resolvePlayerNicknames(
+  uuids: readonly string[],
+  users: CurrentUserLookup,
+  players?: MinecraftPlayerLookup,
+  currentUser?: CurrentUser,
+): Promise<Record<string, string>> {
+  const uniqueUuids = [...new Set(uuids)];
+  const results: Record<string, string> = {};
+
+  if (currentUser !== undefined && currentUser.username.length > 0) {
+    results[currentUser.uuid] = currentUser.username;
+  }
+
+  await Promise.all(
+    uniqueUuids.map(async (uuid): Promise<void> => {
+      if (players !== undefined) {
+        try {
+          const profile = await players.findProfileById(uuid);
+          if (profile?.username) {
+            results[uuid] = profile.username;
+            return;
+          }
+        } catch {
+          // Fall back to database record
+        }
+      }
+      if (results[uuid] === undefined) {
+        try {
+          const stored = await users.findCurrentUser(uuid);
+          if (stored?.username) {
+            results[uuid] = stored.username;
+          }
+        } catch {
+          // Ignored
+        }
+      }
+    }),
+  );
+
+  return results;
 }
 
 function requireDashboardUser(user: CurrentUser | undefined, expectedUuid: string): CurrentUser {

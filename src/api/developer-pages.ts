@@ -31,6 +31,7 @@ export interface DeveloperDashboardInput {
     readonly redirectUris: string;
   };
   readonly notice?: DashboardNotice;
+  readonly playerNames?: Readonly<Record<string, string>>;
   readonly role: DeveloperRole;
   readonly showDocumentation?: boolean;
   readonly username: string;
@@ -93,7 +94,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
             <h2 class="icon-heading" id="apps-heading">${renderIcon('key', 'heading-icon')}${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
             ${docsLink}
           </div>
-          ${renderAppList(input.apps, input.role, input.csrfToken)}
+          ${renderAppList(input.apps, input.role, input.csrfToken, input.playerNames)}
         </section>
 
         <details class="disclosure console-create"${formOpen ? ' open' : ''}>
@@ -278,10 +279,23 @@ function noticeLine(message: string, alert: boolean): string {
   return `      <p class="notice${alert ? ' notice-error' : ''}" role="${alert ? 'alert' : 'status'}">${escapeHtml(message)}</p>\n`;
 }
 
+function renderAppOwner(
+  ownerUuid: string | undefined,
+  ownerName: string | undefined,
+  unassignedLabel: string,
+): string {
+  if (ownerUuid === undefined) {
+    return `<code>${escapeHtml(unassignedLabel)}</code>`;
+  }
+  const displayName = ownerName ?? ownerUuid;
+  return `<span class="app-owner-chip" title="${escapeHtml(ownerUuid)}"><img class="app-owner-head" src="/api/avatars/${encodeURIComponent(ownerUuid)}/face?size=32&amp;layers=all" alt="" width="20" height="20" decoding="async"><span class="app-owner-name">${escapeHtml(displayName)}</span></span>`;
+}
+
 function renderAppList(
   apps: readonly ManagedApp[],
   role: DeveloperRole,
   csrfToken: string,
+  playerNames?: Readonly<Record<string, string>>,
 ): string {
   const strings = english.developer.app;
   if (apps.length === 0) {
@@ -297,7 +311,7 @@ function renderAppList(
         role === 'admin'
           ? `<div>
                 <dt>${escapeHtml(strings.ownerLabel)}</dt>
-                <dd><code>${escapeHtml(app.ownerUuid ?? strings.unassignedOwner)}</code></dd>
+                <dd>${renderAppOwner(app.ownerUuid, app.ownerUuid !== undefined ? playerNames?.[app.ownerUuid] : undefined, strings.unassignedOwner)}</dd>
               </div>`
           : '';
       return `<li class="app-card">

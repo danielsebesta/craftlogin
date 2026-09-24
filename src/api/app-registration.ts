@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
+import { CONSOLE_CLIENT_NAME } from '../developers/console-client.js';
 import { developerUuidSchema } from '../developers/developer-repository.js';
 import { containsOnlyDisplayCharacters } from '../developers/display-text.js';
 import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
@@ -17,7 +18,13 @@ const appRegistrationInputSchema = z
       .min(1)
       .max(100)
       .refine((value): boolean => value === value.trim(), 'App names cannot have outer whitespace')
-      .refine(containsOnlyDisplayCharacters, 'App names cannot contain control characters'),
+      .refine(containsOnlyDisplayCharacters, 'App names cannot contain control characters')
+      // The first-party name is reserved so a third-party app can never
+      // impersonate the console on the consent screen.
+      .refine(
+        (value): boolean => value.toLowerCase() !== CONSOLE_CLIENT_NAME.toLowerCase(),
+        'This app name is reserved',
+      ),
     redirectUris: z
       .array(redirectUriSchema)
       .min(1)

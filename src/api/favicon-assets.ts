@@ -9,6 +9,7 @@ interface FaviconAsset {
     | 'application/manifest+json; charset=utf-8'
     | 'image/png'
     | 'image/svg+xml; charset=utf-8'
+    | 'image/webp'
     | 'image/x-icon';
   readonly fileUrl: URL;
   readonly route: string;
@@ -26,6 +27,11 @@ const faviconAssets: readonly FaviconAsset[] = [
     route: '/favicon-96x96.png',
   },
   {
+    contentType: 'image/webp',
+    fileUrl: new URL('../../public/favicon-96x96.webp', import.meta.url),
+    route: '/favicon-96x96.webp',
+  },
+  {
     contentType: 'image/x-icon',
     fileUrl: new URL('../../public/favicon.ico', import.meta.url),
     route: '/favicon.ico',
@@ -36,14 +42,29 @@ const faviconAssets: readonly FaviconAsset[] = [
     route: '/apple-touch-icon.png',
   },
   {
+    contentType: 'image/webp',
+    fileUrl: new URL('../../public/apple-touch-icon.webp', import.meta.url),
+    route: '/apple-touch-icon.webp',
+  },
+  {
     contentType: 'image/png',
     fileUrl: new URL('../../public/web-app-manifest-192x192.png', import.meta.url),
     route: '/web-app-manifest-192x192.png',
   },
   {
+    contentType: 'image/webp',
+    fileUrl: new URL('../../public/web-app-manifest-192x192.webp', import.meta.url),
+    route: '/web-app-manifest-192x192.webp',
+  },
+  {
     contentType: 'image/png',
     fileUrl: new URL('../../public/web-app-manifest-512x512.png', import.meta.url),
     route: '/web-app-manifest-512x512.png',
+  },
+  {
+    contentType: 'image/webp',
+    fileUrl: new URL('../../public/web-app-manifest-512x512.webp', import.meta.url),
+    route: '/web-app-manifest-512x512.webp',
   },
   {
     contentType: 'application/manifest+json; charset=utf-8',

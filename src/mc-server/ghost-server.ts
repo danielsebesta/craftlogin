@@ -20,6 +20,7 @@ import type {
   VerificationResolution,
   VerificationResolver,
 } from '../verification/verification-resolver.js';
+import { installCompatLoginGate } from './compat-login-gate.js';
 import { installConfigurationTags } from './configuration-tags.js';
 import { disconnect, isLoggedIn, markLoggedIn, markWorldReady } from './disconnect.js';
 import { extractVerificationCode, isLobbyHost } from './hostname.js';
@@ -38,6 +39,12 @@ import {
 // Shutdown must not stall on a client that never completes configuration; the reason is best effort.
 const SHUTDOWN_WORLD_WAIT_TIMEOUT_MS = 1_500;
 const MAX_PLAYERS = 10_000;
+// minecraft-protocol only reports maxPlayers in the status ping; it never
+// refuses a TCP connection. These gates bound pre-login socket floods, and a
+// rejected socket costs only a destroy.
+const MAX_CONNECTIONS = 10_000;
+const MAX_CONNECTIONS_PER_ADDRESS = 64;
+const CONNECTION_LIMIT_LOG_INTERVAL_MS = 10_000;
 const LOBBY_MAX_PLAYERS = 64;
 const LOBBY_LIFETIME_MS = 40 * 1000;
 const LOBBY_PROMPT_COOLDOWN_MS = 3_000;
@@ -65,6 +72,8 @@ interface PendingVerification {
   readonly kind: 'verification';
   readonly code: string;
   readonly availability: Promise<CodeAvailability>;
+  /** True when the negotiated protocol has no minecraft-data support; the client stays in the login state. */
+  readonly compat: boolean;
   outcome: Promise<VerificationOutcome> | null;
 }
 
@@ -157,6 +166,10 @@ export async function startGhostServer(
     host: config.host,
     port: config.port,
     version: false,
+    // Clients on protocols newer than minecraft-data supports still get login-state serializers
+    // from the newest known version, so they can finish online-mode authentication and receive
+    // the verification result as a login-state disconnect instead of a silent socket close.
+    fallbackVersion: minecraftProtocol.defaultVersion,
     'online-mode': true,
     hideErrors: true,
     keepAlive: true,
@@ -186,9 +199,44 @@ export async function startGhostServer(
   };
   const server = minecraftProtocol.createServer(options);
 
+  let activeConnections = 0;
+  const connectionsByAddress = new Map<string, number>();
+  let lastConnectionLimitLogAt = 0;
+
   server.on('connection', (client): void => {
+    const address = client.socket.remoteAddress ?? '';
+    const addressConnections = connectionsByAddress.get(address) ?? 0;
+    if (activeConnections >= MAX_CONNECTIONS || addressConnections >= MAX_CONNECTIONS_PER_ADDRESS) {
+      client.socket.destroy();
+      // Rejection floods must not become log floods; one line per interval is enough signal.
+      const now = Date.now();
+      if (now - lastConnectionLimitLogAt >= CONNECTION_LIMIT_LOG_INTERVAL_MS) {
+        lastConnectionLimitLogAt = now;
+        dependencies.logger.warn(
+          { activeConnections },
+          'Minecraft connection limit rejected a client',
+        );
+      }
+      return;
+    }
+    activeConnections += 1;
+    connectionsByAddress.set(address, addressConnections + 1);
+    client.once('end', (): void => {
+      activeConnections -= 1;
+      const remaining = (connectionsByAddress.get(address) ?? 1) - 1;
+      if (remaining <= 0) {
+        connectionsByAddress.delete(address);
+      } else {
+        connectionsByAddress.set(address, remaining);
+      }
+    });
+
     installVersionedRegistryCodec(client);
     installConfigurationTags(client);
+    installCompatLoginGate(client, (): boolean => {
+      const pending = pendingClients.get(client);
+      return pending?.kind === 'verification' && pending.compat;
+    });
 
     client.once('set_protocol', (packet: unknown): void => {
       const parsedHandshake = loginHandshakeSchema.safeParse(packet);
@@ -199,24 +247,28 @@ export async function startGhostServer(
 
       const { serverHost, protocolVersion } = parsedHandshake.data;
 
-      // minecraft-data only knows a fixed protocol range (currently up to 26.1). A newer client
-      // would otherwise receive a login success encoded with an older protocol and fail with a
-      // generic DecoderException. Stop before the library writes it and explain what to do.
-      if (getMinecraftData(protocolVersion) === null) {
+      // minecraft-data only knows a fixed protocol range. With the fallback version a newer
+      // client still completes login; it just cannot enter the world. A code subdomain can
+      // therefore verify it, while hosts that need the play state are rejected up front.
+      const protocolSupported = getMinecraftData(protocolVersion) !== null;
+      if (!protocolSupported) {
         // The server host is never logged: for code subdomains it carries the verification code.
         dependencies.logger.info(
           { protocolVersion },
           'Minecraft client uses an unsupported version',
         );
-        client.removeAllListeners('login_start');
-        void disconnect(client, english.minecraft.unsupportedVersion, { tone: 'error' });
-        return;
       }
 
       const code = extractVerificationCode(serverHost, config.baseDomain);
       if (code !== null) {
         const availability = lookupCodeAvailability(code, dependencies);
-        pendingClients.set(client, { kind: 'verification', code, availability, outcome: null });
+        pendingClients.set(client, {
+          kind: 'verification',
+          code,
+          availability,
+          compat: !protocolSupported,
+          outcome: null,
+        });
         void availability.then((result): void => {
           // A logged-in client is rejected after its world is presented so the reason renders.
           if (isLoggedIn(client)) {
@@ -228,6 +280,14 @@ export async function startGhostServer(
             void disconnect(client, english.minecraft.temporaryFailure, { tone: 'error' });
           }
         });
+        return;
+      }
+
+      if (!protocolSupported) {
+        // Without a code subdomain there is nothing to resolve; the lobby needs play-state chat,
+        // which requires protocol data this client does not have.
+        client.removeAllListeners('login_start');
+        void disconnect(client, english.minecraft.unsupportedVersion, { tone: 'error' });
         return;
       }
 
@@ -243,13 +303,19 @@ export async function startGhostServer(
   // minecraft-protocol emits login only after online-mode session authentication populated the
   // UUID and username. Resolving earlier would treat an unauthenticated profile as verified.
   server.on('login', (client): void => {
-    // Login success has been written, so the client is no longer addressable in the login state.
-    markLoggedIn(client);
-
     const pending = pendingClients.get(client);
     if (pending?.kind === 'verification') {
       pending.outcome = settleVerification(client, pending, dependencies);
+      if (pending.compat) {
+        // The withheld success packet keeps this client in the login state, so the outcome is
+        // delivered as a login-state disconnect instead of a play-state kick after the void world.
+        void finalizeVerification(client, pending.outcome, dependencies.logger);
+        return;
+      }
     }
+
+    // Login success has been written, so the client is no longer addressable in the login state.
+    markLoggedIn(client);
   });
 
   // The play state exists here, so the Join Game packet can be written and a later kick is rendered.

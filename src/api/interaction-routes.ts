@@ -24,6 +24,7 @@ import { interactionScript, interactionStyles } from './interaction-assets.js';
 import { renderInteractionPage, type InteractionOwner } from './interaction-page.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import {
+  interactionPageRateLimit,
   skinVerificationLookupRateLimit,
   skinVerificationStartRateLimit,
   verificationStatusRateLimit,
@@ -83,6 +84,7 @@ export interface ApiInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<{ readonly interactionId: string }>;
+  prepareMicrosoftCallback?(interactionId: string): Promise<{ readonly interactionId: string }>;
   checkSkin?(
     request: IncomingMessage,
     response: ServerResponse,
@@ -138,7 +140,10 @@ export function registerInteractionRoutes(
 ): void {
   server.get<{ Params: InteractionParams }>(
     '/interaction/:uid',
-    { schema: interactionPageRouteSchema },
+    {
+      config: { rateLimit: interactionPageRateLimit },
+      schema: interactionPageRouteSchema,
+    },
     async (request, reply): Promise<void> => {
       let interaction: PendingOAuthInteraction;
       try {
@@ -212,7 +217,10 @@ export function registerInteractionRoutes(
 
   server.post<{ Params: InteractionParams }>(
     '/interaction/:uid/abort',
-    { schema: interactionAbortRouteSchema },
+    {
+      config: { rateLimit: interactionPageRateLimit },
+      schema: interactionAbortRouteSchema,
+    },
     async (request, reply): Promise<void> => {
       let abortion: OAuthInteractionAbortion;
       try {
@@ -317,7 +325,10 @@ export function registerInteractionRoutes(
 
   server.get<{ Params: InteractionParams }>(
     '/interaction/:uid/skin/download',
-    { schema: skinVerificationDownloadRouteSchema },
+    {
+      config: { rateLimit: interactionPageRateLimit },
+      schema: skinVerificationDownloadRouteSchema,
+    },
     async (request, reply): Promise<void> => {
       if (options.interactions.getSkinChallenge === undefined) {
         throw new ApiError(501, 'internal_error', english.api.errors.internal);
@@ -351,7 +362,10 @@ export function registerInteractionRoutes(
 
   server.get<{ Params: InteractionParams }>(
     '/interaction/:uid/skin/original-download',
-    { schema: skinVerificationDownloadRouteSchema },
+    {
+      config: { rateLimit: interactionPageRateLimit },
+      schema: skinVerificationDownloadRouteSchema,
+    },
     async (request, reply): Promise<void> => {
       if (options.interactions.getSkinChallenge === undefined) {
         throw new ApiError(501, 'internal_error', english.api.errors.internal);
@@ -418,7 +432,10 @@ export function registerInteractionRoutes(
 
   server.post<{ Params: InteractionParams }>(
     '/interaction/:uid/complete',
-    { schema: interactionCompleteRouteSchema },
+    {
+      config: { rateLimit: interactionPageRateLimit },
+      schema: interactionCompleteRouteSchema,
+    },
     async (request, reply): Promise<void> => {
       let completion: OAuthInteractionCompletion;
       try {
@@ -451,7 +468,10 @@ export function registerInteractionRoutes(
 
   server.post<{ Params: InteractionParams }>(
     '/interaction/:uid/switch',
-    { schema: interactionAbortRouteSchema },
+    {
+      config: { rateLimit: interactionPageRateLimit },
+      schema: interactionAbortRouteSchema,
+    },
     async (request, reply): Promise<void> => {
       if (options.interactions.switchAccount === undefined) {
         throw new ApiError(501, 'internal_error', english.api.errors.internal);

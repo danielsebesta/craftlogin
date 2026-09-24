@@ -15,6 +15,7 @@ import type { AuthenticatedDeveloperSession } from '../../src/developers/session
 import type { ApiInteractionService } from '../../src/api/interaction-routes.js';
 import {
   appRegistrationRateLimit,
+  authorizeRateLimit,
   avatarRawRateLimit,
   avatarRenderRateLimit,
   playerProfileRateLimit,
@@ -100,6 +101,13 @@ class InteractionStub implements ApiInteractionService {
   ): Promise<{ readonly interactionId: string }> {
     this.expectedIds.push(expectedInteractionId);
     return Promise.resolve({ interactionId: expectedInteractionId ?? 'interaction-id' });
+  }
+
+  public prepareMicrosoftCallback(
+    interactionId: string,
+  ): Promise<{ readonly interactionId: string }> {
+    this.expectedIds.push(interactionId);
+    return Promise.resolve({ interactionId });
   }
 
   public startSkin(
@@ -220,9 +228,10 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-security-policy']).toContain("script-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
     expect(response.body).toContain('<main id="main" class="container">');
-    expect(response.body).toContain('<h1 id="hero-heading">Log in with Minecraft</h1>');
-    expect(response.body).toContain('class="landing-steps"');
-    expect(response.body).toContain('K7MPQ4RX.craftlogin.com');
+    expect(response.body).toContain(
+      '<h1 id="hero-heading">Let your users log in with Minecraft</h1>',
+    );
+    expect(response.body).toContain('landing-steps');
     expect(response.body).toContain('href="/docs/"');
     expect(response.body).toContain('/assets/landing.css');
     expect(response.body).toContain('class="skip-link"');
@@ -231,9 +240,10 @@ describe('CraftLogin API server', (): void => {
       '<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />',
     );
     expect(response.body).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
-    expect(response.body).toContain('class="brand-mark" src="/favicon.svg"');
+    expect(response.body).toContain('class="brand-wordmark"');
+    expect(response.body).toContain('class="brand-wordmark-image"');
     expect(response.body).toContain(
-      'NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
+      'NOT AN OFFICIAL MINECRAFT SERVICE.<br>NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
     );
     expect(response.body).toContain('Contact: contact@craftlogin.com.');
     expect(response.body).toContain('<link rel="shortcut icon" href="/favicon.ico" />');
@@ -248,6 +258,9 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('data-copy-target="#craftlogin-agent-prompt"');
     expect(response.body).toContain('https://craftlogin.com/llms-full.txt');
     expect(response.body).toContain('Never ask me to paste a client secret');
+    expect(response.body).toContain('class="avatar-showcase"');
+    expect(response.body).toContain('/processed-skin');
+    expect(response.body).toContain('/cape');
     expect(response.body).not.toContain('integration-form');
     expect(response.body).not.toContain('integration-stack');
     expect(response.body).toContain('<script src="/assets/prompt-copy.js" defer></script>');
@@ -278,11 +291,38 @@ describe('CraftLogin API server', (): void => {
     expect(fontLicense.statusCode).toBe(200);
     expect(fontLicense.body).toContain('SIL OPEN FONT LICENSE Version 1.1');
 
-    const background = await server.inject({ method: 'GET', url: '/assets/background.svg' });
-    expect(background.statusCode).toBe(200);
-    expect(background.headers['content-type']).toContain('image/svg+xml');
-    expect(background.headers['cache-control']).toBe('public, max-age=31536000, immutable');
-    expect(background.body).toContain('<svg');
+    const gridFade = await server.inject({ method: 'GET', url: '/assets/grid-fade.svg' });
+    expect(gridFade.statusCode).toBe(200);
+    expect(gridFade.headers['content-type']).toContain('image/svg+xml');
+    expect(gridFade.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect(gridFade.body).toContain('<svg');
+
+    // The glow grid must never place the same fill on orthogonally adjacent cells.
+    const gridCells = new Map<number, Map<number, string>>();
+    const cellSizes = new Set<number>();
+    for (const rect of gridFade.body.matchAll(
+      /<rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)" fill="(#[0-9a-f]+)"/g,
+    )) {
+      const x = Number(rect[1]);
+      const y = Number(rect[2]);
+      const cellW = Number(rect[3]);
+      const cellH = Number(rect[4]);
+      const fill = rect[5];
+      if (Number.isNaN(x) || Number.isNaN(y) || !(cellW > 0) || !(cellH > 0) || fill === undefined)
+        continue;
+      cellSizes.add(cellW);
+      const column = gridCells.get(x / cellW) ?? new Map<number, string>();
+      column.set(y / cellH, fill);
+      gridCells.set(x / cellW, column);
+    }
+    expect(cellSizes.size).toBe(1);
+    expect(gridCells.size).toBeGreaterThan(0);
+    for (const [col, column] of gridCells) {
+      for (const [row, fill] of column) {
+        expect(gridCells.get(col + 1)?.get(row)).not.toBe(fill);
+        expect(gridCells.get(col)?.get(row + 1)).not.toBe(fill);
+      }
+    }
 
     const faviconSvg = await server.inject({ method: 'GET', url: '/favicon.svg' });
     expect(faviconSvg.statusCode).toBe(200);
@@ -302,6 +342,47 @@ describe('CraftLogin API server', (): void => {
       expect(png.rawPayload.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     }
 
+    for (const route of [
+      '/favicon-96x96.webp',
+      '/apple-touch-icon.webp',
+      '/web-app-manifest-192x192.webp',
+      '/web-app-manifest-512x512.webp',
+    ]) {
+      const webp = await server.inject({ method: 'GET', url: route });
+      expect(webp.statusCode).toBe(200);
+      expect(webp.headers['content-type']).toContain('image/webp');
+      expect(webp.headers['cache-control']).toBe('public, max-age=86400');
+      expect(webp.rawPayload.subarray(0, 4).toString('ascii')).toBe('RIFF');
+      expect(webp.rawPayload.subarray(8, 12).toString('ascii')).toBe('WEBP');
+    }
+
+    for (const route of [
+      '/assets/brand-wordmark.png',
+      '/assets/brand-wordmark-2x.png',
+      '/assets/craftlogin-title.png',
+      '/assets/craftlogin-title-2x.png',
+    ]) {
+      const brandPng = await server.inject({ method: 'GET', url: route });
+      expect(brandPng.statusCode).toBe(200);
+      expect(brandPng.headers['content-type']).toContain('image/png');
+      expect(brandPng.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+      expect(brandPng.rawPayload.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    }
+
+    for (const route of [
+      '/assets/brand-wordmark.webp',
+      '/assets/brand-wordmark-2x.webp',
+      '/assets/craftlogin-title.webp',
+      '/assets/craftlogin-title-2x.webp',
+    ]) {
+      const brandWebp = await server.inject({ method: 'GET', url: route });
+      expect(brandWebp.statusCode).toBe(200);
+      expect(brandWebp.headers['content-type']).toContain('image/webp');
+      expect(brandWebp.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+      expect(brandWebp.rawPayload.subarray(0, 4).toString('ascii')).toBe('RIFF');
+      expect(brandWebp.rawPayload.subarray(8, 12).toString('ascii')).toBe('WEBP');
+    }
+
     const faviconIco = await server.inject({ method: 'GET', url: '/favicon.ico' });
     expect(faviconIco.statusCode).toBe(200);
     expect(faviconIco.headers['content-type']).toContain('image/x-icon');
@@ -316,6 +397,8 @@ describe('CraftLogin API server', (): void => {
       icons: [
         { sizes: '192x192', src: '/web-app-manifest-192x192.png' },
         { sizes: '512x512', src: '/web-app-manifest-512x512.png' },
+        { sizes: '192x192', src: '/web-app-manifest-192x192.webp' },
+        { sizes: '512x512', src: '/web-app-manifest-512x512.webp' },
       ],
     });
   });
@@ -373,8 +456,9 @@ describe('CraftLogin API server', (): void => {
       '/api/avatars/123e4567-e89b-42d3-a456-426614174000/face?size=64&amp;layers=all',
     );
     expect(response.body).toContain('This app will receive:');
-    expect(response.body).toContain('Your Minecraft identity (stable UUID)');
-    expect(response.body).toContain('Your current username and avatar');
+    expect(response.body).toContain('Your Minecraft identity (username, skin, cape, UUID)');
+    expect(response.body).toContain('This app will never receive:');
+    expect(response.body).toContain('Your Microsoft or Minecraft password');
     expect(response.body).toContain('action="/interaction/interaction-id/abort"');
     expect(response.body).toContain('href="/interaction/interaction-id/microsoft/start"');
     expect(response.body).toContain('>Sign in with Microsoft</a>');
@@ -452,20 +536,10 @@ describe('CraftLogin API server', (): void => {
 
   it('redirects expired Microsoft callbacks back to the friendly interaction page', async (): Promise<void> => {
     const interactions = new InteractionStub();
-    // server.ts binds prepareMicrosoft at registration, so the expiry must be
-    // armed before buildServer: the start call succeeds, the callback fails.
-    const workingPrepare = interactions.prepareMicrosoft.bind(interactions);
-    let prepareCalls = 0;
-    interactions.prepareMicrosoft = (
-      request: IncomingMessage,
-      response: ServerResponse,
-      expectedInteractionId?: string,
-    ): Promise<{ readonly interactionId: string }> => {
-      prepareCalls += 1;
-      return prepareCalls === 1
-        ? workingPrepare(request, response, expectedInteractionId)
-        : Promise.reject(new OAuthInteractionStateError('The interaction is gone'));
-    };
+    // The callback guard is cookie-less, so expiry is armed on the callback
+    // method directly: the start call succeeds, the callback fails.
+    interactions.prepareMicrosoftCallback = (): Promise<never> =>
+      Promise.reject(new OAuthInteractionStateError('The interaction is gone'));
     const server = await buildServer(
       'test',
       interactions,
@@ -828,7 +902,7 @@ describe('CraftLogin API server', (): void => {
     const publicAvatarCors = await server.inject({
       headers: { origin: 'https://attacker.example' },
       method: 'GET',
-      url: `/api/avatars/${avatarUuid}/head`,
+      url: `/api/avatars/${avatarUuid}/face`,
     });
     expect(publicAvatarCors.statusCode).toBe(200);
     expect(publicAvatarCors.headers['access-control-allow-origin']).toBe('*');
@@ -841,7 +915,7 @@ describe('CraftLogin API server', (): void => {
         origin: 'https://attacker.example',
       },
       method: 'OPTIONS',
-      url: `/api/avatars/${avatarUuid}/head`,
+      url: `/api/avatars/${avatarUuid}/face`,
     });
     expect(publicAvatarPreflight.statusCode).toBe(204);
     expect(publicAvatarPreflight.headers['access-control-allow-origin']).toBe('*');
@@ -873,6 +947,19 @@ describe('CraftLogin API server', (): void => {
     expect(unavailable.statusCode).toBe(500);
     expect(errorResponseSchema.parse(unavailable.json()).error.code).toBe('internal_error');
     expect(unavailable.headers['cache-control']).toBe('no-store');
+  });
+
+  it('fails the health probe when a dependency check stalls', async (): Promise<void> => {
+    const stalledServer = await buildServer(
+      'test',
+      new InteractionStub(),
+      [],
+      undefined,
+      (): Promise<void> => new Promise<void>((): void => undefined),
+    );
+    const stalled = await stalledServer.inject({ method: 'GET', url: '/health' });
+    expect(stalled.statusCode).toBe(500);
+    expect(errorResponseSchema.parse(stalled.json()).error.code).toBe('internal_error');
   });
 
   it('serves the Microsoft identity association document at the well-known URL', async (): Promise<void> => {
@@ -949,17 +1036,21 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).toHaveProperty('/api/users/{identifier}');
     expect(parsed.paths).toHaveProperty('/oauth2/token');
     expect(parsed.paths).toHaveProperty('/oauth2/logout');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/skin');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/processed-skin');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/cape');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/elytra');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/face');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/head');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/bust');
-    expect(parsed.paths).toHaveProperty('/api/avatars/{uuid}/body');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/skin');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/processed-skin');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/cape');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/elytra');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/face');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/face');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/bust');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/body');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/back');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/side');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/duo');
+    expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/wings');
     expect(parsed.paths).not.toHaveProperty('/api/apps');
     expect(parsed.paths).not.toHaveProperty('/interaction/{uid}');
-    expect(parsed.paths).not.toHaveProperty('/avatar/{uuid}');
+    expect(parsed.paths).not.toHaveProperty('/avatar/{identifier}');
     expect(parsed.paths).not.toHaveProperty('/skin/{hash}');
 
     const documentation = await development.inject({ method: 'GET', url: '/docs/' });
@@ -1055,18 +1146,26 @@ describe('CraftLogin API server', (): void => {
     expectRateLimited(limitedToken);
     expect(oidcCalls).toBe(tokenRateLimit.max);
 
+    for (let index = 0; index < authorizeRateLimit.max; index += 1) {
+      const response = await server.inject({ method: 'GET', url: '/oauth2/authorize' });
+      expect(response.statusCode).toBe(200);
+    }
+    const limitedAuthorize = await server.inject({ method: 'GET', url: '/oauth2/authorize' });
+    expectRateLimited(limitedAuthorize);
+    expect(oidcCalls).toBe(tokenRateLimit.max + authorizeRateLimit.max);
+
     for (let index = 0; index < avatarRenderRateLimit.max; index += 1) {
       const response = await server.inject({
         headers: { origin: 'https://attacker.example' },
         method: 'GET',
-        url: `/api/avatars/${avatarUuid}/head`,
+        url: `/api/avatars/${avatarUuid}/face`,
       });
       expect(response.statusCode).toBe(200);
     }
     const limitedRender = await server.inject({
       headers: { origin: 'https://attacker.example' },
       method: 'GET',
-      url: `/api/avatars/${avatarUuid}/head`,
+      url: `/api/avatars/${avatarUuid}/face`,
     });
     expectRateLimited(limitedRender);
     expect(limitedRender.headers['access-control-allow-origin']).toBe('*');
@@ -1191,6 +1290,8 @@ describe('CraftLogin API server', (): void => {
       httpPort: 3000,
       minecraft: {
         avatars: {
+          findAvailableCapes: (): Promise<never> =>
+            Promise.reject(new Error('Unexpected capes overview lookup')),
           findCape: (): Promise<never> => Promise.reject(new Error('Unexpected cape lookup')),
           findProcessedSkin: (): Promise<never> =>
             Promise.reject(new Error('Unexpected processed skin lookup')),

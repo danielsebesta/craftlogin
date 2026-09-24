@@ -136,19 +136,26 @@ export class RedisSkinVerificationStore {
     const interactionId = interactionIdSchema.parse(interactionIdInput);
     const challenge = parseChallengeInput(challengeInput);
     const interactionKey = this.interactionKey(interactionId);
-    await this.redis.eval(
-      CREATE_SCRIPT,
-      1,
-      interactionKey,
-      challenge.userUuid,
-      challenge.username,
-      challenge.markerHash,
-      challenge.body.toString('base64'),
-      challenge.originalBody?.toString('base64') ?? '',
-      challenge.height,
-      challenge.model,
-      CHALLENGE_TTL_MS,
+    const created = scriptBooleanSchema.parse(
+      await this.redis.eval(
+        CREATE_SCRIPT,
+        1,
+        interactionKey,
+        challenge.userUuid,
+        challenge.username,
+        challenge.markerHash,
+        challenge.body.toString('base64'),
+        challenge.originalBody?.toString('base64') ?? '',
+        challenge.height,
+        challenge.model,
+        CHALLENGE_TTL_MS,
+      ),
     );
+    if (created === 1) {
+      return { ...challenge, status: 'pending' };
+    }
+    // A concurrent start already stored a challenge for this interaction; the
+    // stored row is authoritative, so return the winner instead of the loser.
     const stored = await this.get(interactionId);
     if (stored === undefined) {
       throw new SkinVerificationStateError('The skin verification challenge could not be stored');

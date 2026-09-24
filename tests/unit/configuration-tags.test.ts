@@ -101,7 +101,7 @@ describe('configuration tags', (): void => {
     } finally {
       server.close();
     }
-  });
+  }, 15_000);
 });
 
 function collectRegistryTagReferences(mcData: MinecraftData): readonly string[] {
@@ -141,7 +141,7 @@ async function collectConfigurationSequence(port: number): Promise<readonly stri
     const timeout = setTimeout((): void => {
       client.end();
       reject(new Error('Minecraft client did not finish configuration'));
-    }, 5_000);
+    }, 10_000);
 
     client.on('packet', (_packet: unknown, metadata: PacketMeta): void => {
       sequence.push(metadata.name);

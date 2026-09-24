@@ -2,10 +2,8 @@ import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
 import { renderPageDocument } from './ui/document.js';
 import { renderIcon } from './ui/icons.js';
-import { selectDemoPlayer, formatShowcaseCaption, type DemoPlayer } from './demo-players.js';
+import { DEMO_PLAYER, formatShowcaseCaption, type DemoPlayer } from './demo-players.js';
 import { siteFooter, siteHeader } from './ui/site-chrome.js';
-
-const SHOWCASE_SOURCE_URL = 'https://paperboat.yt/';
 
 export interface DocsPageInput {
   readonly demoPlayer?: DemoPlayer;
@@ -55,7 +53,7 @@ ${endpoints
 
 export function renderDocsPage(input: DocsPageInput = {}): string {
   const strings = english.docs;
-  const demoPlayer = input.demoPlayer ?? selectDemoPlayer();
+  const demoPlayer = input.demoPlayer ?? DEMO_PLAYER;
 
   return renderPageDocument({
     content: `      <aside class="docs-rail" aria-labelledby="docs-navigation-heading">
@@ -189,7 +187,7 @@ ${strings.avatars.parameters
   )
   .join('\n')}
               </dl>
-              <p class="avatar-credit">${escapeHtml(formatShowcaseCaption(strings.avatars.showcaseCaption, demoPlayer))} <a href="${SHOWCASE_SOURCE_URL}">${escapeHtml(strings.avatars.showcaseSourceLabel)}</a></p>
+              <p class="avatar-credit">${escapeHtml(formatShowcaseCaption(strings.avatars.showcaseCaption, demoPlayer))}</p>
             </div>
           </div>
         </section>

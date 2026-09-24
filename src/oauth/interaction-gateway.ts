@@ -49,6 +49,7 @@ export interface OAuthInteractionGateway {
   abort(request: IncomingMessage, response: ServerResponse): Promise<string>;
   switchAccount?(request: IncomingMessage, response: ServerResponse): Promise<string>;
   inspect(request: IncomingMessage, response: ServerResponse): Promise<OAuthInteractionContext>;
+  findInteraction(interactionId: string): Promise<OAuthInteractionContext>;
   persistConsent?(
     request: IncomingMessage,
     response: ServerResponse,
@@ -117,19 +118,18 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
     request: IncomingMessage,
     response: ServerResponse,
   ): Promise<OAuthInteractionContext> {
-    const interaction = await this.details(request, response);
-    return interactionContextSchema.parse({
-      clientId: interaction.params['client_id'],
-      interactionId: interaction.uid,
-      promptName: interaction.prompt.name,
-      scope: interaction.params['scope'],
-      promptDetails: interaction.prompt.details,
-      acrValues: interaction.params['acr_values'],
-      ...(interaction.session === undefined
-        ? {}
-        : { sessionAccountId: interaction.session.accountId }),
-      ...(interaction.grantId === undefined ? {} : { grantId: interaction.grantId }),
-    });
+    return toInteractionContext(await this.details(request, response));
+  }
+
+  public async findInteraction(interactionId: string): Promise<OAuthInteractionContext> {
+    // Cookie-less lookup for fixed callback paths outside the oidc-provider
+    // interaction cookie scope. The caller binds the id through its own
+    // unforgeable channel (here: the signed Microsoft transaction cookie).
+    const interaction = await this.provider.Interaction.find(interactionId);
+    if (interaction === undefined) {
+      throw new OAuthInteractionStateError('The OIDC interaction is no longer available');
+    }
+    return toInteractionContext(interaction);
   }
 
   public async persistConsent(
@@ -279,6 +279,21 @@ function authenticationContextForMethod(method: VerificationMethod): string {
     case 'microsoft_oauth':
       return MICROSOFT_OAUTH_ACR;
   }
+}
+
+function toInteractionContext(interaction: InteractionDetails): OAuthInteractionContext {
+  return interactionContextSchema.parse({
+    clientId: interaction.params['client_id'],
+    interactionId: interaction.uid,
+    promptName: interaction.prompt.name,
+    scope: interaction.params['scope'],
+    promptDetails: interaction.prompt.details,
+    acrValues: interaction.params['acr_values'],
+    ...(interaction.session === undefined
+      ? {}
+      : { sessionAccountId: interaction.session.accountId }),
+    ...(interaction.grantId === undefined ? {} : { grantId: interaction.grantId }),
+  });
 }
 
 export class OAuthInteractionStateError extends Error {

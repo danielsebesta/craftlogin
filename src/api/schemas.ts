@@ -20,6 +20,7 @@ export const ERROR_RESPONSE_SCHEMA_ID = 'craftlogin.error-response';
 export const USER_RESPONSE_SCHEMA_ID = 'craftlogin.user-response';
 export const APP_RESPONSE_SCHEMA_ID = 'craftlogin.app-response';
 export const MANAGED_APP_RESPONSE_SCHEMA_ID = 'craftlogin.managed-app-response';
+export const CAPES_RESPONSE_SCHEMA_ID = 'craftlogin.capes-response';
 
 const errorResponseSchema = {
   $id: ERROR_RESPONSE_SCHEMA_ID,
@@ -138,14 +139,15 @@ const minecraftUuidProperty = {
   pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   type: 'string',
 };
-const avatarUuidProperty = {
-  pattern: '^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32})$',
+const avatarIdentifierProperty = {
+  pattern:
+    '^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$',
   type: 'string',
 };
 const avatarParamsSchema = {
   additionalProperties: false,
-  properties: { uuid: avatarUuidProperty },
-  required: ['uuid'],
+  properties: { identifier: avatarIdentifierProperty },
+  required: ['identifier'],
   type: 'object',
 };
 const playerIdentifierParamsSchema = {
@@ -164,6 +166,17 @@ const avatarRenderQuerySchema = {
   additionalProperties: false,
   properties: {
     layers: { default: 'all', enum: ['base', 'all'], type: 'string' },
+    model: {
+      description:
+        'Arm model for texture-hash subjects (player subjects always use their signed profile model).',
+      enum: ['classic', 'slim'],
+      type: 'string',
+    },
+    provider: {
+      description: 'Cape provider for cape-bearing views (back, duo, wings); defaults to any.',
+      enum: ['5zig', 'any', 'labymod', 'minecraftcapes', 'mojang', 'optifine', 'skinmc'],
+      type: 'string',
+    },
     size: { default: '128', enum: ['32', '64', '128', '256'], type: 'string' },
   },
   type: 'object',
@@ -257,11 +270,46 @@ const oauthTokenResponseSchema = {
   type: 'object',
 };
 
+const capeProviderStatusSchema = {
+  additionalProperties: false,
+  properties: {
+    available: { type: 'boolean' },
+    url: { type: 'string' },
+  },
+  required: ['available'],
+  type: 'object',
+};
+
+const capesResponseSchema = {
+  $id: CAPES_RESPONSE_SCHEMA_ID,
+  additionalProperties: false,
+  properties: {
+    capes: {
+      additionalProperties: false,
+      properties: {
+        '5zig': capeProviderStatusSchema,
+        labymod: capeProviderStatusSchema,
+        minecraftcapes: capeProviderStatusSchema,
+        mojang: capeProviderStatusSchema,
+        optifine: capeProviderStatusSchema,
+        skinmc: capeProviderStatusSchema,
+      },
+      required: ['5zig', 'labymod', 'minecraftcapes', 'mojang', 'optifine', 'skinmc'],
+      type: 'object',
+    },
+    username: { maxLength: 16, minLength: 1, type: 'string' },
+    uuid: { format: 'uuid', type: 'string' },
+  },
+  required: ['capes', 'username', 'uuid'],
+  type: 'object',
+};
+
 export function registerSharedSchemas(server: FastifyInstance): void {
   server.addSchema(errorResponseSchema);
   server.addSchema(userResponseSchema);
   server.addSchema(appResponseSchema);
   server.addSchema(managedAppResponseSchema);
+  server.addSchema(capesResponseSchema);
 }
 
 export const interactionPageRouteSchema: FastifySchema = {
@@ -877,6 +925,15 @@ export const backgroundAssetRouteSchema: FastifySchema = {
   },
 };
 
+export const brandAssetRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
 export const avatarRouteSchema: FastifySchema = {
   hide: true,
   params: avatarParamsSchema,
@@ -940,6 +997,57 @@ export const rawAvatarRouteSchema: FastifySchema = {
   tags: ['Avatars'],
 };
 
+const capeQuerySchema = {
+  additionalProperties: false,
+  properties: {
+    provider: {
+      description:
+        'Cape provider to query (mojang, optifine, labymod, minecraftcapes, 5zig, skinmc, or any).',
+      enum: ['5zig', 'any', 'labymod', 'minecraftcapes', 'mojang', 'optifine', 'skinmc'],
+      type: 'string',
+    },
+  },
+  type: 'object',
+};
+
+export function capeAvatarRouteSchema(operation: 'avatarCape' | 'avatarElytra'): FastifySchema {
+  return {
+    description: operations[operation].description,
+    params: avatarParamsSchema,
+    querystring: capeQuerySchema,
+    response: {
+      200: pngResponseSchema,
+      304: { type: 'null' },
+      400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+      default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    },
+    summary: operations[operation].summary,
+    tags: ['Avatars'],
+  };
+}
+
+export const capesOverviewRouteSchema: FastifySchema = {
+  description: operations.avatarCapes.description,
+  params: avatarParamsSchema,
+  querystring: emptyQuerySchema,
+  response: {
+    200: { $ref: `${CAPES_RESPONSE_SCHEMA_ID}#` },
+    304: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    503: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.avatarCapes.summary,
+  tags: ['Avatars'],
+};
+
 export function textureAvatarRouteSchema(
   operation: 'avatarCape' | 'avatarElytra' | 'avatarProcessedSkin' | 'avatarSkin',
 ): FastifySchema {
@@ -963,7 +1071,14 @@ export function textureAvatarRouteSchema(
 }
 
 export function renderedAvatarRouteSchema(
-  operation: 'avatarBody' | 'avatarBust' | 'avatarFace' | 'avatarHead',
+  operation:
+    | 'avatarBack'
+    | 'avatarBody'
+    | 'avatarBust'
+    | 'avatarDuo'
+    | 'avatarFace'
+    | 'avatarSide'
+    | 'avatarWings',
 ): FastifySchema {
   return {
     description: operations[operation].description,

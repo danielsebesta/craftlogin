@@ -10,14 +10,18 @@ const PUBLIC_PATHS = new Set([
   '/.well-known/oauth-authorization-server',
   '/.well-known/openid-configuration',
   '/.well-known/webfinger',
-  '/api/avatars/{uuid}/body',
-  '/api/avatars/{uuid}/bust',
-  '/api/avatars/{uuid}/cape',
-  '/api/avatars/{uuid}/elytra',
-  '/api/avatars/{uuid}/face',
-  '/api/avatars/{uuid}/head',
-  '/api/avatars/{uuid}/processed-skin',
-  '/api/avatars/{uuid}/skin',
+  '/api/avatars/{identifier}/back',
+  '/api/avatars/{identifier}/body',
+  '/api/avatars/{identifier}/bust',
+  '/api/avatars/{identifier}/cape',
+  '/api/avatars/{identifier}/capes',
+  '/api/avatars/{identifier}/duo',
+  '/api/avatars/{identifier}/elytra',
+  '/api/avatars/{identifier}/face',
+  '/api/avatars/{identifier}/side',
+  '/api/avatars/{identifier}/wings',
+  '/api/avatars/{identifier}/processed-skin',
+  '/api/avatars/{identifier}/skin',
   '/api/users/@me',
   '/api/users/{identifier}',
   '/oauth2/authorize',
@@ -29,7 +33,11 @@ const PUBLIC_PATHS = new Set([
   '/oauth2/userinfo',
 ]);
 
-const PUBLIC_SCHEMAS = new Set(['craftlogin.error-response', 'craftlogin.user-response']);
+const PUBLIC_SCHEMAS = new Set([
+  'craftlogin.error-response',
+  'craftlogin.user-response',
+  'craftlogin.capes-response',
+]);
 const PUBLIC_TAGS = new Set(['Avatars', 'Identity', 'OAuth']);
 
 function publicOpenApiPath(url: string): string {

@@ -31,13 +31,27 @@ const KNOWN_SCOPE_DESCRIPTIONS: Readonly<Record<string, string>> = {
 };
 
 export function permissionsForScope(scope: string): readonly ConsentPermission[] {
-  const seen = new Set<string>();
+  const tokens = scope.split(/\s+/u).filter((token): boolean => token.length > 0);
+  const tokenSet = new Set(tokens);
+  const hasOpenId = tokenSet.has('openid');
+  const hasProfile = tokenSet.has('profile');
+
   const permissions: ConsentPermission[] = [];
-  for (const name of scope.split(/\s+/u)) {
-    if (name.length === 0 || seen.has(name)) {
+  const processed = new Set<string>();
+
+  for (const name of tokens) {
+    if (processed.has(name)) {
       continue;
     }
-    seen.add(name);
+    if ((name === 'openid' || name === 'profile') && hasOpenId && hasProfile) {
+      if (!processed.has('openid') && !processed.has('profile')) {
+        permissions.push({ kind: 'text', text: english.interaction.scopeIdentityCombined });
+      }
+      processed.add('openid');
+      processed.add('profile');
+      continue;
+    }
+    processed.add(name);
     const description = KNOWN_SCOPE_DESCRIPTIONS[name];
     permissions.push(
       description === undefined
@@ -109,8 +123,9 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     continueLabel: strings.continueButton,
     copiedLabel: strings.copied,
     copyLabel: strings.copyAddress,
+    disallowed: strings.disallowed,
+    disallowedHeading: strings.disallowedHeading,
     documentTitle: `${input.appName} · ${strings.title}`,
-    footer: strings.footer,
     heading: strings.heading,
     lead: isConsent ? strings.consentLead : strings.lead,
     messages:
@@ -134,7 +149,6 @@ export function renderInteractionPage(input: InteractionPageInput): string {
           },
         }),
     permissions: permissionsForScope(input.scope),
-    securityNote: strings.securityNote,
     ...(isConsent
       ? { switchAccount: { action: `${interactionPath}/switch`, label: strings.changeAccount } }
       : {}),

@@ -33,33 +33,13 @@ const landingPageStyles = `
   border-color: var(--accent);
 }
 
-.landing-hero {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s4);
-  max-width: 56rem;
-  margin-inline: auto;
-  padding-block: var(--s8) var(--s7);
-  text-align: center;
-}
-
-/* Landing drops the app-shell chrome (the repeating cube texture and the
-   single-color center rail with its side borders) for a clean edge-free page
-   floating over the grid glow. */
-@media (min-width: 74.01rem) {
-  body::before,
-  body::after {
-    display: none;
-  }
-}
-
-/* Grid glow only across the top of the landing page: an absolutely positioned
-   layer the exact height of the asset scrolls away with the content, its lower
-   edge melting into the plain single-color page background below. */
+/* Grid glow bands at the top and bottom of the landing page: absolutely
+   positioned layers the exact height of the asset scroll away with the
+   content, their inner edges melting into the plain page background so the
+   middle of the page stays clear. */
 main.container {
   position: relative;
+  isolation: isolate;
 }
 
 /* Full-bleed guard: the glow below escapes the centered content column to
@@ -68,9 +48,9 @@ body {
   overflow-x: clip;
 }
 
-main.container::before {
+main.container::before,
+main.container::after {
   position: absolute;
-  top: 0;
   left: calc(50% - 50vw);
   right: calc(50% - 50vw);
   z-index: -1;
@@ -80,45 +60,66 @@ main.container::before {
   background-repeat: no-repeat;
   background-position: top center;
   background-size: cover;
-  opacity: 0.15;
+  opacity: 0.1;
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
     black 18%,
-    black 45%,
+    black 50%,
     transparent 100%
   );
-  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 50%, transparent 100%);
   pointer-events: none;
+}
+
+main.container::before {
+  top: 0;
+}
+
+/* The footer band mirrors the hero band: its dense edge sits at the bottom
+   of the page and the middle of the page stays clear between them. */
+main.container::after {
+  bottom: 0;
+  transform: scaleY(-1);
 }
 
 /* Narrow viewports would compute only a short strip from the asset ratio, so
    the glow gets a taller minimum there and cover crops the sides instead of
    leaving a seam. */
 @media (max-width: 34rem) {
-  main.container::before {
+  main.container::before,
+  main.container::after {
     height: 24rem;
   }
 }
 
 @media (forced-colors: active) {
-  main.container::before {
+  main.container::before,
+  main.container::after {
     display: none;
   }
 }
 
-.landing-hero h1 {
-  max-width: 20ch;
+.landing-hero {
+  display: grid;
+  gap: var(--s4);
+  justify-items: center;
+  max-width: 56rem;
   margin-inline: auto;
+  padding-block: var(--s8) var(--s7);
+  text-align: center;
+}
+
+.landing-hero h1 {
+  max-width: 24ch;
   font-size: var(--t-3xl);
 }
 
 .landing-lead {
-  max-width: 44rem;
-  margin-inline: auto;
+  max-width: 42rem;
   color: var(--muted);
   font-size: var(--t-lg);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .landing-actions {
@@ -126,128 +127,221 @@ main.container::before {
   margin-top: var(--s2);
 }
 
-.landing-request {
-  width: 100%;
-  max-width: 44rem;
-  margin-inline: auto;
-  margin-top: var(--s5);
-  text-align: left;
-}
-
-.landing-request figcaption {
-  margin-bottom: var(--s2);
-  color: var(--muted);
-  font-size: var(--t-xs);
-  font-weight: 700;
-}
-
-.landing-request .code-block {
-  margin: 0;
-}
-
 .landing-section {
-  max-width: 56rem;
+  max-width: 60rem;
   margin-inline: auto;
   padding-block: var(--s7);
 }
 
-.landing-section > h2,
-.landing-section > .section-intro {
-  text-align: center;
+.landing-section + .landing-section {
+  border-top: 1px solid var(--line);
 }
 
 .landing-section > h2 {
   justify-content: center;
   margin-bottom: var(--s4);
-}
-
-.landing-section > h3 {
-  margin-block: var(--s6) var(--s3);
+  text-align: center;
 }
 
 .section-intro {
-  max-width: 46rem;
+  max-width: 44rem;
   margin-inline: auto;
   margin-bottom: var(--s5);
   color: var(--muted);
+  text-align: center;
   text-wrap: pretty;
 }
 
-.landing-steps,
-.use-list {
+/* One card treatment for every grouped item on the page: steps, use cases,
+   and get-started actions all share it so the sections read as one system. */
+.card-grid {
   display: grid;
-  gap: var(--s5);
+  gap: var(--s4);
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-.landing-steps li,
-.use-list li {
-  display: grid;
-  gap: var(--s1);
-  align-content: start;
+.landing-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 
-.step-index {
+.landing-card > .list-icon {
+  margin-bottom: var(--s1);
   color: var(--accent);
-  font-family: var(--font-mono);
-  font-size: var(--t-sm);
 }
 
-.landing-steps h3,
-.use-list h3 {
+.landing-card h3 {
   margin: 0;
 }
 
-.landing-steps .list-icon,
-.use-list .list-icon {
-  color: var(--accent);
-}
-
-.landing-steps p,
-.use-list p {
+.landing-card p {
   color: var(--muted);
 }
 
-.landing-example {
-  margin-top: var(--s6);
+/* The claims section presents "what your app receives" as one artifact: an
+   identity panel whose header shows a real verified player and whose divided
+   lower half explains each field. */
+.player-card {
+  max-width: 44rem;
+  padding: var(--s5);
+  margin-inline: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 
-.landing-section .code-block {
-  margin-top: var(--s4);
+.player-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: center;
+}
+
+.player-card img {
+  flex: none;
+  width: 7rem;
+  height: 7rem;
+  image-rendering: pixelated;
+}
+
+.player-card-identity {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.player-name {
+  font-size: var(--t-xl);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.player-uuid {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  overflow-wrap: anywhere;
+}
+
+.player-verified {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  margin-top: var(--s2);
+  font-size: var(--t-sm);
+}
+
+.player-verified .list-icon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--accent);
+}
+
+.claim-list {
+  display: grid;
+  gap: var(--s4);
+  padding-top: var(--s5);
+  margin: var(--s5) 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.claim-row {
+  display: grid;
+  gap: var(--s1);
+}
+
+.claim-row dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.chips-label {
+  margin-block: var(--s6) var(--s3);
+  color: var(--muted);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
+.scope-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.scope-chips li {
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: baseline;
+  padding: var(--s2) var(--s4);
+  font-size: var(--t-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+/* The lookup form sits centered above the showcase; its label stays small and
+   muted so the row of input + submit reads as one compact control. */
+.avatar-lookup {
+  display: grid;
+  gap: var(--s2);
+  max-width: 26rem;
+  margin: 0 auto var(--s5);
+}
+
+.avatar-lookup > .field-label {
+  text-align: center;
+}
+
+.avatar-lookup-row {
+  display: flex;
+  gap: var(--s2);
+}
+
+.avatar-lookup-row input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.avatar-lookup-row .button {
+  flex: none;
 }
 
 .avatar-showcase {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
-  gap: var(--s5);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: var(--s4);
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
 .avatar-card {
-  display: grid;
-  gap: var(--s2);
-  justify-items: center;
+  align-items: center;
   padding: var(--s4);
   text-align: center;
-  background: var(--surface-raised);
 }
 
-.avatar-card h3 {
-  margin: 0;
-}
-
-/* Every view is a flat 2D render, so nearest-neighbor scaling keeps texels crisp. */
+/* Every view samples nearest texels, so pixelated scaling stays crisp even on
+   the angled head projection. */
 .avatar-card img {
-  width: 8rem;
-  height: 8rem;
+  width: 100%;
+  max-width: 7rem;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 
 .avatar-card code {
+  color: var(--muted);
   font-size: var(--t-xs);
   overflow-wrap: anywhere;
 }
@@ -259,55 +353,83 @@ main.container::before {
   text-align: center;
 }
 
-.endpoint-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  gap: 0 var(--s6);
-  padding: 0;
-  margin: 0;
+/* Get-started cards pin their action to the bottom so the row stays level. */
+.start-card > :last-child {
+  margin-top: auto;
+}
+
+.start-card .button {
+  align-self: flex-start;
+}
+
+.prompt-details summary {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  min-height: 2rem;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  cursor: pointer;
   list-style: none;
 }
 
-.endpoint-list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s4);
-  align-items: baseline;
-  justify-content: space-between;
-  padding-block: var(--s3);
+.prompt-details summary::-webkit-details-marker {
+  display: none;
 }
 
-.endpoint-list code {
+.prompt-details summary::before {
+  color: var(--muted);
+  content: "+";
+  font-family: var(--font-mono);
+}
+
+.prompt-details[open] summary::before {
+  content: "\\2212";
+}
+
+.prompt-details summary:hover {
   color: var(--text);
 }
 
-.endpoint-list .muted {
-  font-size: var(--t-sm);
-  text-align: right;
-}
-
-.landing-ai-prompt {
-  max-height: 32rem;
-  margin-top: var(--s4);
+.prompt-details .code-block {
+  max-height: 18rem;
+  margin-top: var(--s3);
   overflow: auto;
+  font-size: var(--t-xs);
   white-space: pre-wrap;
 }
 
-@media (min-width: 48rem) {
-  .landing-steps,
-  .use-list {
+@media (min-width: 40rem) {
+  .claim-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--s6);
+  }
+}
+
+@media (min-width: 48rem) {
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s5);
   }
 }
 
 @media (max-width: 40rem) {
-  .endpoint-list li {
-    justify-content: flex-start;
+  .landing-hero {
+    padding-block: var(--s6);
   }
 
-  .endpoint-list .muted {
-    text-align: left;
+  .landing-section {
+    padding-block: var(--s6);
+  }
+}
+
+@media (max-width: 30rem) {
+  .player-card-head {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .player-verified {
+    justify-content: center;
   }
 }
 `;

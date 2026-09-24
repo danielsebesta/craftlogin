@@ -1,13 +1,35 @@
-import { randomBytes } from 'node:crypto';
-
-import type { PrismaClient } from '../generated/prisma/client.js';
-
 export const CONSOLE_CLIENT_NAME = 'Developer Console';
 export const CONSOLE_CALLBACK_PATH = '/developers/callback';
+// A fixed public id turns seeding into an atomic upsert on the unique clientId:
+// concurrent instances converge on one row, and a user-registered application
+// can never be adopted as the console just by reusing the name.
+export const CONSOLE_CLIENT_ID = 'cl_developer_console';
 
 export interface ConsoleOAuthClient {
   readonly clientId: string;
   readonly redirectUri: string;
+}
+
+export interface ConsoleClientStore {
+  readonly app: {
+    upsert(options: {
+      create: {
+        clientId: string;
+        clientSecretHash: null;
+        name: string;
+        ownerUuid: null;
+        redirectUris: string[];
+        verifiedAt: Date;
+      };
+      select: { clientId: true; id: true };
+      update: { name: string; redirectUris: string[] };
+      where: { clientId: string };
+    }): Promise<{ clientId: string; id: string }>;
+    updateMany(options: {
+      data: { verifiedAt: Date };
+      where: { id: string; verifiedAt: null };
+    }): Promise<{ count: number }>;
+  };
 }
 
 export function consoleCallbackUrl(issuer: string): string {
@@ -20,41 +42,28 @@ export function consoleCallbackUrl(issuer: string): string {
 // registration. Seeding only repairs the callback URL and the first-party
 // verification label, and never touches ownership, which stays operator-assigned.
 export async function ensureConsoleClient(
-  database: PrismaClient,
+  database: ConsoleClientStore,
   issuer: string,
 ): Promise<ConsoleOAuthClient> {
   const redirectUri = consoleCallbackUrl(issuer);
-  const existing = await database.app.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { clientId: true, id: true, redirectUris: true },
-    where: { name: CONSOLE_CLIENT_NAME },
-  });
-  if (existing !== null) {
-    if (existing.redirectUris.length !== 1 || existing.redirectUris[0] !== redirectUri) {
-      await database.app.update({
-        data: { redirectUris: [redirectUri] },
-        where: { id: existing.id },
-      });
-    }
-    // The console is first-party, so it carries the verified label by definition.
-    // The condition keeps the write from rewriting an unchanged timestamp.
-    await database.app.updateMany({
-      data: { verifiedAt: new Date() },
-      where: { id: existing.id, verifiedAt: null },
-    });
-    return { clientId: existing.clientId, redirectUri };
-  }
-
-  const created = await database.app.create({
-    data: {
-      clientId: `cl_${randomBytes(24).toString('base64url')}`,
+  const app = await database.app.upsert({
+    create: {
+      clientId: CONSOLE_CLIENT_ID,
       clientSecretHash: null,
       name: CONSOLE_CLIENT_NAME,
       ownerUuid: null,
       redirectUris: [redirectUri],
       verifiedAt: new Date(),
     },
-    select: { clientId: true },
+    select: { clientId: true, id: true },
+    update: { name: CONSOLE_CLIENT_NAME, redirectUris: [redirectUri] },
+    where: { clientId: CONSOLE_CLIENT_ID },
   });
-  return { clientId: created.clientId, redirectUri };
+  // The console is first-party, so it carries the verified label by definition.
+  // The condition keeps the write from rewriting an unchanged timestamp.
+  await database.app.updateMany({
+    data: { verifiedAt: new Date() },
+    where: { id: app.id, verifiedAt: null },
+  });
+  return { clientId: app.clientId, redirectUri };
 }

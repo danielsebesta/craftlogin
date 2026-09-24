@@ -50,6 +50,7 @@ export interface MicrosoftOAuthInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<{ readonly interactionId: string }>;
+  prepareMicrosoftCallback(interactionId: string): Promise<{ readonly interactionId: string }>;
 }
 
 export interface MicrosoftOAuthRoutesOptions {
@@ -137,11 +138,11 @@ export function registerMicrosoftOAuthRoutes(
       }
       clearTransactionCookie(reply, transaction.cookieName);
       try {
-        await options.interactions.prepareMicrosoft(
-          request.raw,
-          reply.raw,
-          transaction.interactionId,
-        );
+        // Cookie-less guard: the fixed callback path sits outside the
+        // oidc-provider interaction cookie scope (Path=/interaction/<uid>),
+        // so request cookies cannot identify the interaction here. The
+        // signed transaction cookie binds the interaction instead.
+        await options.interactions.prepareMicrosoftCallback(transaction.interactionId);
       } catch (error: unknown) {
         // The interaction may have expired while the user was at Microsoft.
         // Like every other browser navigation here, that becomes a redirect

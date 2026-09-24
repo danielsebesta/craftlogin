@@ -24,18 +24,19 @@ export interface DocumentHeader {
 export interface PageDocument {
   readonly content: string;
   readonly description?: string;
-  readonly footer: readonly string[];
+  readonly footer?: readonly string[];
   readonly headExtra?: string;
   readonly header: DocumentHeader;
   readonly layout?: 'narrow' | 'wide';
   readonly mainAttributes?: string;
   readonly mainClass: string;
-  readonly script?: string;
+  readonly script?: string | readonly string[];
   readonly stylesheet: string;
   readonly title: string;
 }
 
-const brandMark = '<img class="brand-mark" src="/favicon.svg" alt="" width="20" height="20">';
+const brandWordmark =
+  '<picture class="brand-wordmark"><source srcset="/assets/brand-wordmark.webp 210w, /assets/brand-wordmark-2x.webp 420w, /assets/craftlogin-title.webp 640w, /assets/craftlogin-title-2x.webp 1280w, /assets/craftlogin-title-master.webp 2048w" sizes="(max-width: 48rem) 85vw, 420px" type="image/webp"><source srcset="/assets/brand-wordmark.png 210w, /assets/brand-wordmark-2x.png 420w, /assets/craftlogin-title.png 640w, /assets/craftlogin-title-2x.png 1280w, /assets/craftlogin-title-master.png 2048w" sizes="(max-width: 48rem) 85vw, 420px" type="image/png"><img class="brand-wordmark-image" src="/assets/craftlogin-title.png" alt="CraftLogin" width="640" height="97" decoding="async"></picture>';
 
 export function renderPageDocument(page: PageDocument): string {
   const description =
@@ -45,9 +46,14 @@ export function renderPageDocument(page: PageDocument): string {
   const script =
     page.script === undefined
       ? ''
-      : `\n    <script src="${escapeHtml(page.script)}" defer></script>`;
+      : (typeof page.script === 'string' ? [page.script] : page.script)
+          .map((src): string => `\n    <script src="${escapeHtml(src)}" defer></script>`)
+          .join('');
   const headExtra = page.headExtra === undefined ? '' : `\n    ${page.headExtra}`;
-  const brandText = `${brandMark}${escapeHtml(page.header.brand)}`;
+  const brandText =
+    page.header.brand === 'CraftLogin'
+      ? `<span class="visually-hidden">${escapeHtml(page.header.brand)}</span>${brandWordmark}`
+      : escapeHtml(page.header.brand);
   const brand =
     page.header.brandHref === undefined
       ? `<span class="brand">${brandText}</span>`
@@ -65,9 +71,15 @@ ${page.header.navigation.items
   .join('\n')}
 ${page.header.navigation.trailing ?? ''}
       </nav>`;
-  const footer = [...page.footer, english.common.legalDisclaimer, english.common.operator]
-    .map((line): string => `<p>${escapeHtml(line)}</p>`)
-    .join('\n        ');
+  const pageFooter = page.footer ?? [];
+  const legalDisclaimer = english.common.legalDisclaimer.map(escapeHtml).join('<br>');
+  const footer = [
+    ...pageFooter
+      .filter((line): boolean => line.trim().length > 0)
+      .map((line): string => `<p class="footer-note">${escapeHtml(line)}</p>`),
+    `<p class="footer-legal">${legalDisclaimer}</p>`,
+    `<p class="footer-operator">${escapeHtml(english.common.operator)}</p>`,
+  ].join('\n        ');
 
   return `<!doctype html>
 <html lang="en">
@@ -77,6 +89,7 @@ ${page.header.navigation.trailing ?? ''}
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="${THEME_COLOR}">${description}
     <title>${escapeHtml(page.title)}</title>
+    <link rel="icon" type="image/webp" href="/favicon-96x96.webp" sizes="96x96" />
     <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.ico" />

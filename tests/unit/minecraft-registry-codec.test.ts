@@ -68,7 +68,7 @@ async function collectRegistryPackets(
     const timeout = setTimeout((): void => {
       client.end();
       reject(new Error(`Minecraft ${version} did not finish configuration`));
-    }, 5_000);
+    }, 10_000);
     client.once('playerJoin', (): void => {
       clearTimeout(timeout);
       client.end();

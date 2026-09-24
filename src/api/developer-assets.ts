@@ -21,17 +21,17 @@ body {
   overflow-x: clip;
 }
 
-@media (min-width: 74.01rem) {
-  body::before,
-  body::after {
-    display: none;
-  }
-}
 
 .console-main {
   position: relative;
+  isolation: isolate;
   width: min(72rem, 100% - (2 * var(--s4)));
   padding-block: var(--s8);
+}
+
+.message-layout {
+  position: relative;
+  isolation: isolate;
 }
 
 .console-main::before,
@@ -47,9 +47,9 @@ body {
   background-repeat: no-repeat;
   background-position: top center;
   background-size: cover;
-  opacity: 0.12;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 42%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 42%, transparent 100%);
+  opacity: 0.35;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 50%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 50%, transparent 100%);
   pointer-events: none;
 }
 
@@ -223,6 +223,28 @@ body {
 }
 
 .app-card-details code {
+  overflow-wrap: anywhere;
+}
+
+.app-owner-chip {
+  display: inline-flex;
+  gap: var(--s2);
+  align-items: center;
+  font-size: var(--t-sm);
+  color: var(--text);
+}
+
+.app-owner-head {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  image-rendering: pixelated;
+}
+
+.app-owner-name {
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 

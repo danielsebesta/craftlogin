@@ -1,6 +1,6 @@
 # CraftLogin
 
-> CraftLogin is an open-source OpenID Connect provider for Minecraft Java Edition identities. Websites can add “Sign in with Minecraft” without collecting Minecraft passwords or email addresses.
+> CraftLogin is an open-source OpenID Connect provider for Minecraft Java Edition identities. Websites can add "Sign in with Minecraft" without collecting Minecraft passwords or email addresses.
 
 Use OpenID Connect Authorization Code Flow through a maintained OIDC library. CraftLogin requires a fresh state value and PKCE S256 for every public and confidential client. Register exact callback URIs; wildcards are not allowed. Never expose a confidential client secret to browser code or an AI tool.
 

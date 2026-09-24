@@ -31,6 +31,7 @@ import { HttpMojangClient, type MojangLogger } from './mojang/client.js';
 import { HttpDefaultSkinStore } from './mojang/default-skins.js';
 import { HttpSkinStore } from './mojang/skin-store.js';
 import { startGhostServer, type MinecraftGhostServer } from './mc-server/ghost-server.js';
+import { ExpiredRefreshTokenSweeper } from './oauth/refresh-token-sweeper.js';
 import { createOAuthRuntime } from './oauth/runtime.js';
 import { installSessionSignalLogging } from './oauth/session-security.js';
 import { PrismaVerifiedUserRepository } from './users/verified-user-repository.js';
@@ -57,8 +58,10 @@ async function main(): Promise<void> {
 
   let api: FastifyInstance | null = null;
   let minecraft: MinecraftGhostServer | null = null;
+  const sweeper = new ExpiredRefreshTokenSweeper(database, logger);
   try {
     await Promise.all([database.$connect(), redis.connect()]);
+    sweeper.start();
 
     const verification = new RedisVerificationStore(redis);
     const verifiedUsers = new PrismaVerifiedUserRepository(database);
@@ -181,7 +184,7 @@ async function main(): Promise<void> {
       'CraftLogin is listening',
     );
   } catch (error: unknown) {
-    await closeAfterStartupFailure(api, minecraft, redis, database, logger, error);
+    await closeAfterStartupFailure(api, minecraft, sweeper, redis, database, logger, error);
   }
 
   let shuttingDown = false;
@@ -190,7 +193,7 @@ async function main(): Promise<void> {
       return;
     }
     shuttingDown = true;
-    void closeResources(api, minecraft, redis, database, logger)
+    void closeResources(api, minecraft, sweeper, redis, database, logger)
       .then((): void => {
         logger.info({ signal }, 'CraftLogin stopped');
       })
@@ -206,13 +209,14 @@ async function main(): Promise<void> {
 async function closeAfterStartupFailure(
   api: FastifyInstance | null,
   minecraft: MinecraftGhostServer | null,
+  sweeper: ExpiredRefreshTokenSweeper,
   redis: Redis,
   database: PrismaClient,
   logger: Logger,
   startupError: unknown,
 ): Promise<never> {
   try {
-    await closeResources(api, minecraft, redis, database, logger);
+    await closeResources(api, minecraft, sweeper, redis, database, logger);
   } catch (cleanupError: unknown) {
     throw new AggregateError([startupError, cleanupError], 'Startup and cleanup failed', {
       cause: cleanupError,
@@ -224,11 +228,13 @@ async function closeAfterStartupFailure(
 async function closeResources(
   api: FastifyInstance | null,
   minecraft: MinecraftGhostServer | null,
+  sweeper: ExpiredRefreshTokenSweeper,
   redis: Redis,
   database: PrismaClient,
   logger: Logger,
 ): Promise<void> {
   const failures: unknown[] = [];
+  sweeper.stop();
   if (api !== null) {
     try {
       await api.close();

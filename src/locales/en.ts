@@ -7,8 +7,10 @@ export const english = {
     title: 'Sign-in request failed',
   },
   common: {
-    legalDisclaimer:
-      'NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
+    legalDisclaimer: [
+      'NOT AN OFFICIAL MINECRAFT SERVICE.',
+      'NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
+    ],
     operator: 'Operated independently by Daniel Šebesta. Contact: contact@craftlogin.com.',
     skipToContent: 'Skip to main content',
   },
@@ -23,6 +25,11 @@ export const english = {
         },
         appDelete: { summary: 'Delete an owned OAuth client' },
         appList: { summary: 'List manageable OAuth clients' },
+        avatarBack: {
+          description:
+            'Render a flat back view of the full player, including the worn cape when the account has one.',
+          summary: 'Render a Minecraft back view',
+        },
         avatarBody: {
           description: 'Render a flat front view of the full player from its current signed skin.',
           summary: 'Render a Minecraft body',
@@ -32,11 +39,23 @@ export const english = {
           summary: 'Render a Minecraft bust',
         },
         avatarCape: {
-          description: "Return the account's current cape texture, if the player wears one.",
+          description:
+            "Return the account's current cape texture from Mojang or modloaders (OptiFine, LabyMod, MinecraftCapes, 5zig, SkinMC).",
           summary: 'Get a Minecraft cape',
         },
+        avatarCapes: {
+          description:
+            'List available capes across supported providers (Mojang, OptiFine, LabyMod, MinecraftCapes, 5zig, SkinMC).',
+          summary: 'List available Minecraft capes',
+        },
+        avatarDuo: {
+          description:
+            'Render the flat front and back views of the full player side by side in one image, including the worn cape when the account has one.',
+          summary: 'Render a Minecraft front and back pair',
+        },
         avatarElytra: {
-          description: 'Return the elytra wing texture, which matches the worn cape texture.',
+          description:
+            'Return the elytra wing texture, matching the worn cape texture across supported providers.',
           summary: 'Get a Minecraft elytra texture',
         },
         avatarFace: {
@@ -44,17 +63,22 @@ export const english = {
             'Render the front eight-by-eight face with its transparent Minecraft head overlay.',
           summary: 'Render a Minecraft face',
         },
-        avatarHead: {
-          description: 'Render a flat front-facing head from its current signed skin.',
-          summary: 'Render a Minecraft head',
-        },
         avatarProcessedSkin: {
           description:
             'Return the normalized 64x64 skin: legacy layouts converted, base layers opaque, fully-opaque overlays cleared.',
           summary: 'Get a normalized Minecraft skin',
         },
+        avatarSide: {
+          description: 'Render a flat left-side profile of the full player.',
+          summary: 'Render a Minecraft side profile',
+        },
+        avatarWings: {
+          description:
+            'Render a flat back view of the full player with deployed elytra wings, drawn from the wing region of the worn cape texture.',
+          summary: 'Render Minecraft elytra wings',
+        },
         avatarSkin: {
-          description: 'Return the current signed Mojang skin for a Minecraft UUID.',
+          description: 'Return the current signed skin for a Minecraft player or texture hash.',
           summary: 'Get a Minecraft skin',
         },
         authorize: {
@@ -208,7 +232,7 @@ export const english = {
         {
           title: 'Map the account',
           detail:
-            'Persist the sub claim as the account key. It is the canonical Minecraft UUID and remains stable when the player changes username.',
+            'Persist the sub (UUID) claim as the account key. The Minecraft UUID remains stable when the player changes username.',
         },
       ],
       configurationHeading: 'Suggested configuration',
@@ -250,7 +274,10 @@ export const english = {
       claimHeading: 'Claim',
       valueHeading: 'Meaning',
       claims: [
-        { name: 'sub', detail: 'Permanent canonical Minecraft UUID. Use it as the account key.' },
+        {
+          name: 'sub (UUID)',
+          detail: 'Permanent canonical Minecraft UUID. Use it as the account key.',
+        },
         { name: 'preferred_username', detail: 'Current Minecraft username. It can change.' },
         { name: 'picture', detail: 'Current CraftLogin avatar URL.' },
         { name: 'acr', detail: 'Authentication context used to verify the account.' },
@@ -258,7 +285,7 @@ export const english = {
       ],
       exampleHeading: 'UserInfo example',
       exampleCode:
-        '{\n  "sub": "069a79f4-44e9-4726-a5be-fca90e38aaf5",\n  "preferred_username": "Notch",\n  "picture": "https://craftlogin.com/avatar/069a79f4-44e9-4726-a5be-fca90e38aaf5"\n}',
+        '{\n  "sub": "4a11ca60-63b6-451f-82eb-50119d8e5052",\n  "preferred_username": "Dastcz",\n  "picture": "https://craftlogin.com/avatar/4a11ca60-63b6-451f-82eb-50119d8e5052"\n}',
     },
     sessions: {
       heading: 'Tokens and logout',
@@ -278,7 +305,7 @@ export const english = {
         {
           title: 'Logout',
           detail:
-            'Always destroy the application’s local session. For provider logout, use the end_session_endpoint returned by discovery and only a registered post-logout URI.',
+            "Always destroy the application's local session. For provider logout, use the end_session_endpoint returned by discovery and only a registered post-logout URI.",
         },
       ],
     },
@@ -350,16 +377,24 @@ export const english = {
     avatars: {
       heading: 'Avatar and texture API',
       intro:
-        'Avatar endpoints are public, CORS-enabled, and suitable for images in profiles, member lists, and leaderboards. Use a canonical UUID when possible. Players without a Mojang texture receive a deterministic default skin.',
-      template: '/api/avatars/{uuid}/{view}?size=128&layers=all',
+        'Avatar endpoints are public, CORS-enabled, and suitable for images in profiles, member lists, and leaderboards. Identify a player by Minecraft UUID (dashed or compact), username, or a Mojang texture hash. Prefer UUIDs; username lookups are slower and rate-limited by Mojang. Offline-mode UUIDs and players without a Mojang texture receive a deterministic default skin.',
+      template: '/api/avatars/{identifier}/{view}?size=128&layers=all',
       parameters: [
-        { name: 'view', detail: 'face, head, bust, body, skin, processed-skin, cape, or elytra' },
+        {
+          name: 'view',
+          detail: 'face, bust, body, back, side, duo, wings, skin, processed-skin, cape, or elytra',
+        },
         { name: 'size', detail: '32, 64, 128, or 256 for rendered views' },
         { name: 'layers', detail: 'all or base for rendered views' },
+        { name: 'model', detail: 'classic or slim, texture-hash renders only' },
+        {
+          name: 'provider',
+          detail:
+            'mojang, optifine, labymod, minecraftcapes, 5zig, skinmc, or any; the cape source for back, duo, wings, cape, and elytra (defaults to any)',
+        },
       ],
       exampleAlt: 'Example Minecraft avatar rendered by CraftLogin',
       showcaseCaption: 'Showcase skin by {player}.',
-      showcaseSourceLabel: 'Meet the players at PaperBoat SMP',
     },
     security: {
       heading: 'Integration checklist',
@@ -370,7 +405,7 @@ export const english = {
         'Bind state, nonce, and the PKCE verifier to one short-lived browser transaction.',
         'Accept only exact, preconfigured callback and post-logout URIs.',
         'Validate issuer, signature, audience, expiry, nonce, and protocol errors.',
-        'Use sub, not username, as the permanent account key.',
+        'Use sub (UUID), not username, as the permanent account key.',
         'Rotate the local session after login and invalidate it during logout.',
         'Keep secrets, codes, tokens, and callback URLs out of logs and browser storage.',
       ],
@@ -393,7 +428,7 @@ export const english = {
       empty: 'No developer accounts have been registered yet.',
       heading: 'Access registry',
       identifierLabel: 'Minecraft name or UUID',
-      identifierPlaceholder: 'Notch or 069a79f4-44e9-4726-a5be-fca90e38aaf5',
+      identifierPlaceholder: 'Dastcz or 4a11ca60-63b6-451f-82eb-50119d8e5052',
       intro:
         'Grant console access by Minecraft UUID. Role changes take effect on the next request.',
       invalidFormNotice: 'Check the Minecraft UUID and access level, then try again.',
@@ -412,7 +447,7 @@ export const english = {
       verificationDeveloperNotice: 'Developer verification updated.',
       verificationHeading: 'Verification requests',
       verificationIntro:
-        'Approve, reject, or withdraw a verification. Verification is a trust label only: it never grants access and it does not change an application’s redirect URIs or credentials.',
+        "Approve, reject, or withdraw a verification. Verification is a trust label only: it never grants access and it does not change an application's redirect URIs or credentials.",
       verificationApprovedNotice: 'Application verified.',
       verificationEmpty: 'No applications are waiting for review.',
       verificationRejectedNotice: 'Verification request rejected.',
@@ -447,7 +482,7 @@ export const english = {
       nameLabel: 'Application name',
       namePlaceholder: 'Example app',
       newHeading: 'New application',
-      ownerLabel: 'Owner UUID',
+      ownerLabel: 'Owner',
       publicHelp: 'For browser, desktop, mobile, or other clients that cannot keep a secret.',
       publicLabel: 'Public client',
       redirectHelp: 'One exact URI per line. HTTPS is required except on localhost.',
@@ -501,73 +536,58 @@ export const english = {
     },
   },
   landing: {
-    affiliation:
-      'NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
     aiPrompt: {
       copied: 'Copied',
       copy: 'Copy prompt',
-      heading: 'Implement with your coding agent',
+      heading: 'Let your agent do it',
+      preview: 'Show the prompt',
       prompt:
-        'Implement “Sign in with CraftLogin” in this project.\n\nFirst inspect the existing framework, routing, authentication, session, environment, and test conventions. Then read https://craftlogin.com/llms-full.txt and treat it as the integration contract.\n\nAsk me only for the client ID, whether the client is public or confidential, and the exact redirect and post-logout URIs if they are not already configured. Never ask me to paste a client secret; use the server-side CRAFTLOGIN_CLIENT_SECRET environment variable when a confidential client requires one.\n\nUse a maintained OpenID Connect library and discovery from https://craftlogin.com/.well-known/openid-configuration. Implement the login action, callback, stable account mapping by sub, local session, logout, configuration validation, accessible UI, documentation, and tests while preserving the project’s existing architecture. Do not implement OAuth or token validation manually.\n\nBefore editing, summarize the plan. After editing, run the project’s formatter, type checker, linter, and tests, then report changed files, required environment variables, the exact URI to register in CraftLogin, and any remaining manual steps. Do not claim completion while checks fail.',
-      text: 'Copy this prompt into Claude Code, Codex, Cursor, Copilot, or another coding agent from the root of your website project.',
+        'Implement "Sign in with CraftLogin" in this project.\n\nFirst inspect the existing framework, routing, authentication, session, environment, and test conventions. Then read https://craftlogin.com/llms-full.txt and treat it as the integration contract.\n\nAsk me only for the client ID, whether the client is public or confidential, and the exact redirect and post-logout URIs if they are not already configured. Never ask me to paste a client secret; use the server-side CRAFTLOGIN_CLIENT_SECRET environment variable when a confidential client requires one.\n\nUse a maintained OpenID Connect library and discovery from https://craftlogin.com/.well-known/openid-configuration. Implement the login action, callback, stable account mapping by sub (the Minecraft UUID), local session, logout, configuration validation, accessible UI, documentation, and tests while preserving the project\'s existing architecture. Do not implement OAuth or token validation manually.\n\nBefore editing, summarize the plan. After editing, run the project\'s formatter, type checker, linter, and tests, then report changed files, required environment variables, the exact URI to register in CraftLogin, and any remaining manual steps. Do not claim completion while checks fail.',
+      text: 'Paste a ready-made prompt into Claude Code, Codex, Cursor, or Copilot and let it wire up the standard flow for you.',
     },
     claims: {
-      claimHeading: 'Claim',
-      detailHeading: 'Detail',
       heading: 'What your app receives',
       rows: [
         {
           claim: 'sub',
-          detail: 'A permanent player ID. It stays the same even if they rename.',
-          value: '123e4567-e89b-42d3-a456-426614174000',
+          detail: 'Their Minecraft UUID. It stays the same even if they rename.',
         },
         {
           claim: 'preferred_username',
           detail: 'The name they play under right now.',
-          value: 'Player',
         },
         {
           claim: 'picture',
-          detail: 'Their current face at `/avatar/{uuid}`, ready to show on your site.',
-          value: '/avatar/123e4567-e89b-42d3-a456-426614174000',
+          detail: 'A live render of their skin, ready to show on your site.',
         },
       ],
       scopes: [
-        { detail: 'Permission to sign the player in.', name: 'openid' },
-        { detail: 'Permission to show their name and face.', name: 'profile' },
+        { detail: 'Sign the player in.', name: 'openid' },
+        { detail: 'Show their name and face.', name: 'profile' },
       ],
       scopesHeading: 'Permissions',
-      valueHeading: 'Example',
-      text: 'Three simple facts on every login. The ID never changes, so roles and purchases stay attached to the right player.',
+      text: 'Three simple facts on every login. The UUID never changes, so roles and purchases stay attached to the right player.',
+      verifiedLabel: 'Verified Minecraft account',
     },
     avatars: {
       heading: 'Free avatars included',
-      text: 'Every login can also show the player\u2019s face, rendered live from their actual current skin. Use them in comments, member lists, or leaderboards. No keys, no extra calls, ready to hotlink.',
+      text: "Every login can also show the player's face, rendered live from their actual current skin. Use them in comments, member lists, or leaderboards. No keys, no extra calls, ready to hotlink.",
+      back: 'Back',
       bust: 'Bust',
       body: 'Body',
+      duo: 'Front + back',
       face: 'Face',
-      head: 'Head',
+      processedSkin: 'Processed skin',
+      side: 'Side',
+      wings: 'Elytra wings',
+      cape: 'Cape / Elytra',
       exampleAlt: 'Example Minecraft avatar render',
       showcaseCaption: 'Showcase skin by {player}.',
-      showcaseSourceLabel: 'Meet the players at PaperBoat SMP',
-    },
-    endpoints: {
-      heading: 'Endpoints',
-      items: [
-        { detail: 'Where the login starts.', path: '/oauth2/authorize' },
-        { detail: 'Where your server swaps the one-time code for tokens.', path: '/oauth2/token' },
-        { detail: 'Where you read who just logged in.', path: '/oauth2/userinfo' },
-        { detail: 'Where your backend double-checks a token.', path: '/oauth2/introspect' },
-        { detail: 'Where the player signs out of CraftLogin.', path: '/oauth2/logout' },
-        { detail: 'The public keys your backend uses to trust our tokens.', path: '/oauth2/jwks' },
-        { detail: 'Where a token gets cancelled.', path: '/oauth2/revoke' },
-      ],
+      lookupAction: 'Render',
+      lookupEmpty: 'No avatar could be rendered for that name.',
+      lookupLabel: 'Try any player name or UUID',
     },
     flow: {
-      claimLabel: 'Your site receives',
-      claimValue: '{ sub: "minecraft-uuid", preferred_username: "Player" }',
-      exampleAddress: 'K7MPQ4RX.craftlogin.com',
-      exampleLabel: 'The player connects to',
       heading: 'From click to known player in seconds',
       items: [
         {
@@ -577,15 +597,29 @@ export const english = {
         },
         {
           detail:
-            'They join a one-time server address, verify with their skin, or sign in with Microsoft. It takes seconds, works once, and expires after five minutes.',
+            'They join a one-time server address, verify with their skin, or sign in with Microsoft. It takes seconds and works once.',
           title: 'They prove it in Minecraft',
         },
         {
           detail:
-            'Your site gets back their permanent player ID and current username. Now you reliably know who they are.',
+            'Your site gets back their Minecraft UUID and current username. Now you reliably know who they are.',
           title: 'You know exactly who they are',
         },
       ],
+    },
+    getStarted: {
+      console: {
+        action: 'Open the Console',
+        detail: 'Create a client in the Developer Console and get your client ID.',
+        title: 'Create a client',
+      },
+      docs: {
+        action: 'Read the docs',
+        detail: 'Every endpoint and claim, with copy-paste examples for each step.',
+        title: 'Follow the guide',
+      },
+      heading: 'Get started',
+      intro: 'Create a client, follow the guide, or hand the whole wiring to your coding agent.',
     },
     useCases: {
       heading: 'Made for community sites',
@@ -611,14 +645,11 @@ export const english = {
       license: 'MIT licensed',
     },
     hero: {
-      codeLabel: 'It starts with one redirect',
       consoleAction: 'Set up login',
       documentationAction: 'Read the API docs',
       githubAction: 'View source',
-      heading: 'Log in with Minecraft',
-      lead: 'Add a \u201cSign in with Minecraft\u201d button to your website. Players prove they own their Java Edition account in seconds, with no passwords and no emails, and you reliably know who they are.',
-      request:
-        'GET /oauth2/authorize\n  ?response_type=code\n  &client_id=cl_your_client\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &scope=openid%20profile\n  &state=<random>\n  &code_challenge=<S256>\n  &code_challenge_method=S256',
+      heading: 'Let your users log in with Minecraft',
+      lead: 'No one wants to register for another server forum. Let them log in with the game they already have open. Zero emails to collect, zero passwords to hash. Open-source, secure, and built for Minecraft.',
     },
     navigation: {
       ariaLabel: 'Primary navigation',
@@ -626,13 +657,6 @@ export const english = {
       developers: 'Console',
       documentation: 'Docs',
       github: 'GitHub',
-    },
-    quickstart: {
-      exchangeCode:
-        'POST /oauth2/token\n  grant_type=authorization_code\n  &code=<code>\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fcallback\n  &client_id=cl_your_client\n  &code_verifier=<verifier>',
-      exchangeHeading: 'Then trade the code for tokens',
-      heading: 'Up and running in minutes',
-      text: 'Create a client in the Console to get your client ID. Send the player to the login page, then swap the one-time code you get back for their identity.',
     },
     security: {
       heading: 'Safe by design',
@@ -642,6 +666,12 @@ export const english = {
   interaction: {
     addressLabel: 'Minecraft server address',
     allowsHeading: 'This app will receive:',
+    disallowedHeading: 'This app will never receive:',
+    disallowed: [
+      'Your Microsoft or Minecraft password',
+      'Your email address or billing details',
+      'What servers you play on or multiplayer activity',
+    ],
     brand: 'CraftLogin',
     cancelButton: 'Cancel',
     changeAccount: 'Use a different account',
@@ -656,9 +686,10 @@ export const english = {
     expiredHeading: 'This sign-in request expired',
     goBack: 'Go back',
     heading: 'Sign in to',
-    scopeIdentity: 'Your Minecraft identity (stable UUID)',
+    scopeIdentity: 'Your Minecraft identity (username, skin, cape, UUID)',
+    scopeIdentityCombined: 'Your Minecraft identity (username, skin, cape, UUID)',
     scopeOffline: 'Stay signed in between visits',
-    scopeProfile: 'Your current username and avatar',
+    scopeProfile: 'Your current username, skin, and cape',
     interactionRequired: 'Minecraft account verification is required',
     lead: 'Confirm your Minecraft account below to continue.',
     methodHeading: 'Choose how to verify',

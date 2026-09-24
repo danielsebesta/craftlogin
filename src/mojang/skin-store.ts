@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
 import { getErrorKind } from '../logging/error-kind.js';
+import { BoundedResponseError, readBoundedResponseBody } from './bounded-body.js';
 import type { CachedValue, MinecraftCache } from './cache.js';
 
 const SKIN_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const SKIN_BASE_URL = 'https://textures.minecraft.net/texture/';
 const USER_AGENT = 'CraftLogin/0.1 (+https://github.com/danielsebesta/craftlogin)';
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 export interface SkinImage {
   readonly body: Buffer;
@@ -92,11 +94,22 @@ export class HttpSkinStore implements SkinStore {
           `Minecraft texture service returned HTTP ${response.status.toString()}`,
         );
       }
-      if (!(response.headers.get('content-type') ?? '').startsWith('image/png')) {
+      // Mojang mislabels cape textures as application/octet-stream, so the
+      // signature check below — not this header — guarantees PNG content.
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.startsWith('image/png') && contentType !== 'application/octet-stream') {
         throw new MinecraftSkinUnavailableError('Minecraft texture service returned a non-PNG');
       }
-      const body = await readBoundedResponseBody(response, this.maxBytes);
-      if (body.length === 0) {
+      const body = await readBoundedResponseBody(
+        response,
+        this.maxBytes,
+        'Minecraft texture',
+      ).catch((cause: unknown): never => {
+        throw cause instanceof BoundedResponseError
+          ? new MinecraftSkinUnavailableError(cause.message, { cause })
+          : cause;
+      });
+      if (!body.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
         throw new MinecraftSkinUnavailableError(
           'Minecraft texture service returned an invalid image',
         );
@@ -119,69 +132,6 @@ export class HttpSkinStore implements SkinStore {
       });
     }
   }
-}
-
-async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<Buffer> {
-  const contentLength = response.headers.get('content-length');
-  if (contentLength !== null) {
-    const declaredBytes = Number(contentLength);
-    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
-      throw new MinecraftSkinUnavailableError('Minecraft texture image exceeds the size limit');
-    }
-  }
-  if (response.body === null) {
-    return Buffer.alloc(0);
-  }
-
-  const readerCandidate: unknown = response.body.getReader();
-  if (!isStreamReader(readerCandidate)) {
-    throw new MinecraftSkinUnavailableError('Minecraft texture stream is unavailable');
-  }
-  const chunks: Uint8Array[] = [];
-  let receivedBytes = 0;
-  let result = readStreamResult(await readerCandidate.read());
-  while (!result.done) {
-    receivedBytes += result.value.byteLength;
-    if (receivedBytes > maxBytes) {
-      await readerCandidate.cancel().catch((): undefined => undefined);
-      throw new MinecraftSkinUnavailableError('Minecraft texture image exceeds the size limit');
-    }
-    chunks.push(result.value);
-    result = readStreamResult(await readerCandidate.read());
-  }
-  return Buffer.concat(chunks, receivedBytes);
-}
-
-interface UnknownStreamReader {
-  cancel(): Promise<unknown>;
-  read(): Promise<unknown>;
-}
-
-function isStreamReader(value: unknown): value is UnknownStreamReader {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const read: unknown = Reflect.get(value, 'read');
-  const cancel: unknown = Reflect.get(value, 'cancel');
-  return typeof read === 'function' && typeof cancel === 'function';
-}
-
-type StreamReadResult =
-  { readonly done: false; readonly value: Uint8Array } | { readonly done: true };
-
-function readStreamResult(value: unknown): StreamReadResult {
-  if (typeof value !== 'object' || value === null) {
-    throw new MinecraftSkinUnavailableError('Minecraft texture stream returned invalid data');
-  }
-  const done: unknown = Reflect.get(value, 'done');
-  if (done === true) {
-    return { done: true };
-  }
-  const chunk: unknown = Reflect.get(value, 'value');
-  if (done !== false || !(chunk instanceof Uint8Array)) {
-    throw new MinecraftSkinUnavailableError('Minecraft texture stream returned invalid data');
-  }
-  return { done: false, value: chunk };
 }
 
 const base64Schema = z.string();

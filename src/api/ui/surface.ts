@@ -58,13 +58,28 @@ export const signInSurfaceStyles = `
   display: inline-flex;
   gap: var(--s2);
   align-items: center;
+  justify-content: center;
+  font-size: var(--t-2xl);
+  line-height: 1.25;
 }
 
-/* The "Sign in to" prefix stays quiet so the application name carries the
-   heading: regular muted prefix, bold full-color app name. */
-.consent-title h1 {
+/* The "Sign in to" prefix stays quiet on its own line so the application name
+   carries the heading: regular muted prefix above, bold full-color app name. */
+.consent-title h1:not(.icon-heading) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
   color: var(--muted);
   font-weight: 400;
+}
+
+.consent-prefix {
+  display: block;
+  font-size: var(--t-base);
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .consent-app bdi {
@@ -78,6 +93,8 @@ export const signInSurfaceStyles = `
   cursor: help;
 }
 
+/* Pixelated circle dot: stepped orthogonal polygon preserves the flat Minecraft
+   pixel aesthetic while creating a circular silhouette. */
 .verification-badge-dot {
   display: inline-flex;
   align-items: center;
@@ -86,10 +103,26 @@ export const signInSurfaceStyles = `
   height: 1.25rem;
   color: var(--muted);
   background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  /* Square like every other surface: the shared style contract forbids
-     rounded corners to keep the flat pixel aesthetic. */
+  border: 0;
   border-radius: 0;
+  clip-path: polygon(
+    30% 0%, 70% 0%,
+    70% 10%, 80% 10%,
+    80% 20%, 90% 20%,
+    90% 30%, 100% 30%,
+    100% 70%,
+    90% 70%, 90% 80%,
+    80% 80%, 80% 90%,
+    70% 90%, 70% 100%,
+    30% 100%,
+    30% 90%, 20% 90%,
+    20% 80%, 10% 80%,
+    10% 70%, 0% 70%,
+    0% 30%,
+    10% 30%, 10% 20%,
+    20% 20%, 20% 10%,
+    30% 10%
+  );
 }
 
 .verification-badge-icon {
@@ -101,12 +134,11 @@ export const signInSurfaceStyles = `
 .verification-badge-verified .verification-badge-dot {
   color: var(--control-ink);
   background: var(--accent);
-  border-color: var(--accent);
 }
 
 @media (forced-colors: active) {
   .verification-badge-dot {
-    border-color: currentColor;
+    outline: 1px solid currentColor;
   }
 }
 
@@ -154,12 +186,19 @@ export const signInSurfaceStyles = `
   font-weight: 700;
 }
 
-.consent-scopes {
+.consent-permissions-grid {
+  display: grid;
+  gap: var(--s5);
+}
+
+.consent-scopes,
+.consent-disallowed {
   display: grid;
   gap: var(--s3);
 }
 
-.consent-scopes ul {
+.consent-scopes ul,
+.consent-disallowed ul {
   display: grid;
   gap: var(--s2);
   padding: 0;
@@ -167,15 +206,21 @@ export const signInSurfaceStyles = `
   list-style: none;
 }
 
-.consent-scopes li {
+.consent-scopes li,
+.consent-disallowed li {
   display: flex;
   gap: var(--s3);
-  align-items: center;
+  align-items: flex-start;
 }
 
 .consent-scopes .list-icon,
 .icon-note .list-icon {
   color: var(--accent);
+}
+
+.consent-disallowed .list-icon,
+.consent-disallowed .heading-icon-disallowed {
+  color: var(--danger);
 }
 
 .icon-note {
@@ -282,15 +327,9 @@ export const signInSurfaceStyles = `
   display: none;
 }
 
-/* Sign-in pages share the landing look: no app-shell rails, an ambient grid
-   glow, and no divider rules. The consent card keeps its window so the page
-   feels official, just with a lighter one-pixel frame. */
-@media (min-width: 74.01rem) {
-  body.page-narrow::before,
-  body.page-narrow::after {
-    display: none;
-  }
-}
+/* Sign-in pages share the landing look: an ambient grid glow and no divider
+   rules. The consent card keeps its window so the page feels official, just
+   with a lighter one-pixel frame. */
 
 body.page-narrow {
   overflow-x: clip;
@@ -304,13 +343,22 @@ body.page-narrow .page-header {
   border-bottom: 0;
 }
 
+body.page-narrow .signin {
+  padding-block: var(--s5) var(--s6);
+}
+
+body.page-narrow .signin-compact {
+  padding-block: var(--s5) var(--s6);
+}
+
 body.page-narrow main.page-column {
   position: relative;
+  isolation: isolate;
 }
 
 body.page-narrow main.page-column::before {
   position: absolute;
-  top: 0;
+  top: -5rem;
   left: calc(50% - 50vw);
   right: calc(50% - 50vw);
   z-index: -1;
@@ -320,21 +368,21 @@ body.page-narrow main.page-column::before {
   background-repeat: no-repeat;
   background-position: top center;
   background-size: cover;
-  opacity: 0.15;
+  opacity: 0.35;
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    black 18%,
-    black 45%,
+    black 16%,
+    black 50%,
     transparent 100%
   );
-  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 50%, transparent 100%);
   pointer-events: none;
 }
 
 @media (max-width: 34rem) {
   body.page-narrow main.page-column::before {
-    height: 24rem;
+    height: 28rem;
   }
 }
 

@@ -16,6 +16,12 @@ export interface SkinPngHeader {
   readonly width: 64;
 }
 
+export interface TexturePixels {
+  readonly height: number;
+  readonly pixels: Uint8ClampedArray;
+  readonly width: number;
+}
+
 export interface SkinTexture extends SkinPngHeader {
   readonly height: 64;
   readonly pixels: Uint8ClampedArray;
@@ -46,7 +52,9 @@ export function inspectSkinPng(body: Buffer): SkinPngHeader {
     width !== SKIN_WIDTH ||
     (height !== 32 && height !== 64) ||
     bitDepth !== 8 ||
-    (colorType !== 2 && colorType !== 6) ||
+    // Indexed (palette) PNGs are valid skins: the bundled default-skin
+    // catalogue ships them, and the canvas decoder expands them to RGBA.
+    (colorType !== 2 && colorType !== 3 && colorType !== 6) ||
     compression !== 0 ||
     filter !== 0 ||
     interlace !== 0
@@ -57,22 +65,36 @@ export function inspectSkinPng(body: Buffer): SkinPngHeader {
   return { height, legacy: height === 32, width };
 }
 
-// Overlay blocks of the modern 64x64 layout. Legacy skins predate limb
-// overlays, so only the hat block applies to them.
-const SKIN_OVERLAY_REGIONS: readonly AlphaRegion[] = [
-  { height: 16, width: 32, x: 32, y: 0 },
-  { height: 16, width: 24, x: 16, y: 32 },
-  { height: 16, width: 16, x: 40, y: 32 },
-  { height: 16, width: 16, x: 48, y: 48 },
-  { height: 16, width: 16, x: 0, y: 32 },
-  { height: 16, width: 16, x: 0, y: 48 },
-];
-
 export function isPngImage(body: Buffer): boolean {
   return (
     body.length >= PNG_SIGNATURE.length &&
     body.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
   );
+}
+
+// Decodes a non-skin texture (cape, elytra) into raw RGBA pixels. Unlike
+// decodeSkinTexture this applies no layout validation or normalization: cape
+// atlases are not 64x64 and must not be mirrored or alpha-cleared.
+export async function decodeTexturePixels(body: Buffer): Promise<TexturePixels> {
+  if (body.length > MAX_SKIN_BYTES || !isPngImage(body)) {
+    throw new InvalidSkinImageError('Minecraft texture is not a PNG image');
+  }
+  let image: Image;
+  try {
+    image = await loadImage(body);
+  } catch (error: unknown) {
+    throw new InvalidSkinImageError('Minecraft texture PNG could not be decoded', {
+      cause: error,
+    });
+  }
+  const canvas = createCanvas(image.width, image.height);
+  const context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0);
+  return {
+    height: image.height,
+    pixels: context.getImageData(0, 0, image.width, image.height).data,
+    width: image.width,
+  };
 }
 
 export async function decodeSkinTexture(body: Buffer): Promise<SkinTexture> {
@@ -128,15 +150,32 @@ function clearOpaqueCompatibilityLayers(pixels: Uint8ClampedArray, legacy: boole
   }
 }
 
+// UV-mapped faces of the base layer in the modern 64x64 layout. Only pixels
+// inside these rectangles become opaque; atlas padding between faces keeps
+// the source alpha so transparent holes stay transparent.
+const SKIN_BASE_REGIONS: readonly AlphaRegion[] = [
+  { height: 8, width: 16, x: 8, y: 0 },
+  { height: 8, width: 32, x: 0, y: 8 },
+  { height: 4, width: 16, x: 20, y: 16 },
+  { height: 12, width: 24, x: 16, y: 20 },
+  { height: 4, width: 8, x: 44, y: 16 },
+  { height: 12, width: 16, x: 40, y: 20 },
+  { height: 4, width: 8, x: 4, y: 16 },
+  { height: 12, width: 16, x: 0, y: 20 },
+  { height: 4, width: 8, x: 36, y: 48 },
+  { height: 12, width: 16, x: 32, y: 52 },
+  { height: 4, width: 8, x: 20, y: 48 },
+  { height: 12, width: 16, x: 16, y: 52 },
+];
+
 // Re-encode a decoded texture the way the vanilla client treats it: legacy
 // skins arrive converted to the modern layout by decodeSkinTexture, base
-// layers are fully opaque, and overlay translucency is preserved.
+// layer UV faces are fully opaque, and overlay translucency is preserved.
 export async function encodeProcessedSkin(texture: SkinTexture): Promise<Buffer> {
-  const regions = texture.legacy ? SKIN_OVERLAY_REGIONS.slice(0, 1) : SKIN_OVERLAY_REGIONS;
   const pixels = new Uint8ClampedArray(texture.pixels);
-  for (let y = 0; y < SKIN_WIDTH; y += 1) {
-    for (let x = 0; x < SKIN_WIDTH; x += 1) {
-      if (!isOverlayPixel(regions, x, y)) {
+  for (const region of SKIN_BASE_REGIONS) {
+    for (let y = region.y; y < region.y + region.height; y += 1) {
+      for (let x = region.x; x < region.x + region.width; x += 1) {
         pixels[(y * SKIN_WIDTH + x) * 4 + 3] = 255;
       }
     }
@@ -147,13 +186,6 @@ export async function encodeProcessedSkin(texture: SkinTexture): Promise<Buffer>
   output.data.set(pixels);
   context.putImageData(output, 0, 0);
   return Buffer.from(await canvas.encode('png'));
-}
-
-function isOverlayPixel(regions: readonly AlphaRegion[], x: number, y: number): boolean {
-  return regions.some(
-    (region): boolean =>
-      x >= region.x && x < region.x + region.width && y >= region.y && y < region.y + region.height,
-  );
 }
 
 interface AlphaRegion {

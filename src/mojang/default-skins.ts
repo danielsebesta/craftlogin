@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { getErrorKind } from '../logging/error-kind.js';
+import { BoundedResponseError, readBoundedResponseBody } from './bounded-body.js';
 import type { MinecraftCache } from './cache.js';
 import { canonicalMinecraftUuid } from './uuid.js';
 
@@ -53,6 +54,13 @@ export function offlinePlayerUuid(username: string): string {
   digest[8] = (variantByte & 0x3f) | 0x80;
   const hex = digest.toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+// Offline-mode UUIDs are MD5 name hashes (version 3, RFC 4122 variant) while
+// Mojang assigns random version-4 UUIDs, so a version-3 identifier can never
+// resolve to a signed profile and always maps to a default skin.
+export function isOfflinePlayerUuid(uuid: string): boolean {
+  return uuid.charAt(14) === '3' && '89ab'.includes(uuid.charAt(19));
 }
 
 // Replicates java.util.UUID.hashCode so hash-derived selection matches JVM
@@ -159,7 +167,13 @@ export class HttpDefaultSkinStore implements DefaultSkinSource {
       if (!(response.headers.get('content-type') ?? '').startsWith('image/png')) {
         throw new DefaultSkinUnavailableError('Default skin service returned a non-PNG');
       }
-      const body = await readBoundedResponseBody(response, this.maxBytes);
+      const body = await readBoundedResponseBody(response, this.maxBytes, 'Default skin').catch(
+        (cause: unknown): never => {
+          throw cause instanceof BoundedResponseError
+            ? new DefaultSkinUnavailableError(cause.message, { cause })
+            : cause;
+        },
+      );
       if (body.length === 0) {
         throw new DefaultSkinUnavailableError('Default skin service returned an invalid image');
       }
@@ -181,69 +195,6 @@ export class HttpDefaultSkinStore implements DefaultSkinSource {
       });
     }
   }
-}
-
-async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<Buffer> {
-  const contentLength = response.headers.get('content-length');
-  if (contentLength !== null) {
-    const declaredBytes = Number(contentLength);
-    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
-      throw new DefaultSkinUnavailableError('Default skin image exceeds the size limit');
-    }
-  }
-  if (response.body === null) {
-    return Buffer.alloc(0);
-  }
-
-  const readerCandidate: unknown = response.body.getReader();
-  if (!isStreamReader(readerCandidate)) {
-    throw new DefaultSkinUnavailableError('Default skin stream is unavailable');
-  }
-  const chunks: Uint8Array[] = [];
-  let receivedBytes = 0;
-  let result = readStreamResult(await readerCandidate.read());
-  while (!result.done) {
-    receivedBytes += result.value.byteLength;
-    if (receivedBytes > maxBytes) {
-      await readerCandidate.cancel().catch((): undefined => undefined);
-      throw new DefaultSkinUnavailableError('Default skin image exceeds the size limit');
-    }
-    chunks.push(result.value);
-    result = readStreamResult(await readerCandidate.read());
-  }
-  return Buffer.concat(chunks, receivedBytes);
-}
-
-interface UnknownStreamReader {
-  cancel(): Promise<unknown>;
-  read(): Promise<unknown>;
-}
-
-function isStreamReader(value: unknown): value is UnknownStreamReader {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const read: unknown = Reflect.get(value, 'read');
-  const cancel: unknown = Reflect.get(value, 'cancel');
-  return typeof read === 'function' && typeof cancel === 'function';
-}
-
-type StreamReadResult =
-  { readonly done: false; readonly value: Uint8Array } | { readonly done: true };
-
-function readStreamResult(value: unknown): StreamReadResult {
-  if (typeof value !== 'object' || value === null) {
-    throw new DefaultSkinUnavailableError('Default skin stream returned invalid data');
-  }
-  const done: unknown = Reflect.get(value, 'done');
-  if (done === true) {
-    return { done: true };
-  }
-  const chunk: unknown = Reflect.get(value, 'value');
-  if (done !== false || !(chunk instanceof Uint8Array)) {
-    throw new DefaultSkinUnavailableError('Default skin stream returned invalid data');
-  }
-  return { done: false, value: chunk };
 }
 
 function cachedImageBody(value: unknown): Buffer | undefined {

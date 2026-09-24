@@ -64,6 +64,33 @@ describe('RedisSkinVerificationStore', (): void => {
     await expect(challengeStore.claimCheck(interactionId)).resolves.toBeNull();
   });
 
+  it('returns the winning challenge to both callers when creates race', async (): Promise<void> => {
+    const challengeStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    const [first, second] = await Promise.all([
+      challengeStore.create(interactionId, {
+        body: Buffer.from('race-a'),
+        height: 64,
+        markerHash: 'd'.repeat(64),
+        model: 'slim',
+        username: 'RacerA',
+        userUuid: uuid,
+      }),
+      challengeStore.create(interactionId, {
+        body: Buffer.from('race-b'),
+        height: 32,
+        markerHash: 'e'.repeat(64),
+        model: 'classic',
+        username: 'RacerB',
+        userUuid: uuid,
+      }),
+    ]);
+
+    // Both callers must see the same challenge: the one the Lua script stored.
+    expect(second).toEqual(first);
+    expect(await challengeStore.get(interactionId)).toEqual(first);
+  });
+
   it('deletes a challenge only for its exact claim owner', async (): Promise<void> => {
     const challengeStore = requireStore(store);
     const interactionId = `interaction-${randomUUID()}`;

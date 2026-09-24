@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { buildAvatarScene, CanvasAvatarRenderer } from '../../src/avatars/renderer.js';
 import {
   decodeSkinTexture,
+  decodeTexturePixels,
   inspectSkinPng,
   InvalidSkinImageError,
+  type TexturePixels,
 } from '../../src/avatars/skin-texture.js';
 import type { AvatarSize, AvatarView, MinecraftSkinModel } from '../../src/avatars/types.js';
 import {
@@ -134,16 +136,16 @@ describe('Minecraft avatar geometry', (): void => {
     expect(outerParts).toEqual(['head']);
   });
 
-  it('renders the flat head overlay separately from the base head', async (): Promise<void> => {
+  it('renders the flat face overlay separately from the base face', async (): Promise<void> => {
     const texture = await decodeSkinTexture(
       await createSkinPng([...BASE_REGIONS, ...OUTER_REGIONS]),
     );
     const renderer = new CanvasAvatarRenderer();
     const base = await decodePng(
-      await renderer.render(texture, 'classic', { layers: 'base', size: 128, view: 'head' }),
+      await renderer.render(texture, 'classic', { layers: 'base', size: 128, view: 'face' }),
     );
     const layered = await decodePng(
-      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'head' }),
+      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'face' }),
     );
 
     expect(countPixels(layered, isOuterColor)).toBeGreaterThan(0);
@@ -167,10 +169,10 @@ describe('Minecraft avatar geometry', (): void => {
     );
     const renderer = new CanvasAvatarRenderer();
     const base = await decodePng(
-      await renderer.render(texture, 'classic', { layers: 'base', size: 128, view: 'head' }),
+      await renderer.render(texture, 'classic', { layers: 'base', size: 128, view: 'face' }),
     );
     const layered = await decodePng(
-      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'head' }),
+      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'face' }),
     );
 
     expect(readFixturePixel(base, 127, 0).alpha).toBe(255);
@@ -183,18 +185,282 @@ describe('Minecraft avatar geometry', (): void => {
     });
   });
 
-  it('does not inset a head whose outer face is completely transparent', async (): Promise<void> => {
+  it('does not inset a face whose outer layer is completely transparent', async (): Promise<void> => {
     const texture = await decodeSkinTexture(await createSkinPng(BASE_REGIONS));
     const image = await decodePng(
       await new CanvasAvatarRenderer().render(texture, 'classic', {
         layers: 'all',
         size: 128,
-        view: 'head',
+        view: 'face',
       }),
     );
 
     expect(readFixturePixel(image, 0, 0).alpha).toBe(255);
     expect(readFixturePixel(image, 127, 127).alpha).toBe(255);
+  });
+
+  it('renders the back view mirrored with the worn cape draped over the body', async (): Promise<void> => {
+    // Each back face gets its own color so mirroring is observable. The left
+    // arm's back face is split in halves to pin orientation: the atlas wraps
+    // back faces pre-mirrored, so the u=44 columns that border the character's
+    // left side must land on the arm's outer edge without any extra flip.
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        { color: { blue: 40, green: 40, red: 200 }, height: 8, width: 8, x: 24, y: 8 },
+        { color: { blue: 200, green: 40, red: 40 }, height: 12, width: 8, x: 32, y: 20 },
+        { color: { blue: 40, green: 200, red: 40 }, height: 12, width: 4, x: 52, y: 20 },
+        { color: { blue: 120, green: 120, red: 0 }, height: 12, width: 2, x: 44, y: 52 },
+        { color: { blue: 0, green: 120, red: 120 }, height: 12, width: 2, x: 46, y: 52 },
+        { color: { blue: 200, green: 200, red: 40 }, height: 12, width: 4, x: 12, y: 20 },
+        { color: { blue: 200, green: 40, red: 200 }, height: 12, width: 4, x: 28, y: 52 },
+      ]),
+    );
+    const cape = await decodeTexturePixels(
+      await createSkinPng(
+        [{ color: { blue: 60, green: 60, red: 60 }, height: 16, width: 10, x: 1, y: 1 }],
+        32,
+      ),
+    );
+    const renderer = new CanvasAvatarRenderer();
+    const back = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'back' }, cape),
+    );
+    const bare = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 128, view: 'back' }),
+    );
+
+    // The cape covers the torso between the shoulders and the upper legs.
+    expect(readFixturePixel(back, 64, 64)).toEqual({ alpha: 255, blue: 60, green: 60, red: 60 });
+    expect(readFixturePixel(bare, 64, 64)).toEqual({
+      alpha: 255,
+      blue: 200,
+      green: 40,
+      red: 40,
+    });
+    // Head back shows above the cape; legs show below it.
+    expect(readFixturePixel(back, 64, 16)).toEqual({ alpha: 255, blue: 40, green: 40, red: 200 });
+    expect(readFixturePixel(back, 56, 110)).toEqual({
+      alpha: 255,
+      blue: 200,
+      green: 40,
+      red: 200,
+    });
+    expect(readFixturePixel(back, 72, 110)).toEqual({
+      alpha: 255,
+      blue: 200,
+      green: 200,
+      red: 40,
+    });
+    // The figure is mirrored: the character's right arm sits on the right.
+    expect(readFixturePixel(back, 88, 60)).toEqual({ alpha: 255, blue: 40, green: 200, red: 40 });
+    // The arm's outer column (bordering the character's left side) lands on
+    // the image-left edge. Asserted on the cape-less render since the cape
+    // covers this strip.
+    expect(readFixturePixel(bare, 34, 60)).toEqual({ alpha: 255, blue: 120, green: 120, red: 0 });
+    expect(readFixturePixel(bare, 46, 60)).toEqual({ alpha: 255, blue: 0, green: 120, red: 120 });
+  });
+
+  it('renders the side profile from left-face atlas regions, not the front', async (): Promise<void> => {
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
+        { color: { blue: 20, green: 220, red: 20 }, height: 8, width: 8, x: 16, y: 8 },
+        { color: { blue: 40, green: 200, red: 40 }, height: 12, width: 4, x: 40, y: 52 },
+      ]),
+    );
+    const renderer = new CanvasAvatarRenderer();
+    const side = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'base', size: 256, view: 'side' }),
+    );
+    const body = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'base', size: 256, view: 'body' }),
+    );
+
+    // The head's left face (green) and the left arm's left face show; the
+    // head's front face never enters the profile.
+    expect(countPixels(side, isFlatBaseGreen)).toBeGreaterThan(0);
+    expect(
+      countPixels(
+        side,
+        (pixel): boolean => pixel.red === 40 && pixel.green === 200 && pixel.blue === 40,
+      ),
+    ).toBeGreaterThan(0);
+    expect(countPixels(side, isFlatBaseRed)).toBe(0);
+    expect(countPixels(body, isFlatBaseGreen)).toBe(0);
+    // A true profile is far narrower than the front silhouette.
+    const sideWidth = [...Array(side.width).keys()].filter((x): boolean =>
+      [...Array(side.height).keys()].some((y): boolean => readFixturePixel(side, x, y).alpha !== 0),
+    ).length;
+    const bodyWidth = [...Array(body.width).keys()].filter((x): boolean =>
+      [...Array(body.height).keys()].some((y): boolean => readFixturePixel(body, x, y).alpha !== 0),
+    ).length;
+    expect(sideWidth).toBeLessThan(bodyWidth);
+  });
+
+  it('renders the duo as a front and back pair sharing one canvas', async (): Promise<void> => {
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
+        { color: { blue: 40, green: 40, red: 200 }, height: 8, width: 8, x: 24, y: 8 },
+      ]),
+    );
+    const cape = await decodeTexturePixels(
+      await createSkinPng(
+        [{ color: { blue: 60, green: 60, red: 60 }, height: 16, width: 10, x: 1, y: 1 }],
+        32,
+      ),
+    );
+    const renderer = new CanvasAvatarRenderer();
+    const duo = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'base', size: 256, view: 'duo' }, cape),
+    );
+
+    // The left half shows the front (red head face); the right half shows the
+    // back with the cape, and neither color crosses the gutter.
+    const half = 128;
+    const leftHasFront = [...Array(half).keys()].some((x): boolean =>
+      [...Array(duo.height).keys()].some((y): boolean =>
+        isFlatBaseRed(readFixturePixel(duo, x, y)),
+      ),
+    );
+    const rightHasCape = [...Array(duo.width - half).keys()].some((dx): boolean =>
+      [...Array(duo.height).keys()].some((y): boolean =>
+        isCapeGray(readFixturePixel(duo, half + dx, y)),
+      ),
+    );
+    const leftHasCape = [...Array(half).keys()].some((x): boolean =>
+      [...Array(duo.height).keys()].some((y): boolean => isCapeGray(readFixturePixel(duo, x, y))),
+    );
+    expect(leftHasFront).toBe(true);
+    expect(rightHasCape).toBe(true);
+    expect(leftHasCape).toBe(false);
+  });
+
+  it('renders the wings view as a back figure with deployed elytra wings', async (): Promise<void> => {
+    // The cape fixture separates the worn cape face (gray, u1-11) from the
+    // elytra wing face (purple, u36-46): only the wing region may appear, and
+    // a thin leading-edge stripe pins the right wing's mirrored sampling.
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
+        { color: { blue: 40, green: 40, red: 200 }, height: 8, width: 8, x: 24, y: 8 },
+      ]),
+    );
+    const cape = await decodeTexturePixels(
+      await createSkinPng(
+        [
+          { color: { blue: 60, green: 60, red: 60 }, height: 16, width: 10, x: 1, y: 1 },
+          { color: { blue: 160, green: 40, red: 160 }, height: 20, width: 7, x: 39, y: 2 },
+          { color: { blue: 40, green: 200, red: 200 }, height: 20, width: 3, x: 36, y: 2 },
+        ],
+        32,
+      ),
+    );
+    const renderer = new CanvasAvatarRenderer();
+    const wings = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 256, view: 'wings' }, cape),
+    );
+    const bare = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 256, view: 'wings' }),
+    );
+    const back = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 256, view: 'back' }),
+    );
+
+    // Wings paint from the elytra face; the worn cape face never appears.
+    expect(countPixels(wings, isWingPurple)).toBeGreaterThan(0);
+    expect(countPixels(wings, isCapeGray)).toBe(0);
+    // No cape means a plain back render with identical pixels.
+    expect(bare.pixels).toEqual(back.pixels);
+    // The figure's back head still shows above the wing hinges.
+    expect(readFixturePixel(wings, 128, 40)).toEqual({
+      alpha: 255,
+      blue: 40,
+      green: 40,
+      red: 200,
+    });
+    // The overlapping pair still flares past the legs at both bottom tips; the
+    // leading-edge stripe reaches both because the right wing mirrors it.
+    const hasWingStripe = (xMin: number, xMax: number): boolean =>
+      [...Array(xMax - xMin).keys()].some((dx): boolean =>
+        [...Array(wings.height).keys()].some((y): boolean =>
+          isWingStripe(readFixturePixel(wings, xMin + dx, y)),
+        ),
+      );
+    expect(hasWingStripe(0, 48)).toBe(true);
+    expect(hasWingStripe(208, 256)).toBe(true);
+  });
+
+  it('renders third-party cape atlases and ignores unsupported cape layouts', async (): Promise<void> => {
+    // OptiFine ships the Mojang layout cropped to 46x22, so the cape face
+    // (u1-11, v1-17) and wing face (u36-46, v2-22) share Mojang coordinates.
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
+        { color: { blue: 40, green: 40, red: 200 }, height: 8, width: 8, x: 24, y: 8 },
+      ]),
+    );
+    const optifineCape = makeCapeTexture(46, 22, [
+      { color: { blue: 60, green: 60, red: 60 }, height: 16, width: 10, x: 1, y: 1 },
+      { color: { blue: 160, green: 40, red: 160 }, height: 20, width: 10, x: 36, y: 2 },
+    ]);
+    // HD OptiFine atlases scale the same coordinates by the integer factor.
+    const hdOptifineCape = makeCapeTexture(92, 44, [
+      { color: { blue: 60, green: 60, red: 60 }, height: 32, width: 20, x: 2, y: 2 },
+      { color: { blue: 160, green: 40, red: 160 }, height: 40, width: 20, x: 72, y: 4 },
+    ]);
+    // A LabyMod-style sprite sheet matches neither atlas family; its pixels
+    // must never leak into the render.
+    const spriteSheet = makeCapeTexture(355, 275, [
+      { color: { blue: 160, green: 40, red: 160 }, height: 275, width: 355, x: 0, y: 0 },
+    ]);
+    const renderer = new CanvasAvatarRenderer();
+    const back = await decodePng(
+      await renderer.render(
+        texture,
+        'classic',
+        { layers: 'all', size: 256, view: 'back' },
+        optifineCape,
+      ),
+    );
+    const wings = await decodePng(
+      await renderer.render(
+        texture,
+        'classic',
+        { layers: 'all', size: 256, view: 'wings' },
+        optifineCape,
+      ),
+    );
+    const hdWings = await decodePng(
+      await renderer.render(
+        texture,
+        'classic',
+        { layers: 'all', size: 256, view: 'wings' },
+        hdOptifineCape,
+      ),
+    );
+    const sheetWings = await decodePng(
+      await renderer.render(
+        texture,
+        'classic',
+        { layers: 'all', size: 256, view: 'wings' },
+        spriteSheet,
+      ),
+    );
+    const bareBack = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 256, view: 'back' }),
+    );
+    const bareWings = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 256, view: 'wings' }),
+    );
+
+    expect(countPixels(back, isCapeGray)).toBeGreaterThan(0);
+    expect(countPixels(wings, isWingPurple)).toBeGreaterThan(0);
+    expect(countPixels(hdWings, isWingPurple)).toBeGreaterThan(0);
+    // Unsupported layouts degrade to the identical cape-less render.
+    expect(sheetWings.pixels).toEqual(bareWings.pixels);
+    expect(countPixels(sheetWings, isWingPurple)).toBe(0);
+    expect(readFixturePixel(bareBack, 128, 40).alpha).toBe(255);
   });
 
   it('keeps full-figure framing anchored to the base model when an outer layer is visible', async (): Promise<void> => {
@@ -351,4 +617,40 @@ function isFlatBaseColor(pixel: ReturnType<typeof readFixturePixel>): boolean {
 
 function isFlatBaseRed(pixel: ReturnType<typeof readFixturePixel>): boolean {
   return pixel.red === 220 && pixel.green === 20 && pixel.blue === 20;
+}
+
+function isFlatBaseGreen(pixel: ReturnType<typeof readFixturePixel>): boolean {
+  return pixel.red === 20 && pixel.green === 220 && pixel.blue === 20;
+}
+
+function isCapeGray(pixel: ReturnType<typeof readFixturePixel>): boolean {
+  return pixel.red === 60 && pixel.green === 60 && pixel.blue === 60;
+}
+
+function isWingPurple(pixel: ReturnType<typeof readFixturePixel>): boolean {
+  return pixel.red === 160 && pixel.green === 40 && pixel.blue === 160;
+}
+
+function isWingStripe(pixel: ReturnType<typeof readFixturePixel>): boolean {
+  return pixel.red === 200 && pixel.green === 200 && pixel.blue === 40;
+}
+
+function makeCapeTexture(
+  width: number,
+  height: number,
+  regions: readonly FixtureRegion[],
+): TexturePixels {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (const region of regions) {
+    for (let y = region.y; y < region.y + region.height; y += 1) {
+      for (let x = region.x; x < region.x + region.width; x += 1) {
+        const index = (y * width + x) * 4;
+        pixels.set(
+          [region.color.red, region.color.green, region.color.blue, region.color.alpha ?? 255],
+          index,
+        );
+      }
+    }
+  }
+  return { height, pixels, width };
 }
