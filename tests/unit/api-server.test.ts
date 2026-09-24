@@ -12,6 +12,7 @@ import type { CurrentUser } from '../../src/api/current-user.js';
 import { ApiError } from '../../src/api/errors.js';
 import { OAuthInteractionStateError } from '../../src/oauth/interaction-gateway.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
+import type { AppIconStore } from '../../src/developers/app-icon-store.js';
 import type { ApiInteractionService } from '../../src/api/interaction-routes.js';
 import {
   appRegistrationRateLimit,
@@ -1050,6 +1051,8 @@ describe('CraftLogin API server', (): void => {
     expect(parsed.paths).toHaveProperty('/api/avatars/{identifier}/wings');
     expect(parsed.paths).not.toHaveProperty('/api/apps');
     expect(parsed.paths).not.toHaveProperty('/interaction/{uid}');
+    expect(parsed.paths).not.toHaveProperty('/privacy');
+    expect(parsed.paths).not.toHaveProperty('/terms');
     expect(parsed.paths).not.toHaveProperty('/avatar/{identifier}');
     expect(parsed.paths).not.toHaveProperty('/skin/{hash}');
 
@@ -1078,6 +1081,77 @@ describe('CraftLogin API server', (): void => {
     const productionLanding = await production.inject({ method: 'GET', url: '/' });
     expect(productionLanding.statusCode).toBe(200);
     expect(productionLanding.body).toContain('href="/docs/"');
+
+    const privacy = await production.inject({ method: 'GET', url: '/privacy' });
+    expect(privacy.statusCode).toBe(200);
+    expect(privacy.headers['content-type']).toContain('text/html');
+    expect(privacy.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(privacy.body).toContain('Privacy policy');
+    expect(privacy.body).toContain('/assets/legal.css');
+    expect(privacy.body).not.toContain('<script');
+
+    const terms = await production.inject({ method: 'GET', url: '/terms/' });
+    expect(terms.statusCode).toBe(200);
+    expect(terms.body).toContain('Terms of service');
+    expect(terms.body).toContain('href="/privacy"');
+
+    const legalTheme = await production.inject({ method: 'GET', url: '/assets/legal.css' });
+    expect(legalTheme.statusCode).toBe(200);
+    expect(legalTheme.body).toContain('font-family: "Pixeloid Sans"');
+    expect(legalTheme.body).toContain('.legal-page');
+  });
+
+  it('serves versioned application icons and reports clients without one', async (): Promise<void> => {
+    const iconBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const iconHash = 'c'.repeat(64);
+    const clientId = `cl_${'b'.repeat(32)}`;
+    const server = await buildServer(
+      'test',
+      new InteractionStub(),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        findIcon: (candidate: string): Promise<{ data: Buffer; hash: string } | undefined> =>
+          Promise.resolve(candidate === clientId ? { data: iconBytes, hash: iconHash } : undefined),
+      },
+    );
+
+    const versioned = await server.inject({
+      method: 'GET',
+      url: `/api/apps/${clientId}/icon?v=${iconHash}`,
+    });
+    expect(versioned.statusCode).toBe(200);
+    expect(versioned.headers['content-type']).toBe('image/png');
+    expect(versioned.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect(versioned.headers.etag).toBe(`"${iconHash}"`);
+    expect(versioned.rawPayload.equals(iconBytes)).toBe(true);
+
+    const bare = await server.inject({ method: 'GET', url: `/api/apps/${clientId}/icon` });
+    expect(bare.statusCode).toBe(200);
+    expect(bare.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
+
+    const cached = await server.inject({
+      headers: { 'if-none-match': `"${iconHash}"` },
+      method: 'GET',
+      url: `/api/apps/${clientId}/icon`,
+    });
+    expect(cached.statusCode).toBe(304);
+
+    const missing = await server.inject({
+      method: 'GET',
+      url: `/api/apps/cl_${'d'.repeat(32)}/icon`,
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(errorResponseSchema.parse(missing.json()).error.code).toBe('not_found');
+
+    const malformed = await server.inject({ method: 'GET', url: '/api/apps/not-a-client/icon' });
+    expect(malformed.statusCode).toBe(400);
   });
 
   it('forwards OIDC routes before Fastify consumes their request bodies', async (): Promise<void> => {
@@ -1211,6 +1285,7 @@ describe('CraftLogin API server', (): void => {
     readinessCheck: () => Promise<void> = (): Promise<void> => Promise.resolve(),
     microsoftVerification: MicrosoftVerificationStub = new MicrosoftVerificationStub(),
     logger?: FastifyBaseLogger,
+    icons: AppIconStore = { findIcon: (): Promise<undefined> => Promise.resolve(undefined) },
   ): Promise<FastifyInstance> {
     const developerSession = {
       csrfToken: 'test-csrf-token',
@@ -1220,6 +1295,7 @@ describe('CraftLogin API server', (): void => {
       userUuid: '123e4567-e89b-42d3-a456-426614174000',
     } satisfies AuthenticatedDeveloperSession;
     const server = await createApiServer({
+      icons,
       accessTokens: {
         authenticate: (header): Promise<AuthenticatedAccessToken> =>
           header === 'Bearer valid-token'
@@ -1230,6 +1306,8 @@ describe('CraftLogin API server', (): void => {
         decideVerification: (): Promise<'applied'> => Promise.resolve('applied'),
         list: (): Promise<[]> => Promise.resolve([]),
         remove: (): Promise<boolean> => Promise.resolve(true),
+        removeIcon: (): Promise<boolean> => Promise.resolve(true),
+        setIcon: (): Promise<boolean> => Promise.resolve(true),
         requestVerification: (): Promise<'applied'> => Promise.resolve('applied'),
       },
       apps: {

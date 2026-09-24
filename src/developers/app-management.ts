@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { PrismaClient } from '../generated/prisma/client.js';
+import { APP_ICON_MAX_BYTES } from './app-icon.js';
 import {
   developerRoleSchema,
   developerUuidSchema,
@@ -10,6 +11,19 @@ import { containsOnlyDisplayCharacters } from './display-text.js';
 
 const appIdSchema = z.uuid();
 const VERIFICATION_NOTE_MAX_LENGTH = 500;
+
+/** Validated before persistence so a normalized icon is the only thing stored. */
+export const appIconSchema = z.object({
+  hash: z.string().regex(/^[0-9a-f]{64}$/u),
+  png: z
+    .instanceof(Buffer)
+    .refine(
+      (value): boolean => value.byteLength > 0 && value.byteLength <= APP_ICON_MAX_BYTES,
+      'Invalid icon bytes',
+    ),
+});
+
+export type AppIconInput = z.infer<typeof appIconSchema>;
 
 export type AppVerificationStatus = 'none' | 'requested' | 'verified';
 
@@ -31,6 +45,7 @@ export interface ManagedApp {
   readonly clientId: string;
   readonly clientType: 'confidential' | 'public';
   readonly createdAt: string;
+  readonly iconHash?: string;
   readonly id: string;
   readonly name: string;
   readonly ownerUuid?: string;
@@ -43,6 +58,7 @@ export interface ManagedApp {
 export interface AppManager {
   list(actorUuid: string, actorRole: DeveloperRole): Promise<readonly ManagedApp[]>;
   remove(appId: string, actorUuid: string, actorRole: DeveloperRole): Promise<boolean>;
+  removeIcon(appId: string, actorUuid: string, actorRole: DeveloperRole): Promise<boolean>;
   requestVerification(
     appId: string,
     actorUuid: string,
@@ -52,6 +68,12 @@ export interface AppManager {
     appId: string,
     decision: AppVerificationDecision,
   ): Promise<AppVerificationOutcome>;
+  setIcon(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+    icon: AppIconInput,
+  ): Promise<boolean>;
 }
 
 export class PrismaAppManager implements AppManager {
@@ -63,10 +85,63 @@ export class PrismaAppManager implements AppManager {
     const where = role === 'admin' ? {} : { ownerUuid: uuid };
     const apps = await this.database.app.findMany({
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      // Never load icon blobs for a list; only the hash is needed to build the
+      // cache-busted preview URL.
+      select: {
+        clientId: true,
+        clientSecretHash: true,
+        createdAt: true,
+        iconHash: true,
+        id: true,
+        name: true,
+        ownerUuid: true,
+        redirectUris: true,
+        verificationNote: true,
+        verificationRequestedAt: true,
+        verifiedAt: true,
+      },
       where,
     });
 
     return apps.map(toManagedApp);
+  }
+
+  public async setIcon(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+    icon: AppIconInput,
+  ): Promise<boolean> {
+    const id = appIdSchema.parse(appId);
+    const uuid = developerUuidSchema.parse(actorUuid);
+    const role = developerRoleSchema.parse(actorRole);
+    const parsedIcon = appIconSchema.parse(icon);
+    const updated = await this.database.app.updateMany({
+      data: { iconHash: parsedIcon.hash, iconPng: Uint8Array.from(parsedIcon.png) },
+      where: { id, ...(role === 'admin' ? {} : { ownerUuid: uuid }) },
+    });
+    return updated.count === 1;
+  }
+
+  public async removeIcon(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+  ): Promise<boolean> {
+    const id = appIdSchema.parse(appId);
+    const uuid = developerUuidSchema.parse(actorUuid);
+    const role = developerRoleSchema.parse(actorRole);
+    // The icon condition keeps a double removal a no-op instead of a write that
+    // reports success for an application that never had an icon.
+    const updated = await this.database.app.updateMany({
+      data: { iconHash: null, iconPng: null },
+      where: {
+        iconPng: { not: null },
+        id,
+        ...(role === 'admin' ? {} : { ownerUuid: uuid }),
+      },
+    });
+    return updated.count === 1;
   }
 
   public async remove(
@@ -157,6 +232,7 @@ interface StoredApp {
   readonly clientId: string;
   readonly clientSecretHash: string | null;
   readonly createdAt: Date;
+  readonly iconHash: string | null;
   readonly id: string;
   readonly name: string;
   readonly ownerUuid: string | null;
@@ -171,6 +247,7 @@ function toManagedApp(app: StoredApp): ManagedApp {
     clientId: app.clientId,
     clientType: app.clientSecretHash === null ? 'public' : 'confidential',
     createdAt: app.createdAt.toISOString(),
+    ...(app.iconHash === null ? {} : { iconHash: app.iconHash }),
     id: app.id,
     name: app.name,
     ...(app.ownerUuid === null ? {} : { ownerUuid: app.ownerUuid }),

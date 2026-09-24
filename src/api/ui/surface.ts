@@ -87,6 +87,13 @@ export const signInSurfaceStyles = `
   font-weight: 700;
 }
 
+/* Application icons are 64x64 pixel art; pixelated keeps them crisp at 2rem. */
+.consent-app-icon {
+  width: 2rem;
+  height: 2rem;
+  image-rendering: pixelated;
+}
+
 .verification-badge {
   display: inline-flex;
   align-items: center;

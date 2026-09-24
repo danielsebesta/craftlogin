@@ -183,6 +183,32 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
+.app-card-identity {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+  min-width: 0;
+}
+
+/* Icons are 64x64 pixel art; pixelated keeps them crisp at the 2rem preview. */
+.app-card-icon {
+  width: 2rem;
+  height: 2rem;
+  image-rendering: pixelated;
+}
+
+.icon-preview {
+  margin: 0;
+}
+
+.icon-preview img {
+  width: 4rem;
+  height: 4rem;
+  image-rendering: pixelated;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
 .app-name {
   display: block;
   margin: 0;

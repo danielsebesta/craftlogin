@@ -10,6 +10,7 @@ const PUBLIC_PATHS = new Set([
   '/.well-known/oauth-authorization-server',
   '/.well-known/openid-configuration',
   '/.well-known/webfinger',
+  '/api/apps/{clientId}/icon',
   '/api/avatars/{identifier}/back',
   '/api/avatars/{identifier}/body',
   '/api/avatars/{identifier}/bust',
@@ -38,7 +39,7 @@ const PUBLIC_SCHEMAS = new Set([
   'craftlogin.user-response',
   'craftlogin.capes-response',
 ]);
-const PUBLIC_TAGS = new Set(['Avatars', 'Identity', 'OAuth']);
+const PUBLIC_TAGS = new Set(['Applications', 'Avatars', 'Identity', 'OAuth']);
 
 function publicOpenApiPath(url: string): string {
   return url.replaceAll(/:([A-Za-z][A-Za-z0-9_]*)/gu, '{$1}');
@@ -91,6 +92,7 @@ export async function registerOpenApi(
         { description: documentation.tags.oauth, name: 'OAuth' },
         { description: documentation.tags.identity, name: 'Identity' },
         { description: documentation.tags.avatars, name: 'Avatars' },
+        { description: documentation.tags.applications, name: 'Applications' },
       ],
     },
     transform: ({ schema, url }) => ({

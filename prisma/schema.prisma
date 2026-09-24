@@ -22,6 +22,8 @@ model App {
   clientSecretHash        String?        @db.VarChar(255)
   name                    String         @db.VarChar(100)
   redirectUris            String[]
+  iconPng                 Bytes?         @db.ByteA
+  iconHash                String?        @db.VarChar(64)
   createdAt               DateTime       @default(now()) @db.Timestamptz(3)
   ownerUuid               String?        @db.Uuid
   owner                   Developer?     @relation(fields: [ownerUuid], references: [uuid], onDelete: SetNull)

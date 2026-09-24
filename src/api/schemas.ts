@@ -630,6 +630,37 @@ export const appDeleteRouteSchema: FastifySchema = {
   tags: ['Applications'],
 };
 
+// Registered client ids are `cl_` plus 32 base64url characters.
+const appClientIdParamsSchema = {
+  additionalProperties: false,
+  properties: {
+    clientId: { pattern: '^cl_[A-Za-z0-9_-]{32}$', type: 'string' },
+  },
+  required: ['clientId'],
+  type: 'object',
+};
+
+export const appIconRouteSchema: FastifySchema = {
+  description: operations.appIcon.description,
+  params: appClientIdParamsSchema,
+  querystring: {
+    additionalProperties: false,
+    properties: { v: { pattern: '^[0-9a-f]{64}$', type: 'string' } },
+    type: 'object',
+  },
+  response: {
+    200: pngResponseSchema,
+    304: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.appIcon.summary,
+  tags: ['Applications'],
+};
+
 export const developerLoginPageRouteSchema: FastifySchema = {
   hide: true,
   response: {
@@ -741,6 +772,66 @@ export const developerAppDeleteConfirmRouteSchema: FastifySchema = {
   response: {
     200: htmlResponseSchema,
     303: { type: 'null' },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppIconRouteSchema: FastifySchema = {
+  hide: true,
+  params: appIdParamsSchema,
+  querystring: {
+    additionalProperties: false,
+    properties: {
+      notice: {
+        enum: ['icon-removed', 'icon-saved'],
+        type: 'string',
+      },
+    },
+    type: 'object',
+  },
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+// The multipart body is parsed by @fastify/multipart, so this route declares
+// only params and responses; invalid icons re-render the page as HTML.
+export const developerAppIconUploadRouteSchema: FastifySchema = {
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    303: { type: 'null' },
+    400: htmlResponseSchema,
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    413: htmlResponseSchema,
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppIconDeleteRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: { csrfToken: csrfFormProperty },
+    required: ['csrfToken'],
+    type: 'object',
+  },
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },

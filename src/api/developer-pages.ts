@@ -291,6 +291,72 @@ function renderAppOwner(
   return `<span class="app-owner-chip" title="${escapeHtml(ownerUuid)}"><img class="app-owner-head" src="/api/avatars/${encodeURIComponent(ownerUuid)}/face?size=32&amp;layers=all" alt="" width="20" height="20" decoding="async"><span class="app-owner-name">${escapeHtml(displayName)}</span></span>`;
 }
 
+export type AppIconNotice = 'icon-removed' | 'icon-saved';
+
+export interface AppIconPageInput {
+  readonly error?: string;
+  readonly notice?: AppIconNotice;
+  readonly statusCode?: number;
+}
+
+export function renderAppIconPage(
+  app: ManagedApp,
+  csrfToken: string,
+  input: AppIconPageInput = {},
+): string {
+  const strings = english.developer;
+  const appStrings = strings.app;
+  const iconPath = `/developers/apps/${encodeURIComponent(app.id)}/icon`;
+  const iconUrl =
+    app.iconHash === undefined
+      ? undefined
+      : `/api/apps/${encodeURIComponent(app.clientId)}/icon?v=${app.iconHash}`;
+  const preview =
+    iconUrl === undefined
+      ? `<p class="empty-state">${escapeHtml(appStrings.iconNone)}</p>`
+      : `<p class="icon-preview"><img src="${escapeHtml(iconUrl)}" alt="" width="64" height="64" decoding="async"></p>`;
+  const remove =
+    iconUrl === undefined
+      ? ''
+      : `
+        <form class="row-action-form" action="${iconPath}/delete" method="post">
+          ${csrfField(csrfToken)}
+          <button class="button button-quiet" type="submit">${escapeHtml(appStrings.iconDeleteAction)}</button>
+        </form>`;
+  const notice =
+    input.notice === undefined
+      ? ''
+      : noticeLine(
+          input.notice === 'icon-saved' ? appStrings.iconSavedNotice : appStrings.iconRemovedNotice,
+          false,
+        );
+  const error = input.error === undefined ? '' : noticeLine(input.error, true);
+
+  return renderConsoleShell(appStrings.iconTitle, {
+    className: 'container message-layout',
+    content: `      <section class="message-card card" aria-labelledby="app-icon-heading">
+        <h1 class="icon-heading" id="app-icon-heading">${renderIcon('server', 'heading-icon')}${escapeHtml(appStrings.iconHeading)}</h1>
+        <p class="lead">${escapeHtml(appStrings.iconIntro)}</p>
+${error}${notice}        <h2 class="field-label">${escapeHtml(appStrings.iconCurrentLabel)}</h2>
+        ${preview}
+        <p class="field-hint">${escapeHtml(appStrings.iconHint)}</p>
+        <form class="stack" action="${iconPath}" method="post" enctype="multipart/form-data">
+          ${csrfField(csrfToken)}
+          <div class="field">
+            <label for="app-icon">${escapeHtml(appStrings.iconFileLabel)}</label>
+            <input id="app-icon" name="icon" type="file" accept="image/png" required>
+          </div>
+          <div class="button-row">
+            <button class="button" type="submit">${escapeHtml(appStrings.iconUploadAction)}</button>
+          </div>
+        </form>${remove}
+        <div class="button-row">
+          <a class="button button-secondary" href="/developers">${escapeHtml(strings.navigation.console)}</a>
+        </div>
+      </section>`,
+  });
+}
+
 function renderAppList(
   apps: readonly ManagedApp[],
   role: DeveloperRole,
@@ -317,9 +383,12 @@ function renderAppList(
       return `<li class="app-card">
           <article>
             <header class="app-card-header">
-              <div>
-                <h3 class="app-name">${escapeHtml(app.name)}</h3>
-                <p class="app-meta">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</p>
+              <div class="app-card-identity">
+                ${app.iconHash === undefined ? '' : `<img class="app-card-icon" src="/api/apps/${encodeURIComponent(app.clientId)}/icon?v=${app.iconHash}" alt="" width="32" height="32" decoding="async">`}
+                <div>
+                  <h3 class="app-name">${escapeHtml(app.name)}</h3>
+                  <p class="app-meta">${escapeHtml(app.clientType === 'public' ? strings.publicLabel : strings.confidentialLabel)}</p>
+                </div>
               </div>
               ${renderAppVerificationCell(app)}
             </header>
@@ -383,6 +452,9 @@ function renderAppActions(app: ManagedApp, role: DeveloperRole, csrfToken: strin
       `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/verification">${escapeHtml(strings.app.requestAction)}</a>`,
     );
   }
+  actions.push(
+    `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/icon">${escapeHtml(strings.app.iconLinkLabel)}</a>`,
+  );
   actions.push(
     `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/delete">${escapeHtml(strings.app.deleteAction)}</a>`,
   );

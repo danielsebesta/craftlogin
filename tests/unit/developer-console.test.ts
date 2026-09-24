@@ -1,14 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type { FastifyInstance } from 'fastify';
+import { createCanvas } from '@napi-rs/canvas';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { DeveloperAuthentication } from '../../src/api/developer-authentication.js';
 import { ApiError } from '../../src/api/errors.js';
 import { createApiServer } from '../../src/api/server.js';
+import { APP_ICON_MAX_BYTES } from '../../src/developers/app-icon.js';
 import type { ManagedApp } from '../../src/developers/app-management.js';
 import type { DeveloperRole } from '../../src/developers/developer-repository.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
+import { english } from '../../src/locales/en.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
 
 const developerSession: AuthenticatedDeveloperSession = {
@@ -20,6 +23,7 @@ const developerSession: AuthenticatedDeveloperSession = {
 };
 
 const consoleClientId = 'cl_console-test-client';
+const appId = '123e4567-e89b-42d3-a456-426614174001';
 
 describe('Developer Console', (): void => {
   const servers: FastifyInstance[] = [];
@@ -391,6 +395,118 @@ describe('Developer Console', (): void => {
     expect(response.headers.location).toBe('/developers?notice=verification-unavailable');
   });
 
+  it('shows the application icon and its management link on the dashboard', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true, iconHash: 'd'.repeat(64) });
+    const response = await server.inject({ method: 'GET', url: '/developers' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('class="app-card-icon"');
+    expect(response.body).toContain(`/api/apps/cl_local-map/icon?v=${'d'.repeat(64)}`);
+    expect(response.body).toContain(`href="/developers/apps/${appId}/icon"`);
+  });
+
+  it('renders the icon page with an upload form and the current preview', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true, iconHash: 'a'.repeat(64) });
+    const response = await server.inject({
+      method: 'GET',
+      url: `/developers/apps/${appId}/icon`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('enctype="multipart/form-data"');
+    expect(response.body).toContain('type="file"');
+    expect(response.body).toContain(`/api/apps/cl_local-map/icon?v=${'a'.repeat(64)}`);
+    expect(response.body).toContain(`action="/developers/apps/${appId}/icon/delete"`);
+  });
+
+  it('stores a normalized icon uploaded as multipart', async (): Promise<void> => {
+    const setIconCalls: { appId: string; bytes: number; hash: string }[] = [];
+    const server = await buildServer({ authenticated: true, setIconCalls });
+    const response = await server.inject({
+      headers: { 'content-type': `multipart/form-data; boundary=${ICON_BOUNDARY}` },
+      method: 'POST',
+      payload: iconUploadBody(pngOf(64, 64)),
+      url: `/developers/apps/${appId}/icon`,
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe(`/developers/apps/${appId}/icon?notice=icon-saved`);
+    expect(setIconCalls).toHaveLength(1);
+    expect(setIconCalls[0]?.appId).toBe(appId);
+    expect(setIconCalls[0]?.hash).toMatch(/^[0-9a-f]{64}$/u);
+    expect(setIconCalls[0]?.bytes).toBeGreaterThan(0);
+    expect(setIconCalls[0]?.bytes).toBeLessThanOrEqual(APP_ICON_MAX_BYTES);
+  });
+
+  it('explains an icon that is too large in pixels or not a PNG', async (): Promise<void> => {
+    const setIconCalls: { appId: string; bytes: number; hash: string }[] = [];
+    const server = await buildServer({ authenticated: true, setIconCalls });
+
+    const tooLarge = await server.inject({
+      headers: { 'content-type': `multipart/form-data; boundary=${ICON_BOUNDARY}` },
+      method: 'POST',
+      payload: iconUploadBody(pngOf(65, 65)),
+      url: `/developers/apps/${appId}/icon`,
+    });
+    expect(tooLarge.statusCode).toBe(400);
+    expect(tooLarge.headers['content-type']).toContain('text/html');
+    expect(tooLarge.body).toContain(english.developer.app.iconErrors.tooLargeDimensions);
+
+    const notPng = await server.inject({
+      headers: { 'content-type': `multipart/form-data; boundary=${ICON_BOUNDARY}` },
+      method: 'POST',
+      payload: iconUploadBody(Buffer.from('not a png')),
+      url: `/developers/apps/${appId}/icon`,
+    });
+    expect(notPng.statusCode).toBe(400);
+    expect(notPng.body).toContain(english.developer.app.iconErrors.notPng);
+
+    expect(setIconCalls).toHaveLength(0);
+  });
+
+  it('reports an oversized upload as too large instead of a parser failure', async (): Promise<void> => {
+    const setIconCalls: { appId: string; bytes: number; hash: string }[] = [];
+    const server = await buildServer({ authenticated: true, setIconCalls });
+    const response = await server.inject({
+      headers: { 'content-type': `multipart/form-data; boundary=${ICON_BOUNDARY}` },
+      method: 'POST',
+      payload: iconUploadBody(Buffer.alloc(APP_ICON_MAX_BYTES + 1, 7)),
+      url: `/developers/apps/${appId}/icon`,
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.body).toContain(english.developer.app.iconErrors.tooLargeBytes);
+    expect(setIconCalls).toHaveLength(0);
+  });
+
+  it('asks for a file when the upload has none and removes the icon on request', async (): Promise<void> => {
+    const removeIconCalls: string[] = [];
+    const server = await buildServer({
+      authenticated: true,
+      iconHash: 'b'.repeat(64),
+      removeIconCalls,
+    });
+
+    const missing = await server.inject({
+      headers: { 'content-type': `multipart/form-data; boundary=${ICON_BOUNDARY}` },
+      method: 'POST',
+      payload: iconMissingFileBody(),
+      url: `/developers/apps/${appId}/icon`,
+    });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.body).toContain(english.developer.app.iconErrors.missingFile);
+
+    const removed = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'csrfToken=developer-csrf-token',
+      url: `/developers/apps/${appId}/icon/delete`,
+    });
+    expect(removed.statusCode).toBe(303);
+    expect(removed.headers.location).toBe(`/developers/apps/${appId}/icon?notice=icon-removed`);
+    expect(removeIconCalls).toEqual([appId]);
+  });
+
   async function buildServer(options: {
     readonly allowlisted?: boolean;
     readonly appVerification?: 'none' | 'requested' | 'verified';
@@ -400,10 +516,15 @@ describe('Developer Console', (): void => {
     readonly developerVerified?: boolean;
     readonly fetchCalls?: string[];
     readonly grantCalls?: { role: DeveloperRole; uuid: string }[];
+    readonly iconHash?: string;
     readonly players?: MinecraftPlayerLookup;
+    readonly removeIconCalls?: string[];
+    readonly removeIconOutcome?: boolean;
     readonly requestOutcome?: 'applied' | 'unavailable';
     readonly requests?: { actorUuid: string; id: string; note?: string }[];
     readonly role?: DeveloperRole;
+    readonly setIconCalls?: { appId: string; bytes: number; hash: string }[];
+    readonly setIconOutcome?: boolean;
     readonly setVerifiedOutcome?: boolean;
     readonly tokenBehavior?: 'failure' | 'ok';
     readonly verificationChanges?: { uuid: string; verified: boolean }[];
@@ -421,7 +542,8 @@ describe('Developer Console', (): void => {
       clientId: 'cl_local-map',
       clientType: 'public',
       createdAt: '2026-09-07T12:00:00.000Z',
-      id: '123e4567-e89b-42d3-a456-426614174001',
+      ...(options.iconHash === undefined ? {} : { iconHash: options.iconHash }),
+      id: appId,
       name: 'Local map client',
       ownerUuid: developerSession.userUuid,
       redirectUris: ['https://client.example/callback'],
@@ -449,6 +571,7 @@ describe('Developer Console', (): void => {
       return Promise.resolve(Response.json({ sub: developerSession.userUuid }));
     };
     const server = await createApiServer({
+      icons: { findIcon: unavailable },
       accessTokens: { authenticate: unavailable },
       appManager: {
         decideVerification: (id, decision) => {
@@ -457,6 +580,18 @@ describe('Developer Console', (): void => {
         },
         list: (): Promise<readonly ManagedApp[]> => Promise.resolve([app]),
         remove: unavailable,
+        removeIcon: (candidateAppId) => {
+          options.removeIconCalls?.push(candidateAppId);
+          return Promise.resolve(options.removeIconOutcome ?? true);
+        },
+        setIcon: (candidateAppId, _actorUuid, _role, icon) => {
+          options.setIconCalls?.push({
+            appId: candidateAppId,
+            bytes: icon.png.byteLength,
+            hash: icon.hash,
+          });
+          return Promise.resolve(options.setIconOutcome ?? true);
+        },
         requestVerification: (id, actorUuid, note) => {
           options.requests?.push({ actorUuid, id, ...(note === undefined ? {} : { note }) });
           return Promise.resolve(options.requestOutcome ?? 'applied');
@@ -586,4 +721,36 @@ function setCookies(setCookie: string | string[] | undefined): string {
     return setCookie.join(';');
   }
   return '';
+}
+
+const ICON_BOUNDARY = 'craftlogin-test-boundary';
+
+function pngOf(width: number, height: number): Buffer {
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ff0000';
+  context.fillRect(0, 0, width, height);
+  return canvas.toBuffer('image/png');
+}
+
+function iconUploadBody(png: Buffer, csrfToken = 'developer-csrf-token'): Buffer {
+  return Buffer.concat([
+    Buffer.from(
+      `--${ICON_BOUNDARY}\r\ncontent-disposition: form-data; name="csrfToken"\r\n\r\n${csrfToken}\r\n`,
+    ),
+    Buffer.from(
+      `--${ICON_BOUNDARY}\r\ncontent-disposition: form-data; name="icon"; filename="icon.png"\r\ncontent-type: image/png\r\n\r\n`,
+    ),
+    png,
+    Buffer.from(`\r\n--${ICON_BOUNDARY}--\r\n`),
+  ]);
+}
+
+function iconMissingFileBody(csrfToken = 'developer-csrf-token'): Buffer {
+  return Buffer.concat([
+    Buffer.from(
+      `--${ICON_BOUNDARY}\r\ncontent-disposition: form-data; name="csrfToken"\r\n\r\n${csrfToken}\r\n`,
+    ),
+    Buffer.from(`--${ICON_BOUNDARY}--\r\n`),
+  ]);
 }

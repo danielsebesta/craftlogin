@@ -6,6 +6,7 @@ import { CachedAvatarService } from '../avatars/service.js';
 import { loadEnvironment } from '../config/environment.js';
 import { loadMicrosoftOAuthCredentials } from '../config/microsoft-oauth.js';
 import { loadOAuthCredentials } from '../config/oauth-credentials.js';
+import { PrismaAppIconStore } from '../developers/app-icon-store.js';
 import { PrismaAppManager } from '../developers/app-management.js';
 import { PrismaDeveloperAccessRepository } from '../developers/developer-repository.js';
 import { ensureConsoleClient } from '../developers/console-client.js';
@@ -121,6 +122,7 @@ async function main(): Promise<void> {
     server = await createApiServer({
       accessTokens: new ProviderAccessTokenAuthenticator(oauth.provider),
       appManager: new PrismaAppManager(database),
+      icons: new PrismaAppIconStore(database),
       apps: new PrismaAppRegistrar(database),
       clients,
       cookieKeys: credentials.cookieKeys,

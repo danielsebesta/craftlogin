@@ -108,6 +108,22 @@ export const playerProfileRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
+// Application icons are cached hard, so this is only volumetric protection for
+// the database read behind an uncached URL.
+export const appIconReadRateLimit = {
+  groupId: 'app-icon-read',
+  max: 240,
+  timeWindow: 60 * 1_000,
+};
+
+// Owners change an icon rarely; an independent bucket keeps a refresh loop from
+// consuming the application-registration budget.
+export const appIconWriteRateLimit = {
+  groupId: 'app-icon-write',
+  max: 20,
+  timeWindow: 60 * 60 * 1_000,
+};
+
 export async function registerRateLimiting(
   server: FastifyInstance,
   redis?: Redis,

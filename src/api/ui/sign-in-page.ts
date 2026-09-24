@@ -90,6 +90,7 @@ export interface SignInPageInput {
   readonly accountName?: string;
   readonly action: string;
   readonly allowsHeading: string;
+  readonly appIconUrl?: string;
   readonly appName?: string;
   readonly appVerified?: boolean;
   readonly brand: string;
@@ -317,7 +318,7 @@ export function renderSignInPage(input: SignInPageInput): string {
   const headingSuffix =
     input.appName === undefined
       ? ''
-      : `<span class="consent-app"><bdi>${escapeHtml(input.appName)}</bdi>${verifiedBadge}</span>`;
+      : `<span class="consent-app">${input.appIconUrl === undefined ? '' : `<img class="consent-app-icon" src="${escapeHtml(input.appIconUrl)}" alt="" width="32" height="32" decoding="async">`}<bdi>${escapeHtml(input.appName)}</bdi>${verifiedBadge}</span>`;
   const securityNote =
     input.securityNote === undefined
       ? ''

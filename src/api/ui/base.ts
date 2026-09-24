@@ -274,6 +274,22 @@ main {
   opacity: 0.75;
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.footer-links a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.footer-links a:hover {
+  color: var(--text);
+}
+
 .page-footer .footer-operator {
   font-size: 0.75rem;
   opacity: 0.9;

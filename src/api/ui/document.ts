@@ -73,10 +73,14 @@ ${page.header.navigation.trailing ?? ''}
       </nav>`;
   const pageFooter = page.footer ?? [];
   const legalDisclaimer = english.common.legalDisclaimer.map(escapeHtml).join('<br>');
+  const legalLinks = `<nav class="footer-links" aria-label="${escapeHtml(english.common.legalLinksLabel)}">${english.common.legalLinks
+    .map((link): string => `<a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`)
+    .join('')}</nav>`;
   const footer = [
     ...pageFooter
       .filter((line): boolean => line.trim().length > 0)
       .map((line): string => `<p class="footer-note">${escapeHtml(line)}</p>`),
+    legalLinks,
     `<p class="footer-legal">${legalDisclaimer}</p>`,
     `<p class="footer-operator">${escapeHtml(english.common.operator)}</p>`,
   ].join('\n        ');

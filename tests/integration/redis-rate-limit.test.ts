@@ -84,11 +84,14 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
     userUuid: '123e4567-e89b-42d3-a456-426614174000',
   } satisfies AuthenticatedDeveloperSession;
   const server = await createApiServer({
+    icons: { findIcon: unavailable },
     accessTokens: { authenticate: unavailable },
     appManager: {
       decideVerification: unavailable,
       list: unavailable,
       remove: unavailable,
+      removeIcon: unavailable,
+      setIcon: unavailable,
       requestVerification: unavailable,
     },
     apps: {

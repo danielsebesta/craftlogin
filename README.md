@@ -191,9 +191,10 @@ the login redirects to the standard authorization endpoint, the administrator ve
 available method on the shared interaction page, and the console callback creates the console
 session. There is no parallel console login flow. Administrators can grant or revoke developer UUIDs
 and roles; the access registry accepts a Minecraft name or a canonical UUID. Registered developers
-can create and remove their own public or confidential OAuth clients. Confidential secrets are
-displayed once. Role changes are checked on every request and rotate or revoke active console
-sessions.
+can create and remove their own public or confidential OAuth clients. Each application can carry a
+64×64 PNG icon, the same format as a Minecraft server icon, which is uploaded from the console and
+shown beside the application name on the sign-in screen. Confidential secrets are displayed once.
+Role changes are checked on every request and rotate or revoke active console sessions.
 
 #### Application verification
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { developerStyles } from '../../src/api/developer-assets.js';
 import { renderDeveloperDashboard } from '../../src/api/developer-pages.js';
 import { interactionStyles } from '../../src/api/interaction-assets.js';
+import { legalStyles } from '../../src/api/legal-assets.js';
 import { permissionsForScope, renderInteractionPage } from '../../src/api/interaction-page.js';
 import { landingStyles } from '../../src/api/landing-assets.js';
 import { swaggerThemeStyles } from '../../src/api/swagger-theme.js';
@@ -12,7 +13,7 @@ import { signInSurfaceStyles } from '../../src/api/ui/surface.js';
 import { uiTokenStyles } from '../../src/api/ui/tokens.js';
 import { english } from '../../src/locales/en.js';
 
-const pageStyles = [landingStyles, interactionStyles, developerStyles];
+const pageStyles = [landingStyles, interactionStyles, developerStyles, legalStyles];
 
 describe('shared UI styles', (): void => {
   it('keeps every page flat, dark, and focus visible', (): void => {

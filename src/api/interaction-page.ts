@@ -8,6 +8,7 @@ export interface InteractionOwner {
 }
 
 export interface InteractionPageInput {
+  readonly appIconUrl?: string;
   readonly appName: string;
   readonly appVerified?: boolean;
   readonly code?: string;
@@ -116,6 +117,7 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     ...(input.accountName === undefined ? {} : { accountName: input.accountName }),
     action: `${interactionPath}/complete`,
     allowsHeading: strings.allowsHeading,
+    ...(input.appIconUrl === undefined ? {} : { appIconUrl: input.appIconUrl }),
     appName: input.appName,
     ...(input.appVerified === true ? { appVerified: true } : {}),
     brand: strings.brand,

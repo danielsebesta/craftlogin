@@ -2,10 +2,13 @@ import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import formBody from '@fastify/formbody';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 
 import type { AvatarService } from '../avatars/service.js';
+import { APP_ICON_MAX_BYTES } from '../developers/app-icon.js';
+import type { AppIconStore } from '../developers/app-icon-store.js';
 import type { AppManager } from '../developers/app-management.js';
 import type { DeveloperAccessRepository } from '../developers/developer-repository.js';
 import type { DeveloperSessionService } from '../developers/session-service.js';
@@ -13,6 +16,7 @@ import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { SkinStore } from '../mojang/skin-store.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
 import { registerAgentGuidanceRoutes } from './agent-guidance-routes.js';
+import { registerAppIconRoutes } from './app-icon-routes.js';
 import type { AppRegistrar } from './app-registration.js';
 import { registerAppRoutes } from './app-routes.js';
 import { registerAvatarRoutes } from './avatar-routes.js';
@@ -34,6 +38,7 @@ import {
   type ClientDirectoryLookup,
 } from './interaction-routes.js';
 import { registerLandingRoutes } from './landing-routes.js';
+import { registerLegalRoutes } from './legal-routes.js';
 import { registerMicrosoftIdentityAssociationRoute } from './microsoft-identity-association-route.js';
 import {
   registerMicrosoftOAuthRoutes,
@@ -57,6 +62,7 @@ export interface ApiServerOptions {
   readonly developers: DeveloperAccessRepository;
   readonly developerSessions: Pick<DeveloperSessionService, 'create'>;
   readonly httpPort: number;
+  readonly icons: AppIconStore;
   readonly interactions: ApiInteractionService;
   readonly issuer: string;
   readonly logger?: FastifyBaseLogger;
@@ -101,6 +107,14 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   await registerRateLimiting(server, options.rateLimitRedis, options.rateLimitNamespace);
   await server.register(cookie, { secret: [...options.cookieKeys] });
   await server.register(formBody);
+  // Developer Console icon uploads are multipart so the form still works
+  // without JavaScript; the limits keep a hostile body tiny and single-file.
+  // Oversized files are truncated instead of throwing so the route can answer
+  // with its own HTML notice rather than a generic JSON error.
+  await server.register(multipart, {
+    limits: { fields: 4, fileSize: APP_ICON_MAX_BYTES, files: 1 },
+    throwFileSizeLimit: false,
+  });
   await server.register(helmet, { contentSecurityPolicy: false });
 
   registerSharedSchemas(server);
@@ -116,6 +130,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     registerAvatarRoutes(server, options.minecraft);
   }
   registerLandingRoutes(server, { showDocumentation: true });
+  registerLegalRoutes(server);
   registerDocsRoutes(server);
   registerAgentGuidanceRoutes(server);
   registerHealthRoute(server, options.readiness);
@@ -162,6 +177,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
   });
   registerAppRoutes(server, options.apps, options.appManager, options.developerAuthentication);
+  registerAppIconRoutes(server, { icons: options.icons });
 
   return server;
 }

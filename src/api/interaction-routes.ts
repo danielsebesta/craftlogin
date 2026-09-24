@@ -112,6 +112,8 @@ export interface ApiInteractionService {
 }
 
 export interface ClientDirectoryEntry {
+  /** Current application icon version, absent when the client has no icon. */
+  readonly iconHash?: string;
   readonly name: string;
   /** Manual verification label shown beside the app name on the consent screen. */
   readonly verified: boolean;
@@ -168,6 +170,11 @@ export function registerInteractionRoutes(
       await reply.type('text/html; charset=utf-8').send(
         renderInteractionPage({
           appName,
+          ...(client?.iconHash === undefined
+            ? {}
+            : {
+                appIconUrl: `/api/apps/${encodeURIComponent(interaction.clientId)}/icon?v=${client.iconHash}`,
+              }),
           ...(client?.verified === true ? { appVerified: true } : {}),
           ...(interaction.code === undefined ? {} : { code: interaction.code }),
           interactionId: interaction.interactionId,

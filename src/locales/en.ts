@@ -11,6 +11,11 @@ export const english = {
       'NOT AN OFFICIAL MINECRAFT SERVICE.',
       'NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
     ],
+    legalLinks: [
+      { href: '/privacy', label: 'Privacy' },
+      { href: '/terms', label: 'Terms' },
+    ],
+    legalLinksLabel: 'Legal',
     operator: 'Operated independently by Daniel Šebesta. Contact: contact@craftlogin.com.',
     skipToContent: 'Skip to main content',
   },
@@ -24,6 +29,11 @@ export const english = {
           summary: 'Register an OAuth client',
         },
         appDelete: { summary: 'Delete an owned OAuth client' },
+        appIcon: {
+          description:
+            'Return the application icon as a 64x64 PNG. Icons are uploaded by the client owner in the Developer Console and are used on the sign-in screen.',
+          summary: 'Get an application icon',
+        },
         appList: { summary: 'List manageable OAuth clients' },
         avatarBack: {
           description:
@@ -161,7 +171,8 @@ export const english = {
         profile: 'Read the current Minecraft username and avatar.',
       },
       tags: {
-        applications: 'Manage public and confidential OAuth clients as an authenticated developer.',
+        applications:
+          'Manage OAuth clients as an authenticated developer and fetch public application icons.',
         avatars: 'Fetch and render signed Minecraft skins without authentication.',
         identity:
           'Resolve public Minecraft identities or read the identity represented by a token.',
@@ -479,6 +490,26 @@ export const english = {
       deleteAction: 'Delete',
       empty: 'No applications yet. Register one to get a client ID.',
       formErrorNotice: 'Check the application name and redirect URIs, then try again.',
+      iconCurrentLabel: 'Current icon',
+      iconDeleteAction: 'Remove icon',
+      iconErrors: {
+        invalidImage: 'That PNG could not be read. Export it again and retry.',
+        missingFile: 'Choose a PNG file to upload.',
+        notPng: 'The icon must be a PNG file.',
+        tooLargeBytes: 'The icon file is too large. Keep it under 16 KB.',
+        tooLargeDimensions: 'The icon must be at most 64x64 pixels.',
+      },
+      iconFileLabel: 'PNG file, up to 64x64 pixels',
+      iconHeading: 'Application icon',
+      iconHint:
+        'Use the same 64x64 PNG as your Minecraft server icon. Smaller images are centered at their original size, never stretched, and the background stays transparent.',
+      iconIntro: 'The icon appears next to your application name on the sign-in screen.',
+      iconLinkLabel: 'Icon',
+      iconNone: 'No icon uploaded yet.',
+      iconRemovedNotice: 'Application icon removed.',
+      iconSavedNotice: 'Application icon updated.',
+      iconTitle: 'Application icon',
+      iconUploadAction: 'Upload icon',
       nameLabel: 'Application name',
       namePlaceholder: 'Example app',
       newHeading: 'New application',
@@ -661,6 +692,141 @@ export const english = {
     security: {
       heading: 'Safe by design',
       text: 'There are no CraftLogin passwords to steal. Players never type a password on our pages, and we store no emails. Logins are short-lived and single-use, return addresses must match exactly, and everything is open source, so anyone can check our work.',
+    },
+  },
+  legal: {
+    lastUpdated: 'Last updated: September 24, 2026',
+    privacy: {
+      description:
+        'What CraftLogin stores, what it never stores, and how to have your data removed.',
+      intro:
+        'This page describes the data CraftLogin handles when you sign in, what it deliberately never stores, and how to have it removed.',
+      sections: [
+        {
+          heading: 'Who operates CraftLogin',
+          paragraphs: [
+            'CraftLogin is an independent, open-source OpenID Connect provider for Minecraft: Java Edition identities. The data controller is Daniel Šebesta, reachable at contact@craftlogin.com. CraftLogin is not affiliated with, approved by, or associated with Mojang or Microsoft.',
+          ],
+        },
+        {
+          heading: 'Data CraftLogin stores',
+          items: [
+            'Your Minecraft UUID, your current Minecraft username, and the time of your first and last verification.',
+            'If you use the Developer Console: your allowlisted Minecraft UUID, your role, and the OAuth clients you create.',
+            'For every registered application: its client ID, display name, exact redirect URIs, owner, and manual verification labels.',
+            'Refresh tokens only as one-way hashes, together with the client ID, your Minecraft UUID, and an expiry time.',
+            'Short-lived verification records in Redis, which expire after about five minutes.',
+          ],
+          paragraphs: [
+            'Confidential client secrets are hashed with Argon2 before they are stored. CraftLogin cannot recover the original secret from that hash.',
+          ],
+        },
+        {
+          heading: 'Data CraftLogin never stores',
+          items: [
+            'Your email address, your password, or any other account credential.',
+            'Microsoft access or refresh tokens, Xbox Live tokens, XSTS tokens, Minecraft access tokens, Xbox user hashes, or Microsoft account identifiers. These exist only in memory while a single verification request is processed.',
+            'Verification codes, authorization codes, access tokens, raw refresh tokens, or client secrets in application logs.',
+          ],
+        },
+        {
+          heading: 'Cookies and sessions',
+          paragraphs: [
+            'CraftLogin sets signed cookies that are HttpOnly, Secure, and SameSite=Lax. The sign-in flow uses a short-lived interaction cookie and a five-minute Microsoft PKCE transaction cookie. The Developer Console uses an opaque server-side session with sliding expiry and an absolute lifetime.',
+            'CraftLogin runs no analytics, no advertising, and no third-party tracking scripts.',
+          ],
+        },
+        {
+          heading: 'Logs and security signals',
+          paragraphs: [
+            'The service writes structured operational logs without verification codes, tokens, secrets, or cookie values. IP address and user agent are recorded only as session anomaly signals, and an IP change alone never invalidates a session.',
+          ],
+        },
+        {
+          heading: 'Retention',
+          paragraphs: [
+            'Verification records disappear automatically after about five minutes. Refresh tokens stop working when they expire, when you sign out, or when the application you signed in to revokes them.',
+            'Your account record is kept while you use CraftLogin. You can ask for it to be deleted at any time.',
+          ],
+        },
+        {
+          heading: 'Your rights',
+          paragraphs: [
+            'You can request access to, correction of, or deletion of the personal data CraftLogin holds about you, and you can object to its processing. Write to contact@craftlogin.com and include your Minecraft username or UUID.',
+          ],
+        },
+        {
+          heading: 'Changes to this policy',
+          paragraphs: [
+            'Material changes appear on this page with a new date. Continued use after a change means you accept the updated policy.',
+          ],
+        },
+      ],
+      title: 'Privacy policy',
+    },
+    terms: {
+      description: 'Terms of service and acceptable use for the CraftLogin OIDC provider.',
+      intro:
+        'These terms cover the use of CraftLogin as a player and as an integrating application. CraftLogin is not affiliated with, approved by, or associated with Mojang or Microsoft.',
+      sections: [
+        {
+          heading: 'The service',
+          paragraphs: [
+            'CraftLogin verifies that you control a Minecraft: Java Edition account and returns the resulting Minecraft UUID and current username to applications you approve. Verification confirms account control only. It does not transfer any Mojang or Microsoft rights, and it is not a license, entitlement, or ownership check beyond what it reports.',
+          ],
+        },
+        {
+          heading: 'What you must not do',
+          items: [
+            'Impersonate Mojang or Microsoft, or imply that CraftLogin is approved or endorsed by them.',
+            'Bypass authentication, license, or entitlement checks with CraftLogin.',
+            'Phish users, distribute malware, or run gambling or other unlawful, deceptive, harmful, or abusive services.',
+            'Use CraftLogin to mislead people about who controls a Minecraft account.',
+          ],
+        },
+        {
+          heading: 'Integrating applications',
+          items: [
+            'Keep confidential client secrets on your server. Never ship a client secret in browser, mobile, or desktop code.',
+            'Register exact redirect URIs. Wildcards are not accepted.',
+            'Publish your own privacy notice and disclosures. You are responsible for how your application uses the identity data it receives.',
+            'Follow the Minecraft EULA and the Minecraft Usage Guidelines.',
+          ],
+        },
+        {
+          heading: 'Availability and changes',
+          paragraphs: [
+            'CraftLogin is under active development and provided on an as-is and as-available basis, without warranties of any kind. Features, limits, and endpoints may change or be discontinued.',
+          ],
+        },
+        {
+          heading: 'Suspension',
+          paragraphs: [
+            'We may suspend or revoke developer access or client credentials that violate these terms or put the service or its users at risk.',
+          ],
+        },
+        {
+          heading: 'Liability',
+          paragraphs: [
+            'To the maximum extent permitted by law, CraftLogin and its operator are not liable for indirect, incidental, or consequential damages arising from the use of the service. Nothing in these terms limits liability that cannot be limited by law. The CraftLogin source code is licensed under the MIT License and is provided without warranty.',
+          ],
+        },
+        {
+          heading: 'Governing law',
+          paragraphs: ['These terms are governed by the laws of the Czech Republic.'],
+        },
+        {
+          heading: 'Changes to these terms',
+          paragraphs: [
+            'Material changes appear on this page with a new date. Continued use after a change means you accept the updated terms.',
+          ],
+        },
+        {
+          heading: 'Contact',
+          paragraphs: ['Questions about these terms: contact@craftlogin.com.'],
+        },
+      ],
+      title: 'Terms of service',
     },
   },
   interaction: {

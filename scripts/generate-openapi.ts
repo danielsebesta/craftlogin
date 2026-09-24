@@ -9,11 +9,14 @@ const unavailable = (): never => {
 
 async function generate(): Promise<void> {
   const server = await createApiServer({
+    icons: { findIcon: unavailable },
     accessTokens: { authenticate: unavailable },
     appManager: {
       decideVerification: unavailable,
       list: unavailable,
       remove: unavailable,
+      removeIcon: unavailable,
+      setIcon: unavailable,
       requestVerification: unavailable,
     },
     apps: { register: unavailable },

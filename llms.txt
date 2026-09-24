@@ -10,7 +10,7 @@ Use OpenID Connect Authorization Code Flow through a maintained OIDC library. Cr
 - [Copyable implementation prompt](https://craftlogin.com/#implement-with-ai): One simple prompt for Claude Code, Codex, Cursor, Copilot, and similar coding agents.
 - [OIDC discovery](https://craftlogin.com/.well-known/openid-configuration): Authoritative issuer metadata and endpoint URLs.
 - [OpenAPI](https://craftlogin.com/openapi.yaml): CraftLogin HTTP API reference outside the standard OIDC protocol.
-- [Developer Console](https://craftlogin.com/developers): Register public or confidential applications and exact redirect URIs.
+- [Developer Console](https://craftlogin.com/developers): Register public or confidential applications with exact redirect URIs and a 64×64 PNG application icon.
 
 ## Identity
 

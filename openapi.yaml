@@ -1844,6 +1844,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+  /api/apps/{clientId}/icon:
+    get:
+      summary: Get an application icon
+      tags:
+        - Applications
+      description: Return the application icon as a 64x64 PNG. Icons are uploaded by
+        the client owner in the Developer Console and are used on the sign-in
+        screen.
+      parameters:
+        - schema:
+            pattern: ^[0-9a-f]{64}$
+            type: string
+          in: query
+          name: v
+          required: false
+        - schema:
+            pattern: ^cl_[A-Za-z0-9_-]{32}$
+            type: string
+          in: path
+          name: clientId
+          required: true
+      responses:
+        "200":
+          description: Default Response
+          headers:
+            cache-control:
+              schema:
+                type: string
+            etag:
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                format: binary
+                type: string
+        "304":
+          description: Default Response
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        "500":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
+        default:
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
 servers:
   - url: https://craftlogin.com
 tags:
@@ -1854,3 +1922,6 @@ tags:
     name: Identity
   - description: Fetch and render signed Minecraft skins without authentication.
     name: Avatars
+  - description: Manage OAuth clients as an authenticated developer and fetch public
+      application icons.
+    name: Applications

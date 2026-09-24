@@ -64,12 +64,16 @@ export class PrismaClientDirectory implements ClientDirectoryLookup, RegisteredO
 
   public async findClient(clientId: string): Promise<ClientDirectoryEntry | undefined> {
     const client = await this.database.app.findUnique({
-      select: { name: true, verifiedAt: true },
+      select: { iconHash: true, name: true, verifiedAt: true },
       where: { clientId },
     });
     return client === null
       ? undefined
-      : { name: client.name, verified: client.verifiedAt !== null };
+      : {
+          ...(client.iconHash === null ? {} : { iconHash: client.iconHash }),
+          name: client.name,
+          verified: client.verifiedAt !== null,
+        };
   }
 
   public async findClientOwnerUuid(clientId: string): Promise<string | undefined> {

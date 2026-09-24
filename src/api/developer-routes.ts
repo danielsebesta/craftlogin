@@ -6,7 +6,14 @@ import {
   appVerificationNoteSchema,
   type AppManager,
   type AppVerificationDecision,
+  type ManagedApp,
 } from '../developers/app-management.js';
+import {
+  AppIconError,
+  normalizeAppIcon,
+  type AppIconErrorCode,
+  type NormalizedAppIcon,
+} from '../developers/app-icon.js';
 import type {
   DeveloperAccessRepository,
   DeveloperRole,
@@ -41,17 +48,21 @@ import {
   ConsoleOidcError,
 } from './developer-oidc-login.js';
 import {
+  renderAppIconPage,
   renderCreatedAppPage,
   renderDeleteAppPage,
   renderDeveloperAccessDeniedPage,
   renderDeveloperDashboard,
   renderRemoveDeveloperPage,
   renderRequestVerificationPage,
+  type AppIconNotice,
+  type AppIconPageInput,
   type DashboardNotice,
   type DeveloperDashboardInput,
 } from './developer-pages.js';
 import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import {
+  appIconWriteRateLimit,
   appRegistrationRateLimit,
   developerAppVerificationRateLimit,
   developerLoginPageRateLimit,
@@ -60,6 +71,9 @@ import {
   developerAppCreateRouteSchema,
   developerAppDeleteConfirmRouteSchema,
   developerAppDeleteRouteSchema,
+  developerAppIconDeleteRouteSchema,
+  developerAppIconRouteSchema,
+  developerAppIconUploadRouteSchema,
   developerAppVerificationDecisionRouteSchema,
   developerAppVerificationRequestRouteSchema,
   developerAppVerificationRouteSchema,
@@ -88,6 +102,15 @@ interface CsrfBody {
 interface AppParams {
   readonly id: string;
 }
+
+type DeveloperSession = NonNullable<Awaited<ReturnType<DeveloperAuthentication['authenticate']>>>;
+
+const ICON_ERROR_MESSAGES: Record<AppIconErrorCode, string> = {
+  'invalid-image': english.developer.app.iconErrors.invalidImage,
+  'not-png': english.developer.app.iconErrors.notPng,
+  'too-large-bytes': english.developer.app.iconErrors.tooLargeBytes,
+  'too-large-dimensions': english.developer.app.iconErrors.tooLargeDimensions,
+};
 
 const APP_VERIFICATION_NOTICES = {
   approve: 'verification-approved',
@@ -341,6 +364,117 @@ export function registerDeveloperRoutes(
         'Developer deleted an OAuth application',
       );
       await reply.redirect('/developers', 303);
+    },
+  );
+
+  server.get<{ Params: AppParams; Querystring: { notice?: AppIconNotice } }>(
+    '/developers/apps/:id/icon',
+    { schema: developerAppIconRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      const app = await findManagedApp(options, session, request.params.id);
+      if (app === undefined) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      await sendAppIconPage(reply, app, session.csrfToken, {
+        ...(request.query.notice === undefined ? {} : { notice: request.query.notice }),
+      });
+    },
+  );
+
+  server.post<{ Params: AppParams }>(
+    '/developers/apps/:id/icon',
+    {
+      config: { rateLimit: appIconWriteRateLimit },
+      schema: developerAppIconUploadRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      // The CSRF token travels as a multipart field so the upload form works
+      // without JavaScript; it is checked before any storage work happens.
+      const upload = await readIconUpload(request);
+      options.authentication.requireCsrf(session, upload.csrfToken);
+      const app = await findManagedApp(options, session, request.params.id);
+      if (app === undefined) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      if (upload.tooLarge) {
+        await sendAppIconPage(reply, app, session.csrfToken, {
+          error: ICON_ERROR_MESSAGES['too-large-bytes'],
+          statusCode: 413,
+        });
+        return;
+      }
+      if (upload.bytes === undefined) {
+        await sendAppIconPage(reply, app, session.csrfToken, {
+          error: english.developer.app.iconErrors.missingFile,
+          statusCode: 400,
+        });
+        return;
+      }
+
+      let icon: NormalizedAppIcon;
+      try {
+        icon = await normalizeAppIcon(upload.bytes);
+      } catch (error: unknown) {
+        if (!(error instanceof AppIconError)) {
+          throw error;
+        }
+        await sendAppIconPage(reply, app, session.csrfToken, {
+          error: ICON_ERROR_MESSAGES[error.code],
+          statusCode: 400,
+        });
+        return;
+      }
+
+      if (
+        !(await options.appManager.setIcon(request.params.id, session.userUuid, session.role, icon))
+      ) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      options.logger.info(
+        { actorUuid: session.userUuid, appId: request.params.id },
+        'Developer updated an application icon',
+      );
+      await reply.redirect(
+        `/developers/apps/${encodeURIComponent(request.params.id)}/icon?notice=icon-saved`,
+        303,
+      );
+    },
+  );
+
+  server.post<{ Body: CsrfBody; Params: AppParams }>(
+    '/developers/apps/:id/icon/delete',
+    { schema: developerAppIconDeleteRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, request.body.csrfToken);
+      if (
+        !(await options.appManager.removeIcon(request.params.id, session.userUuid, session.role))
+      ) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      options.logger.info(
+        { actorUuid: session.userUuid, appId: request.params.id },
+        'Developer removed an application icon',
+      );
+      await reply.redirect(
+        `/developers/apps/${encodeURIComponent(request.params.id)}/icon?notice=icon-removed`,
+        303,
+      );
     },
   );
 
@@ -724,4 +858,66 @@ function setDeveloperPageHeaders(reply: FastifyReply): void {
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
   });
+}
+
+async function findManagedApp(
+  options: DeveloperRoutesOptions,
+  session: DeveloperSession,
+  appId: string,
+): Promise<ManagedApp | undefined> {
+  const apps = await options.appManager.list(session.userUuid, session.role);
+  return apps.find((candidate): boolean => candidate.id === appId);
+}
+
+async function sendAppIconPage(
+  reply: FastifyReply,
+  app: ManagedApp,
+  csrfToken: string,
+  input: AppIconPageInput,
+): Promise<void> {
+  setDeveloperPageHeaders(reply);
+  await reply
+    .status(input.statusCode ?? 200)
+    .type('text/html; charset=utf-8')
+    .send(renderAppIconPage(app, csrfToken, input));
+}
+
+interface IconUpload {
+  readonly bytes?: Buffer;
+  readonly csrfToken?: string;
+  readonly tooLarge: boolean;
+}
+
+// Reads the single `icon` file plus the CSRF field. Unexpected files are drained
+// so the multipart stream can finish, and an oversized file is detected through
+// the truncation flag instead of an exception.
+async function readIconUpload(request: FastifyRequest): Promise<IconUpload> {
+  let bytes: Buffer | undefined;
+  let csrfToken: string | undefined;
+  let tooLarge = false;
+
+  for await (const part of request.parts()) {
+    if (part.type === 'file') {
+      if (part.fieldname !== 'icon') {
+        await part.toBuffer();
+        continue;
+      }
+      const uploaded = await part.toBuffer();
+      if (part.file.truncated) {
+        tooLarge = true;
+        continue;
+      }
+      bytes = uploaded;
+      continue;
+    }
+    if (part.fieldname === 'csrfToken' && typeof part.value === 'string') {
+      csrfToken = part.value;
+    }
+  }
+
+  return {
+    ...(bytes === undefined ? {} : { bytes }),
+    ...(csrfToken === undefined ? {} : { csrfToken }),
+    tooLarge,
+  };
 }

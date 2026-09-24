@@ -47,6 +47,7 @@ const idTokenClaimsSchema = z.object({
   amr: z.array(z.string()).optional(),
   sub: z.literal(accountId),
 });
+const FLOW_ICON_HASH = 'a1b2c3'.padEnd(64, '0');
 
 interface StoredAdapterState {
   readonly records: Map<string, AdapterPayload>;
@@ -238,17 +239,24 @@ describe('CraftLogin OIDC provider', (): void => {
     );
     const accessTokens = new ProviderAccessTokenAuthenticator(provider);
     server = await createApiServer({
+      icons: { findIcon: unavailable },
       accessTokens,
       appManager: {
         decideVerification: unavailable,
         list: unavailable,
         remove: unavailable,
+        removeIcon: unavailable,
+        setIcon: unavailable,
         requestVerification: unavailable,
       },
       apps: { register: unavailable },
       clients: {
-        findClient: (): Promise<{ name: string; verified: boolean }> =>
-          Promise.resolve({ name: 'OAuth flow test client', verified: true }),
+        findClient: (): Promise<{ iconHash: string; name: string; verified: boolean }> =>
+          Promise.resolve({
+            iconHash: FLOW_ICON_HASH,
+            name: 'OAuth flow test client',
+            verified: true,
+          }),
         findClientOwnerUuid: (): Promise<undefined> => Promise.resolve(undefined),
         isAllowedOrigin: (): Promise<boolean> => Promise.resolve(false),
       },
@@ -343,7 +351,10 @@ describe('CraftLogin OIDC provider', (): void => {
       headers: proxyHeaders(cookies),
     });
     expect(interactionResponse.status).toBe(200);
-    expect(await interactionResponse.text()).toContain('Sign in with Microsoft');
+    const interactionHtml = await interactionResponse.text();
+    expect(interactionHtml).toContain('Sign in with Microsoft');
+    // The consent screen shows the application icon the directory lookup reported.
+    expect(interactionHtml).toContain(`/api/apps/public-client/icon?v=${FLOW_ICON_HASH}`);
     expect(verification.interactionId).toBe(
       new URL(interactionLocation, issuer).pathname.split('/').at(-1),
     );
