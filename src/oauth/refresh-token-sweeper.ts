@@ -10,9 +10,8 @@ export interface ExpiredRefreshTokenStore {
   };
 }
 
-// Expired rows are invisible to `find` but never removed on their own, so the
-// table would grow forever. A periodic deleteMany keeps it bounded; concurrent
-// instances may sweep the same rows harmlessly.
+// Expired rows are invisible to `find` but never removed, so a periodic
+// deleteMany keeps the table bounded; concurrent sweeps are harmless.
 export class ExpiredRefreshTokenSweeper {
   private timer: NodeJS.Timeout | null = null;
 

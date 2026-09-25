@@ -11,9 +11,7 @@ export const appRegistrationRateLimit = {
   timeWindow: 60 * 60 * 1_000,
 };
 
-// A verification request is a rare, developer-initiated write with the same abuse
-// profile as registering an application, but its own bucket so the two do not
-// consume each other's budget.
+// Same abuse profile as app registration, but its own bucket.
 export const developerAppVerificationRateLimit = {
   groupId: 'developer-app-verification',
   max: appRegistrationRateLimit.max,
@@ -26,11 +24,9 @@ export const tokenRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
-// Confidential-client authentication costs an Argon2 verification per request.
-// A shared ceiling bounds worst-case CPU when many addresses abuse the token
-// and introspection endpoints at once. It runs through server.createRateLimit()
-// because a second rateLimit() hook would be skipped after the first one runs;
-// the constant key makes the bucket global rather than per address.
+// Confidential auth costs an Argon2 verify per request; this shared ceiling
+// bounds worst-case CPU. Runs via createRateLimit() — a second rateLimit()
+// hook would be skipped — and the constant key makes the bucket global.
 export const tokenEndpointGlobalRateLimit = {
   groupId: 'oauth-grant-global',
   keyGenerator: (): string => 'oauth-grant-global',
@@ -38,9 +34,8 @@ export const tokenEndpointGlobalRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
-// Each authorize call creates an interaction record in Redis, so the endpoint
-// gets its own volumetric bucket. The keyGenerator prefix keeps it separate
-// from the other manual limiters, which share one store prefix.
+// Each authorize call creates an interaction record in Redis; the keyGenerator
+// prefix keeps this bucket separate from limiters sharing one store prefix.
 export const authorizeRateLimit = {
   groupId: 'oauth-authorize',
   keyGenerator: (request: FastifyRequest): string => `authorize:${request.ip}`,
@@ -61,17 +56,16 @@ export const developerLoginPageRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
-// The status check needs an unguessable interaction id plus the signed session
-// cookie, so guessing is infeasible and this limit is volumetric protection.
-// It must tolerate several polling tabs and reload bursts behind one shared IP.
+// Status needs an unguessable interaction id plus the signed session cookie, so
+// this is volumetric protection tolerant of polling tabs behind one shared IP.
 export const verificationStatusRateLimit = {
   groupId: 'verification-status',
   max: 120,
   timeWindow: 60 * 1_000,
 };
 
-// This has the same trust assumptions and budget as status polling, but an
-// independent bucket keeps background polls from blocking a provider callback.
+// Same budget as status polling, but an independent bucket so background polls
+// can't block a provider callback.
 export const microsoftVerificationRateLimit = {
   groupId: 'microsoft-verification',
   max: verificationStatusRateLimit.max,
@@ -108,16 +102,14 @@ export const playerProfileRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
-// Application icons are cached hard, so this is only volumetric protection for
-// the database read behind an uncached URL.
+// Icons are cached hard; this is only volumetric protection for the DB read behind an uncached URL.
 export const appIconReadRateLimit = {
   groupId: 'app-icon-read',
   max: 240,
   timeWindow: 60 * 1_000,
 };
 
-// Owners change an icon rarely; an independent bucket keeps a refresh loop from
-// consuming the application-registration budget.
+// An independent bucket keeps an icon refresh loop off the registration budget.
 export const appIconWriteRateLimit = {
   groupId: 'app-icon-write',
   max: 20,

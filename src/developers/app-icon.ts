@@ -2,11 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { createCanvas, loadImage, type Image } from '@napi-rs/canvas';
 
-/**
- * Applications use the same icon format as a Minecraft server icon: a square
- * PNG that developers already have on hand, so the consent screen keeps the
- * game's pixel look instead of a resampled logo.
- */
+/** Server-icon format: a square PNG keeps the game's pixel look. */
 export const APP_ICON_SIZE = 64;
 /** A 64x64 PNG is a few kilobytes; anything larger is not a server icon. */
 export const APP_ICON_MAX_BYTES = 16 * 1024;
@@ -47,8 +43,7 @@ export async function normalizeAppIcon(input: Uint8Array): Promise<NormalizedApp
   const image = await decodePng(input);
   const canvas = createCanvas(APP_ICON_SIZE, APP_ICON_SIZE);
   const context = canvas.getContext('2d');
-  // Pixel art must never be resampled: a smaller icon is centered at its native
-  // size on a transparent canvas, and larger icons were rejected above.
+  // Pixel art is never resampled: a smaller icon centers at native size.
   context.imageSmoothingEnabled = false;
   context.drawImage(
     image,
@@ -85,7 +80,7 @@ function readPngDimensions(input: Uint8Array): IconDimensions {
     throw new AppIconError('invalid-image', 'The icon has no pixels');
   }
   // Reject oversized dimensions before decoding: a tiny file can describe a
-  // huge bitmap, and decoding it would allocate that bitmap in memory.
+  // huge bitmap whose decode would allocate it.
   if (width > APP_ICON_SIZE || height > APP_ICON_SIZE) {
     throw new AppIconError(
       'too-large-dimensions',

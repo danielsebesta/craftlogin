@@ -25,8 +25,8 @@ function withoutOptionalPort(serverHost: string): string | null {
 
 function normalizeHost(serverHost: string): string | null {
   const metadataSeparatorIndex = serverHost.indexOf('\0');
-  // Forge/FML appends forwarding metadata after a NUL delimiter. Only the first segment is the
-  // hostname supplied by the player and is therefore eligible to select a verification code.
+  // Forge/FML appends forwarding metadata after a NUL; only the first segment
+  // is the player-supplied hostname.
   const hostnameSegment =
     metadataSeparatorIndex === -1 ? serverHost : serverHost.slice(0, metadataSeparatorIndex);
 

@@ -36,7 +36,7 @@ const RENDER_CACHE_SECONDS = 24 * 60 * 60;
 const CAPE_CACHE_SECONDS = 60 * 60;
 const CAPE_MISSING_CACHE_SECONDS = 10 * 60;
 // Bump whenever the pixel output changes so stale renders are never served.
-const RENDERER_VERSION = 'v15';
+const RENDERER_VERSION = 'v17';
 // Views that show the worn cape must key it into the render cache identity.
 const CAPE_RENDER_VIEWS = new Set<AvatarView>(['back', 'duo', 'wings']);
 
@@ -351,8 +351,6 @@ export class CachedAvatarService implements AvatarService {
       renderOptions.view,
       renderOptions.layers,
       renderOptions.size.toString(),
-      // The worn cape is part of a back render, so it must be part of the
-      // cache identity too — otherwise a cape change serves a stale image.
       ...(CAPE_RENDER_VIEWS.has(renderOptions.view) ? [cape?.identity ?? 'none'] : []),
     ].join(':');
     const cacheKey = `avatar-render:${identity}`;
@@ -399,14 +397,12 @@ export class CachedAvatarService implements AvatarService {
     try {
       if (parsed.kind === 'name') {
         const named = await this.options.players.findProfileByName(parsed.username);
-        // Unregistered names render as their deterministic offline-mode
-        // identity, matching VZGE's offline-UUID autodetection.
+        // Unregistered names render as their deterministic offline-mode identity.
         uuid = named?.uuid ?? offlinePlayerUuid(parsed.username);
         signedProfile = named !== undefined;
       } else {
         uuid = parsed.uuid;
-        // Version-3 UUIDs are offline-mode name hashes; Mojang accounts are
-        // always version 4, so the profile lookup cannot succeed.
+        // Version-3 UUIDs are offline-mode name hashes; Mojang accounts are always v4.
         signedProfile = !isOfflinePlayerUuid(uuid);
       }
     } catch (error: unknown) {
@@ -449,8 +445,7 @@ export class CachedAvatarService implements AvatarService {
       }
     }
     const fallback = await this.findDefaultSource(uuid);
-    // A cape survives the default-skin fallback: some accounts own capes while
-    // wearing no custom texture.
+    // Some accounts own capes while wearing no custom skin, so cape info survives the fallback.
     return fallback.status === 'found' && capeInfo !== undefined
       ? {
           ...fallback,
@@ -472,8 +467,8 @@ export class CachedAvatarService implements AvatarService {
       inspectSkinPng(image.body);
       return { body: image.body, status: 'found', texture: { hash, model } };
     } catch (error: unknown) {
-      // A texture hash can point at a non-skin texture (e.g. a cape); that is
-      // a missing subject, not an upstream failure.
+      // A texture hash can point at a non-skin texture (e.g. a cape) — a missing
+      // subject, not an upstream failure.
       if (error instanceof InvalidSkinImageError) {
         return { status: 'not-found' };
       }
@@ -482,8 +477,7 @@ export class CachedAvatarService implements AvatarService {
     }
   }
 
-  // Capes exist only on signed Mojang profiles, so offline identities and
-  // texture-hash subjects can never resolve to one.
+  // Capes exist only on signed Mojang profiles.
   private async resolveCapeUuid(subject: string): Promise<string | undefined> {
     const parsed = parseAvatarSubject(subject);
     if (parsed === undefined || parsed.kind === 'texture') {
@@ -496,9 +490,8 @@ export class CachedAvatarService implements AvatarService {
   }
 
   private async findDefaultSource(uuid: string): Promise<AvatarSourceResult> {
-    // Players without a Mojang texture receive a deterministic vanilla default
-    // skin instead of an error. Transient Mojang failures above return
-    // unavailable, never a default that could mask a real custom skin.
+    // Players without a Mojang texture get a deterministic vanilla default skin;
+    // transient upstream failures above return unavailable, never a default.
     const canonical = canonicalMinecraftUuid(uuid);
     if (canonical === undefined) {
       return { status: 'not-found' };
@@ -600,9 +593,7 @@ export class CachedAvatarService implements AvatarService {
     }
   }
 
-  // Third-party cape textures are fetched through the same per-provider cache
-  // the cape endpoint uses; a provider failure surfaces as a miss here so a
-  // broken upstream never blocks a skin render.
+  // A provider failure surfaces as a miss so a broken upstream never blocks a skin render.
   private async thirdPartyCapeBody(
     identity: PlayerIdentityForCapes,
     provider: Exclude<SpecificCapeProvider, 'mojang'>,
@@ -652,10 +643,7 @@ export class CachedAvatarService implements AvatarService {
     return { body, status: 'found' };
   }
 
-  // Rear-facing views drape the player's cape over the body; 'any' resolves
-  // providers in documented priority order so the official Mojang cape always
-  // wins when it exists, and non-atlas textures degrade to a plain render
-  // downstream.
+  // 'any' resolves providers in priority order so the official Mojang cape wins when it exists.
   private async resolveRenderCape(
     source: AvatarSource,
     view: AvatarView,
@@ -667,9 +655,7 @@ export class CachedAvatarService implements AvatarService {
     if (provider !== 'any') {
       return await this.renderCapeForProvider(source, provider);
     }
-    // The Mojang cape is already on the resolved profile, so it wins without
-    // an upstream call; third-party providers then race in parallel and keep
-    // their documented priority so one slow endpoint never serializes misses.
+    // The Mojang cape rides on the resolved profile, so it wins without an upstream call.
     const mojang = await this.renderCapeForProvider(source, 'mojang');
     if (mojang !== undefined) {
       return mojang;
@@ -707,8 +693,7 @@ export class CachedAvatarService implements AvatarService {
         });
         key = capeHash;
       } catch (error: unknown) {
-        // A cape is decoration on a render: an upstream or cache failure
-        // degrades to a plain render instead of failing the request.
+        // A cape is decoration: failures degrade to a plain render.
         if (!(error instanceof CapeTextureMissingError)) {
           this.logFailure(error, 'fetch-mojang-cape');
         }

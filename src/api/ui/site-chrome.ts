@@ -5,8 +5,7 @@ const SOURCE_URL = 'https://github.com/danielsebesta/craftlogin';
 
 export type SitePage = '/' | '/docs/';
 
-// Single shared header and footer for every public page, so the navbar and
-// footer never drift between the landing page and the documentation.
+// Shared header/footer so the navbar and footer can't drift between pages.
 export function siteHeader(current: SitePage): DocumentHeader {
   const strings = english.landing.navigation;
   const items: DocumentNavigationItem[] = [

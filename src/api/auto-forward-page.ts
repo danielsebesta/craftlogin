@@ -25,7 +25,7 @@ export function renderAutoForwardPage(targetUrl: string): string {
     headExtra: `<meta http-equiv="refresh" content="0;url=${escapeHtml(targetUrl)}">`,
     header: { brand: strings.brand },
     layout: 'narrow',
-    mainClass: 'page-column signin signin-compact',
+    mainClass: 'page-column signin',
     stylesheet: '/assets/interaction.css',
     title: strings.forwardTitle,
   });

@@ -67,7 +67,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
     input.formError === undefined
       ? ''
       : `<p class="notice notice-error" role="alert">${escapeHtml(input.formError)}</p>`;
-  const identity = `<span class="console-session">
+  const identity = `<div class="console-session">
           <span class="console-session-player">
             <img class="console-session-head" src="/api/avatars/${encodeURIComponent(input.userUuid)}/face?size=32&amp;layers=all" alt="" width="32" height="32" decoding="async">
             <span><span class="visually-hidden">${escapeHtml(strings.dashboard.signedInAs)} </span>${escapeHtml(input.username)}</span>
@@ -77,7 +77,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
             ${csrfField(input.csrfToken)}
             <button class="button button-quiet" type="submit">${renderIcon('logout', 'button-icon')}${escapeHtml(strings.dashboard.logout)}</button>
           </form>
-        </span>`;
+        </div>`;
 
   return renderConsoleShell(
     strings.dashboard.heading,
@@ -89,7 +89,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
       </header>
       ${renderDashboardNotice(input.notice)}
       <div class="console-workspace">
-        <section class="console-section" aria-labelledby="apps-heading">
+        <section class="card console-section" aria-labelledby="apps-heading">
           <div class="console-section-head">
             <h2 class="icon-heading" id="apps-heading">${renderIcon('key', 'heading-icon')}${escapeHtml(strings.dashboard.applicationsHeading)}</h2>
             ${docsLink}
@@ -97,7 +97,7 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
           ${renderAppList(input.apps, input.role, input.csrfToken, input.playerNames)}
         </section>
 
-        <details class="disclosure console-create"${formOpen ? ' open' : ''}>
+        <details class="card disclosure console-create"${formOpen ? ' open' : ''}>
           <summary>${escapeHtml(strings.app.newHeading)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
           <div class="disclosure-body">
             ${formErrorNotice}
@@ -133,7 +133,7 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
     strings.app.createdTitle,
     {
       className: 'container message-layout',
-      content: `      <section class="message-card card" aria-labelledby="created-heading">
+      content: `      <section class="message-card card stack" aria-labelledby="created-heading">
         <h1 class="icon-heading" id="created-heading">${renderIcon('check', 'heading-icon')}${escapeHtml(strings.app.createdHeading)}</h1>
         <p class="lead">${escapeHtml(strings.app.createdIntro)}</p>
         <dl class="summary-list">
@@ -163,7 +163,7 @@ export function renderRequestVerificationPage(app: ManagedApp, csrfToken: string
   const strings = english.developer;
   return renderConsoleShell(strings.app.requestTitle, {
     className: 'container message-layout',
-    content: `      <section class="message-card card" aria-labelledby="request-heading">
+    content: `      <section class="message-card card stack" aria-labelledby="request-heading">
         <h1 class="icon-heading" id="request-heading">${renderIcon('shield', 'heading-icon')}${escapeHtml(strings.app.requestHeading)}</h1>
         <p class="lead">${escapeHtml(strings.app.requestIntro)}</p>
         <dl class="summary-list">
@@ -176,7 +176,7 @@ export function renderRequestVerificationPage(app: ManagedApp, csrfToken: string
             <dd><code>${escapeHtml(app.clientId)}</code></dd>
           </div>
         </dl>
-        <form action="/developers/apps/${encodeURIComponent(app.id)}/verification" method="post">
+        <form class="stack" action="/developers/apps/${encodeURIComponent(app.id)}/verification" method="post">
           ${csrfField(csrfToken)}
           <div class="field">
             <label for="verification-note">${escapeHtml(strings.app.requestNoteLabel)}</label>
@@ -196,7 +196,7 @@ export function renderDeleteAppPage(app: ManagedApp, csrfToken: string): string 
   const strings = english.developer;
   return renderConsoleShell(strings.confirm.appTitle, {
     className: 'container message-layout',
-    content: `      <section class="message-card card" aria-labelledby="confirm-heading">
+    content: `      <section class="message-card card stack" aria-labelledby="confirm-heading">
         <h1 class="icon-heading" id="confirm-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(strings.confirm.appHeading)}</h1>
         <p class="lead">${escapeHtml(strings.confirm.appBody)}</p>
         <dl class="summary-list">
@@ -226,7 +226,7 @@ export function renderRemoveDeveloperPage(developer: DeveloperAccess, csrfToken:
     developer.role === 'admin' ? strings.admin.adminRole : strings.admin.developerRole;
   return renderConsoleShell(strings.confirm.developerTitle, {
     className: 'container message-layout',
-    content: `      <section class="message-card card" aria-labelledby="confirm-heading">
+    content: `      <section class="message-card card stack" aria-labelledby="confirm-heading">
         <h1 class="icon-heading" id="confirm-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(strings.confirm.developerHeading)}</h1>
         <p class="lead">${escapeHtml(strings.confirm.developerBody)}</p>
         <dl class="summary-list">
@@ -334,7 +334,7 @@ export function renderAppIconPage(
 
   return renderConsoleShell(appStrings.iconTitle, {
     className: 'container message-layout',
-    content: `      <section class="message-card card" aria-labelledby="app-icon-heading">
+    content: `      <section class="message-card card stack" aria-labelledby="app-icon-heading">
         <h1 class="icon-heading" id="app-icon-heading">${renderIcon('server', 'heading-icon')}${escapeHtml(appStrings.iconHeading)}</h1>
         <p class="lead">${escapeHtml(appStrings.iconIntro)}</p>
 ${error}${notice}        <h2 class="field-label">${escapeHtml(appStrings.iconCurrentLabel)}</h2>
@@ -380,7 +380,7 @@ function renderAppList(
                 <dd>${renderAppOwner(app.ownerUuid, app.ownerUuid !== undefined ? playerNames?.[app.ownerUuid] : undefined, strings.unassignedOwner)}</dd>
               </div>`
           : '';
-      return `<li class="app-card">
+      return `<li class="card card-flush app-card">
           <article>
             <header class="app-card-header">
               <div class="app-card-identity">
@@ -437,9 +437,8 @@ function renderAppActions(app: ManagedApp, role: DeveloperRole, csrfToken: strin
   const strings = english.developer;
   const actions: string[] = [];
   if (role === 'admin') {
-    // An administrator verifies an application that never applied, or withdraws an
-    // existing verification. Pending requests are decided in the review queue, so
-    // they are not duplicated here.
+    // Admins verify unapplied apps or withdraw existing verifications; pending
+    // requests are decided in the review queue, not duplicated here.
     if (app.verification === 'none') {
       actions.push(verificationDecisionForm(app, 'approve', strings.admin.verifyAction, csrfToken));
     }
@@ -456,7 +455,7 @@ function renderAppActions(app: ManagedApp, role: DeveloperRole, csrfToken: strin
     `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/icon">${escapeHtml(strings.app.iconLinkLabel)}</a>`,
   );
   actions.push(
-    `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/delete">${escapeHtml(strings.app.deleteAction)}</a>`,
+    `<a class="button button-quiet button-danger-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/delete">${escapeHtml(strings.app.deleteAction)}</a>`,
   );
   return `<div class="row-actions">${actions.join('')}</div>`;
 }
@@ -522,8 +521,8 @@ function renderAdministratorPanel(
   const entries =
     developers.length === 0
       ? `<p class="empty-state">${escapeHtml(admin.empty)}</p>`
-      : `<div class="table-wrap">
-      <table class="table">
+      : `<div class="table-wrap" role="region" aria-label="${escapeHtml(admin.heading)}" tabindex="0">
+      <table class="table table-scrollable">
         <caption class="visually-hidden">${escapeHtml(admin.heading)}</caption>
         <thead>
           <tr>
@@ -538,7 +537,7 @@ function renderAdministratorPanel(
         ${developers
           .map(
             (developer): string => `<tr>
-          <th scope="row"><code>${escapeHtml(developer.uuid)}</code></th>
+          <th scope="row"><code class="table-identifier">${escapeHtml(developer.uuid)}</code></th>
           <td>
             <form class="role-form" action="/developers/admin/developers" method="post">
               ${csrfField(csrfToken)}
@@ -553,7 +552,7 @@ function renderAdministratorPanel(
           </td>
           <td>${renderDeveloperVerificationCell(developer, csrfToken)}</td>
           <td><time datetime="${escapeHtml(developer.createdAt)}">${escapeHtml(developer.createdAt.slice(0, 10))}</time></td>
-          <td class="table-actions"><a class="button button-quiet" href="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete">${escapeHtml(admin.removeAction)}</a></td>
+          <td class="table-actions"><a class="button button-quiet button-danger-quiet" href="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete">${escapeHtml(admin.removeAction)}</a></td>
         </tr>`,
           )
           .join('\n        ')}
@@ -562,7 +561,7 @@ function renderAdministratorPanel(
     </div>`;
 
   return `
-    <details class="disclosure console-admin"${open ? ' open' : ''}>
+    <details class="card disclosure console-admin"${open ? ' open' : ''}>
       <summary>${escapeHtml(admin.summary)}<span class="disclosure-marker" aria-hidden="true"></span></summary>
       <div class="disclosure-body">
         <p class="lead">${escapeHtml(admin.intro)}</p>
@@ -617,7 +616,7 @@ function renderVerificationQueue(apps: readonly ManagedApp[], csrfToken: string)
       : `<ul class="request-list">
         ${pending
           .map(
-            (app): string => `<li class="request-card">
+            (app): string => `<li class="card card-compact request-card">
           <p class="app-name">${escapeHtml(app.name)}</p>
           <p class="app-meta"><code>${escapeHtml(app.clientId)}</code> · <code>${escapeHtml(app.ownerUuid ?? strings.app.unassignedOwner)}</code></p>
           ${

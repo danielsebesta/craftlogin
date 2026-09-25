@@ -237,7 +237,7 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
       ? `
           <form class="field" action="${escapeHtml(input.startAction)}" method="post" data-skin-lookup${input.lookupUrl === undefined ? '' : ` data-lookup-url="${escapeHtml(input.lookupUrl)}"`} data-lookup-found-message="${escapeHtml(input.lookupFoundMessage ?? '')}" data-lookup-not-found-message="${escapeHtml(input.lookupNotFoundMessage ?? '')}" data-lookup-skin-message="${escapeHtml(input.lookupSkinMessage ?? '')}" data-lookup-unavailable-message="${escapeHtml(input.lookupUnavailableMessage ?? '')}">
             <label for="skin-username">${escapeHtml(input.accountLabel)}</label>
-            <div class="skin-start-controls">
+            <div class="input-action-row">
               <input id="skin-username" name="username" type="text" minlength="3" maxlength="16" pattern="[A-Za-z0-9_]+" placeholder="${escapeHtml(input.accountPlaceholder)}" autocomplete="username" required data-skin-username>
               <button class="button button-secondary" type="submit" data-skin-start>${renderIcon('user', 'button-icon')}${escapeHtml(input.startLabel)}</button>
             </div>
@@ -323,11 +323,6 @@ export function renderSignInPage(input: SignInPageInput): string {
     input.securityNote === undefined
       ? ''
       : `<p class="field-hint icon-note">${renderIcon('shield', 'list-icon')}<span>${escapeHtml(input.securityNote)}</span></p>`;
-  const singular =
-    input.verification === undefined &&
-    input.skinVerification === undefined &&
-    input.microsoftVerification === undefined;
-
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="${SIGN_IN_HEADING_ID}">
         <div class="consent-identity">
@@ -368,7 +363,7 @@ export function renderSignInPage(input: SignInPageInput): string {
     header: { brand: input.brand },
     layout: 'narrow',
     ...(input.methodChoices === undefined ? {} : { mainAttributes: ' data-methods' }),
-    mainClass: `page-column signin${singular ? ' signin-compact' : ''}`,
+    mainClass: 'page-column signin',
     script: '/assets/interaction.js',
     stylesheet: '/assets/interaction.css',
     title: input.documentTitle,

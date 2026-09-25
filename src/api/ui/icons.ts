@@ -1,10 +1,7 @@
 /**
- * Icons vendored from the free Pixelarticons set (MIT licensed, 24×24 pixel grid,
- * https://pixelarticons.com/svg/<name>.svg). The path data is inlined verbatim so
- * `fill="currentColor"` follows the surrounding text color, which an `<img>`
- * reference cannot do, and so the pages stay free of an extra HTTP request.
- *
- * Render them at a multiple of 24 CSS pixels to keep the pixels crisp.
+ * Icons vendored from the free Pixelarticons set (MIT licensed, 24×24 pixel
+ * grid, https://pixelarticons.com/svg/<name>.svg), inlined so `currentColor`
+ * follows the text color. Render at a multiple of 24 CSS pixels to stay crisp.
  */
 const ICON_PATHS = {
   bookOpen:
@@ -50,19 +47,12 @@ const ICON_PATHS = {
 
 export type IconName = keyof typeof ICON_PATHS;
 
-/**
- * Icons are always decorative: every icon ships next to a visible text label,
- * so exposing it to assistive technology would only duplicate that label.
- */
+/** Icons are decorative: each ships beside a visible text label. */
 export function renderIcon(name: IconName, className = 'ui-icon'): string {
   return `<svg aria-hidden="true" class="${className}" fill="currentColor" focusable="false" height="24" viewBox="0 0 24 24" width="24"><path d="${ICON_PATHS[name]}"/></svg>`;
 }
 
-/**
- * Convenience helper for the Microsoft logo. Rendered through `renderIcon`
- * so it stays single-color (`fill="currentColor"`), inherits text/icon styling,
- * and preserves the exact 4-square alignment of the original Microsoft mark.
- */
+/** Microsoft logo helper, rendered through `renderIcon` so it inherits text styling. */
 export function renderMicrosoftIcon(className = 'ui-icon'): string {
   return renderIcon('microsoft', className);
 }

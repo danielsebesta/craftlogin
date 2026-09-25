@@ -521,8 +521,7 @@ export function registerInteractionRoutes(
   );
 }
 
-// The publisher identity is decorative trust information: a failed Mojang
-// lookup degrades to a short UUID instead of failing the interaction page.
+// Publisher identity is decorative; a failed Mojang lookup degrades to a short UUID.
 async function resolveOwner(
   players: MinecraftPlayerLookup | undefined,
   ownerUuid: string,
@@ -539,9 +538,8 @@ async function resolveOwner(
   };
 }
 
-// Browser navigation and form posts never see raw JSON envelopes: expired or
-// invalid interactions become a friendly page (or a redirect back to it),
-// while unexpected failures still reach the centralized JSON handler.
+// Browser posts never see raw JSON: expired interactions become a friendly
+// page or a redirect; unexpected failures reach the centralized JSON handler.
 export function isInteractionClientError(error: unknown): boolean {
   if (error instanceof ApiError) {
     return (

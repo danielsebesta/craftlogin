@@ -107,10 +107,8 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   await registerRateLimiting(server, options.rateLimitRedis, options.rateLimitNamespace);
   await server.register(cookie, { secret: [...options.cookieKeys] });
   await server.register(formBody);
-  // Developer Console icon uploads are multipart so the form still works
-  // without JavaScript; the limits keep a hostile body tiny and single-file.
-  // Oversized files are truncated instead of throwing so the route can answer
-  // with its own HTML notice rather than a generic JSON error.
+  // Multipart keeps the icon form working without JavaScript; truncation lets
+  // the route answer with its own HTML notice rather than a generic JSON error.
   await server.register(multipart, {
     limits: { fields: 4, fileSize: APP_ICON_MAX_BYTES, files: 1 },
     throwFileSizeLimit: false,

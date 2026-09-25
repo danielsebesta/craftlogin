@@ -200,10 +200,9 @@ describe('Minecraft avatar geometry', (): void => {
   });
 
   it('renders the back view mirrored with the worn cape draped over the body', async (): Promise<void> => {
-    // Each back face gets its own color so mirroring is observable. The left
-    // arm's back face is split in halves to pin orientation: the atlas wraps
-    // back faces pre-mirrored, so the u=44 columns that border the character's
-    // left side must land on the arm's outer edge without any extra flip.
+    // Each back face gets its own color so mirroring is observable; atlas back
+    // faces are pre-mirrored, so the u=44 columns must land on the outer edge
+    // without any extra flip.
     const texture = await decodeSkinTexture(
       await createSkinPng([
         { color: { blue: 40, green: 40, red: 200 }, height: 8, width: 8, x: 24, y: 8 },
@@ -253,9 +252,8 @@ describe('Minecraft avatar geometry', (): void => {
     });
     // The figure is mirrored: the character's right arm sits on the right.
     expect(readFixturePixel(back, 88, 60)).toEqual({ alpha: 255, blue: 40, green: 200, red: 40 });
-    // The arm's outer column (bordering the character's left side) lands on
-    // the image-left edge. Asserted on the cape-less render since the cape
-    // covers this strip.
+    // The arm's outer column lands on the image-left edge; asserted on the
+    // cape-less render since the cape covers this strip.
     expect(readFixturePixel(bare, 34, 60)).toEqual({ alpha: 255, blue: 120, green: 120, red: 0 });
     expect(readFixturePixel(bare, 46, 60)).toEqual({ alpha: 255, blue: 0, green: 120, red: 120 });
   });
@@ -337,9 +335,9 @@ describe('Minecraft avatar geometry', (): void => {
   });
 
   it('renders the wings view as a back figure with deployed elytra wings', async (): Promise<void> => {
-    // The cape fixture separates the worn cape face (gray, u1-11) from the
-    // elytra wing face (purple, u36-46): only the wing region may appear, and
-    // a thin leading-edge stripe pins the right wing's mirrored sampling.
+    // The fixture separates the worn cape face (gray, u1-11) from the elytra
+    // wing face (purple, u36-46); a leading-edge stripe pins the right wing's
+    // mirrored sampling.
     const texture = await decodeSkinTexture(
       await createSkinPng([
         { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
@@ -379,8 +377,8 @@ describe('Minecraft avatar geometry', (): void => {
       green: 40,
       red: 200,
     });
-    // The overlapping pair still flares past the legs at both bottom tips; the
-    // leading-edge stripe reaches both because the right wing mirrors it.
+    // The overlapping pair flares past the legs; the stripe reaches both tips
+    // because the right wing mirrors it.
     const hasWingStripe = (xMin: number, xMax: number): boolean =>
       [...Array(xMax - xMin).keys()].some((dx): boolean =>
         [...Array(wings.height).keys()].some((y): boolean =>
@@ -389,11 +387,87 @@ describe('Minecraft avatar geometry', (): void => {
       );
     expect(hasWingStripe(0, 48)).toBe(true);
     expect(hasWingStripe(208, 256)).toBe(true);
+    // The vanilla silhouette: hinge-side corners are widest ~y26.6, far tips
+    // converge at the spine ~y29.6 — above the feet, never past them.
+    const isWingPixel = (x: number, y: number): boolean => {
+      const pixel = readFixturePixel(wings, x, y);
+      return isWingPurple(pixel) || isWingStripe(pixel);
+    };
+    const hasWingPixelIn = (xMin: number, xMax: number, yMin: number, yMax: number): boolean =>
+      [...Array(yMax - yMin).keys()].some((dy): boolean =>
+        [...Array(xMax - xMin).keys()].some((dx): boolean => isWingPixel(xMin + dx, yMin + dy)),
+      );
+    expect(hasWingPixelIn(36, 48, 208, 216)).toBe(true);
+    expect(hasWingPixelIn(208, 220, 208, 216)).toBe(true);
+    expect(hasWingPixelIn(120, 136, 232, 238)).toBe(true);
+    const wingsBelowTips = [...Array(256 - 244).keys()].some((dy): boolean =>
+      [...Array(wings.width).keys()].some((x): boolean => isWingPixel(x, 244 + dy)),
+    );
+    expect(wingsBelowTips).toBe(false);
+    // Vanilla resolves crossing plates with a depth buffer: the pair renders as
+    // an exact mirror, so each wing's stripe survives where it lies nearer.
+    for (let y = 0; y < wings.height; y += 1) {
+      for (let x = 0; x < 128; x += 1) {
+        const left = readFixturePixel(wings, x, y);
+        const right = readFixturePixel(wings, 255 - x, y);
+        if (isWingPixel(x, y) || isWingPixel(255 - x, y)) {
+          expect(right).toEqual(left);
+        }
+      }
+    }
+  });
+
+  it('draws elytra as cutout cuboids with in-game texel visibility', async (): Promise<void> => {
+    const texture = await decodeSkinTexture(
+      await createSkinPng([
+        { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
+        { color: { blue: 40, green: 40, red: 200 }, height: 8, width: 8, x: 24, y: 8 },
+      ]),
+    );
+    // Outward face (u36-46): purple with a 5% alpha band the cutout discards;
+    // bottom edge (u34-44, v0-2): orange; hidden inner face (u24-34): green.
+    const cape = makeCapeTexture(64, 32, [
+      { color: { blue: 160, green: 40, red: 160 }, height: 20, width: 10, x: 36, y: 2 },
+      { color: { alpha: 12, blue: 160, green: 40, red: 160 }, height: 4, width: 10, x: 36, y: 10 },
+      { color: { blue: 20, green: 120, red: 240 }, height: 2, width: 10, x: 34, y: 0 },
+      { color: { blue: 20, green: 220, red: 20 }, height: 20, width: 10, x: 24, y: 2 },
+    ]);
+    const renderer = new CanvasAvatarRenderer();
+    const wings = await decodePng(
+      await renderer.render(texture, 'classic', { layers: 'all', size: 256, view: 'wings' }, cape),
+    );
+
+    const isBottomEdge = (pixel: ReturnType<typeof readFixturePixel>): boolean =>
+      pixel.red === 240 && pixel.green === 120 && pixel.blue === 20;
+    expect(countPixels(wings, isWingPurple)).toBeGreaterThan(0);
+    // The pitched-back plate shows its bottom edge face below the outward face.
+    expect(countPixels(wings, isBottomEdge)).toBeGreaterThan(0);
+    // Cutout texels discard rather than blend — no semi-transparent purple — and
+    // the uncullable inner face is visible only through that cutout band.
+    expect(
+      countPixels(
+        wings,
+        (pixel): boolean => pixel.red === 160 && pixel.blue === 160 && pixel.alpha !== 255,
+      ),
+    ).toBe(0);
+    const rowsWith = (
+      predicate: (pixel: ReturnType<typeof readFixturePixel>) => boolean,
+    ): number[] =>
+      [...Array(wings.height).keys()].filter((y): boolean =>
+        [...Array(wings.width).keys()].some((x): boolean =>
+          predicate(readFixturePixel(wings, x, y)),
+        ),
+      );
+    const greenRows = rowsWith(isFlatBaseGreen);
+    const purpleRows = rowsWith(isWingPurple);
+    expect(greenRows.length).toBeGreaterThan(0);
+    expect(Math.min(...greenRows)).toBeGreaterThan(Math.min(...purpleRows) + 40);
+    expect(Math.max(...greenRows)).toBeLessThan(Math.max(...purpleRows) - 40);
   });
 
   it('renders third-party cape atlases and ignores unsupported cape layouts', async (): Promise<void> => {
-    // OptiFine ships the Mojang layout cropped to 46x22, so the cape face
-    // (u1-11, v1-17) and wing face (u36-46, v2-22) share Mojang coordinates.
+    // OptiFine crops the Mojang layout to 46x22, so cape and wing faces share
+    // Mojang coordinates.
     const texture = await decodeSkinTexture(
       await createSkinPng([
         { color: { blue: 20, green: 20, red: 220 }, height: 8, width: 8, x: 8, y: 8 },
@@ -409,8 +483,7 @@ describe('Minecraft avatar geometry', (): void => {
       { color: { blue: 60, green: 60, red: 60 }, height: 32, width: 20, x: 2, y: 2 },
       { color: { blue: 160, green: 40, red: 160 }, height: 40, width: 20, x: 72, y: 4 },
     ]);
-    // A LabyMod-style sprite sheet matches neither atlas family; its pixels
-    // must never leak into the render.
+    // A sprite sheet matching neither atlas family must never leak into the render.
     const spriteSheet = makeCapeTexture(355, 275, [
       { color: { blue: 160, green: 40, red: 160 }, height: 275, width: 355, x: 0, y: 0 },
     ]);

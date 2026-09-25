@@ -12,8 +12,8 @@ export function sendServerBrand(client: ServerClient): void {
     return;
   }
 
-  // Plugin channels became namespaced in 1.13-pre3. minecraft-protocol installs the channel API
-  // during login but deliberately does not choose or send an application brand on its own.
+  // Plugin channels are namespaced since 1.13-pre3; the library installs the
+  // channel API but sends no brand on its own.
   const channel =
     mcData.version.version >= NAMESPACED_CHANNEL_MIN_PROTOCOL ? 'minecraft:brand' : 'MC|Brand';
   client.registerChannel(channel, ['string', []]);

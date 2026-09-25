@@ -85,8 +85,7 @@ export class PrismaAppManager implements AppManager {
     const where = role === 'admin' ? {} : { ownerUuid: uuid };
     const apps = await this.database.app.findMany({
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-      // Never load icon blobs for a list; only the hash is needed to build the
-      // cache-busted preview URL.
+      // Lists never load icon blobs; the hash suffices for the preview URL.
       select: {
         clientId: true,
         clientSecretHash: true,
@@ -131,8 +130,7 @@ export class PrismaAppManager implements AppManager {
     const id = appIdSchema.parse(appId);
     const uuid = developerUuidSchema.parse(actorUuid);
     const role = developerRoleSchema.parse(actorRole);
-    // The icon condition keeps a double removal a no-op instead of a write that
-    // reports success for an application that never had an icon.
+    // The iconPng condition makes a double removal a no-op.
     const updated = await this.database.app.updateMany({
       data: { iconHash: null, iconPng: null },
       where: {
@@ -169,10 +167,8 @@ export class PrismaAppManager implements AppManager {
     const id = appIdSchema.parse(appId);
     const owner = developerUuidSchema.parse(actorUuid);
     const parsedNote = note === undefined ? null : appVerificationNoteSchema.parse(note);
-    // Only the owner can queue an application, and only while it is neither
-    // verified nor already queued. The condition lives in the write so two
-    // concurrent requests cannot both claim the queue slot or overwrite a fresh
-    // administrator decision that landed in between.
+    // The condition lives in the write so concurrent requests can't both claim
+    // the queue slot or overwrite a fresh admin decision.
     const requested = await this.database.app.updateMany({
       data: { verificationNote: parsedNote, verificationRequestedAt: new Date() },
       where: { id, ownerUuid: owner, verificationRequestedAt: null, verifiedAt: null },
@@ -186,8 +182,7 @@ export class PrismaAppManager implements AppManager {
   ): Promise<AppVerificationOutcome> {
     const id = appIdSchema.parse(appId);
     const parsedDecision = appVerificationDecisionSchema.parse(decision);
-    // Each decision requires an exact starting state, so a stale console page
-    // cannot approve an application that was already revoked or rejected twice.
+    // An exact starting state keeps a stale console page from re-deciding an application.
     const decisionWrite = verificationWrite(parsedDecision);
     const decided = await this.database.app.updateMany({
       data: decisionWrite.data,

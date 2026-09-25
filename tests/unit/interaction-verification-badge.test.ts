@@ -25,8 +25,8 @@ describe('consent page verification badge', (): void => {
     expect(page).toContain(
       `<span class="visually-hidden">${english.interaction.verifiedAppBadge}</span>`,
     );
-    // The icon is inlined so it inherits the surrounding text color; an <img>
-    // reference to a vendored SVG would not and would add a second request.
+    // The icon is inlined so it inherits text color; an <img> would not and
+    // would add a second request.
     expect(page).toContain('<span class="verification-badge-dot"><svg');
     expect(page).toContain('fill="currentColor"');
     expect(page).toContain('aria-hidden="true"');

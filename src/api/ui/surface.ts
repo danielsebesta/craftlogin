@@ -1,40 +1,62 @@
 export const signInSurfaceStyles = `
-.method-picker { display: grid; gap: var(--s3); padding: 0; border: 0; }
-.method-picker legend { margin-bottom: var(--s2); font-size: var(--t-lg); font-weight: 700; }
-.method-options { display: grid; gap: var(--s2); }
-.method-option { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s3); border: 1px solid var(--line); cursor: pointer; }
-.method-option:focus-within, .method-option:hover { border-color: var(--accent); }
-.method-option input { flex: none; margin-top: .25rem; }
-.method-option .list-icon { color: var(--accent); }
-.method-option span { display: grid; gap: var(--s1); }
-.method-option small { color: var(--muted); }
-[data-method-panel][hidden] { display: none; }
-.skin-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.skin-lookup-status { min-height: 1.4em; }
+.method-picker {
+  display: grid;
+  gap: var(--s3);
+}
+
+.method-picker legend {
+  margin-bottom: var(--s2);
+  font-size: var(--t-lg);
+  font-weight: 700;
+}
+
+.method-options {
+  display: grid;
+  gap: var(--s2);
+}
+
+.method-option {
+  display: flex;
+  gap: var(--s3);
+  align-items: flex-start;
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.method-option:hover {
+  border-color: var(--accent);
+}
+
+.method-option .list-icon {
+  color: var(--accent);
+}
+
+.method-option span {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.method-option small {
+  color: var(--muted);
+}
+
+.skin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.skin-lookup-status {
+  min-height: 1.4em;
+}
 
 .signin {
   display: grid;
   gap: var(--s6);
-  padding-block: var(--s7) var(--s6);
-}
-
-.signin-compact {
-  padding-block: 5rem var(--s6);
-}
-
-.signin-intro {
-  display: grid;
-  gap: var(--s4);
-}
-
-.signin-intro h1 {
-  max-width: 24ch;
-}
-
-.signin-action {
-  display: grid;
-  gap: var(--s4);
-  padding-top: var(--s6);
+  padding-block: var(--s5) var(--s6);
 }
 
 .consent-card {
@@ -54,17 +76,25 @@ export const signInSurfaceStyles = `
   text-align: center;
 }
 
+.consent-title .icon-heading {
+  justify-content: center;
+}
+
+.consent-title .lead {
+  margin-inline: auto;
+}
+
 .consent-app {
   display: inline-flex;
   gap: var(--s2);
   align-items: center;
   justify-content: center;
+  min-width: 0;
   font-size: var(--t-2xl);
   line-height: 1.25;
 }
 
-/* The "Sign in to" prefix stays quiet on its own line so the application name
-   carries the heading: regular muted prefix above, bold full-color app name. */
+/* Quiet muted prefix line above the bold app name heading. */
 .consent-title h1:not(.icon-heading) {
   display: flex;
   flex-direction: column;
@@ -83,12 +113,15 @@ export const signInSurfaceStyles = `
 }
 
 .consent-app bdi {
+  min-width: 0;
   color: var(--text);
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 /* Application icons are 64x64 pixel art; pixelated keeps them crisp at 2rem. */
 .consent-app-icon {
+  flex: none;
   width: 2rem;
   height: 2rem;
   image-rendering: pixelated;
@@ -96,12 +129,12 @@ export const signInSurfaceStyles = `
 
 .verification-badge {
   display: inline-flex;
+  flex: none;
   align-items: center;
   cursor: help;
 }
 
-/* Pixelated circle dot: stepped orthogonal polygon preserves the flat Minecraft
-   pixel aesthetic while creating a circular silhouette. */
+/* Stepped orthogonal polygon keeps the pixel aesthetic in a circular silhouette. */
 .verification-badge-dot {
   display: inline-flex;
   align-items: center;
@@ -109,7 +142,7 @@ export const signInSurfaceStyles = `
   width: 1.25rem;
   height: 1.25rem;
   color: var(--muted);
-  background: var(--surface-raised);
+  background: var(--surface);
   border: 0;
   border-radius: 0;
   clip-path: polygon(
@@ -159,9 +192,10 @@ export const signInSurfaceStyles = `
 }
 
 .account-chip-avatar {
+  flex: none;
   width: 2rem;
   height: 2rem;
-  background: var(--surface-raised);
+  background: var(--surface);
   border: 2px solid var(--accent);
   image-rendering: pixelated;
 }
@@ -181,9 +215,10 @@ export const signInSurfaceStyles = `
 }
 
 .consent-owner-avatar {
+  flex: none;
   width: 2rem;
   height: 2rem;
-  background: var(--surface-raised);
+  background: var(--surface);
   border: 2px solid var(--line);
   image-rendering: pixelated;
 }
@@ -268,7 +303,7 @@ export const signInSurfaceStyles = `
 .signin-address {
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
-  font-size: var(--t-2xl);
+  font-size: var(--t-xl);
   font-weight: 700;
   line-height: 1.2;
   color: var(--text);
@@ -280,7 +315,7 @@ export const signInSurfaceStyles = `
   align-items: baseline;
   min-height: 1.6em;
   color: var(--muted);
-  transition: color 120ms ease-out;
+  transition: color var(--motion-duration) ease-out;
 }
 
 .signin-status::before {
@@ -294,7 +329,6 @@ export const signInSurfaceStyles = `
 .signin-status[data-state="pending"]::before {
   background: var(--accent);
   border-color: var(--accent);
-  animation: signin-pulse 1.6s ease-in-out infinite;
 }
 
 .signin-status[data-state="verified"] {
@@ -319,6 +353,12 @@ export const signInSurfaceStyles = `
   border-color: var(--danger);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .signin-status[data-state="pending"]::before {
+    animation: signin-pulse 1.6s ease-in-out infinite;
+  }
+}
+
 @keyframes signin-pulse {
   0%,
   100% {
@@ -330,76 +370,22 @@ export const signInSurfaceStyles = `
   }
 }
 
-.signin-continue[hidden] {
-  display: none;
-}
-
-/* Sign-in pages share the landing look: an ambient grid glow and no divider
-   rules. The consent card keeps its window so the page feels official, just
-   with a lighter one-pixel frame. */
-
-body.page-narrow {
-  overflow-x: clip;
-}
-
-body.page-narrow .page-footer {
-  border-top: 0;
-}
-
-body.page-narrow .page-header {
-  border-bottom: 0;
-}
-
-body.page-narrow .signin {
-  padding-block: var(--s5) var(--s6);
-}
-
-body.page-narrow .signin-compact {
-  padding-block: var(--s5) var(--s6);
-}
-
-body.page-narrow main.page-column {
-  position: relative;
-  isolation: isolate;
-}
-
-body.page-narrow main.page-column::before {
-  position: absolute;
-  top: -5rem;
-  left: calc(50% - 50vw);
-  right: calc(50% - 50vw);
-  z-index: -1;
-  height: min(calc(100vw * 530 / 690), 48rem);
-  content: "";
-  background-image: url("/assets/grid-fade.svg");
-  background-repeat: no-repeat;
-  background-position: top center;
-  background-size: cover;
-  opacity: 0.35;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 16%,
-    black 50%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 50%, transparent 100%);
-  pointer-events: none;
-}
-
-@media (max-width: 34rem) {
-  body.page-narrow main.page-column::before {
-    height: 28rem;
+@media (max-width: 40rem) {
+  .signin-address {
+    font-size: var(--t-lg);
   }
-}
 
-@media (forced-colors: active) {
-  body.page-narrow main.page-column::before {
-    display: none;
+  .consent-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
-}
 
-.consent-card {
-  border-width: 1px;
+  .consent-actions .button {
+    width: 100%;
+  }
+
+  .consent-actions .signin-continue {
+    margin-left: 0;
+  }
 }
 `;

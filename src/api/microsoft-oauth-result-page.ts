@@ -78,7 +78,7 @@ export function renderMicrosoftOAuthResultPage(input: MicrosoftOAuthResultPageIn
     footer: [english.interaction.footer],
     header: { brand: english.interaction.brand },
     layout: 'narrow',
-    mainClass: 'page-column signin signin-compact',
+    mainClass: 'page-column signin',
     stylesheet: '/assets/interaction.css',
     title,
   });

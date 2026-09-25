@@ -15,23 +15,23 @@ import {
 const SPECTATOR_GAME_MODE = 3;
 const CREATIVE_GAME_MODE = 1;
 const SPECTATOR_MIN_PROTOCOL = 47;
-// The loading screen only dismisses once the client holds the full view-distance square, so the
-// streamed radius covers viewDistance instead of lagging one behind it (5x5 for view 2).
+// The loading screen dismisses only once the client holds the full view-distance
+// square, so the streamed radius covers viewDistance.
 const VOID_CHUNK_RADIUS = 2;
 const VOID_SPAWN = { x: 0.5, y: 64, z: 0.5 } as const;
 const VOID_DIMENSION = 'minecraft:the_end';
 const END_MIN_Y = 0;
 const END_WORLD_HEIGHT = 256;
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-// 1.21.5+ serializes heightmaps as {type, data} entries. MOTION_BLOCKING is type 4 and an empty
-// void needs 37 zeroed longs for a 384-block-tall dimension.
+// 1.21.5+ serializes heightmaps as {type, data}; MOTION_BLOCKING is type 4 and an
+// empty void needs 37 zeroed longs for a 384-block-tall dimension.
 const MOTION_BLOCKING_HEIGHTMAP_ID = 4;
 const EMPTY_HEIGHTMAP: readonly (readonly [number, number])[] = Array.from(
   { length: 37 },
   (): readonly [number, number] => [0, 0],
 );
-// The End spans light sections -1..16 (blocks 0..256 plus both edges), so an empty chunk marks all
-// 18 sections as empty. The value is one i64 in protodef [high, low] form.
+// The End spans light sections -1..16, so an empty chunk marks all 18 as empty.
+// One i64 in protodef [high, low] form.
 const EMPTY_LIGHT_MASK: readonly [number, number] = [0, 0x3ffff];
 const ZERO_LIGHT_MASK: readonly [number, number] = [0, 0];
 
@@ -111,9 +111,8 @@ export function presentVoidWorld(client: ServerClient, options: VoidWorldOptions
 
   client.write('login', createJoinGamePacket(mcData, options));
 
-  // 1.21.9+ keeps the terrain screen in a "waiting for server" state until this event arrives.
-  // Chunk and teleport acknowledgements alone do not advance that state, so its timeout never even
-  // starts. Older protocols do not define the mapped reason and therefore receive no packet.
+  // 1.21.9+ stays in "waiting for server" until this event arrives; older
+  // protocols don't define the reason and receive nothing.
   const levelLoadStart = createLevelLoadStartPacket(mcData);
   if (levelLoadStart !== null) {
     client.write(levelLoadStart.name, levelLoadStart.params);
@@ -133,10 +132,9 @@ export function presentVoidWorld(client: ServerClient, options: VoidWorldOptions
     client.write(packet.name, packet.params);
   }
 
-  // Position must precede the initial chunks. Vanilla starts tracking which section can dismiss
-  // "Loading terrain" when it applies this teleport; chunks sent earlier are accepted and
-  // acknowledged but do not satisfy that newly established loading target. This matches the
-  // ordering used by a full minecraft-protocol server (Flying Squid).
+  // Position must precede the initial chunks: vanilla only starts tracking the
+  // "Loading terrain" target when it applies this teleport. Same ordering as a
+  // full minecraft-protocol server (Flying Squid).
   client.write('position', createPositionPacket(mcData));
 
   if (options.sendChunks) {
@@ -154,7 +152,7 @@ export function createFrozenAbilitiesPacket(mcData: MinecraftData): FrozenAbilit
   }
   return {
     name: 'abilities',
-    // Keep flight enabled so the void cannot make the player fall, but zero both movement speeds.
+    // Flight stays enabled so the void can't make the player fall.
     params: { flags: 0x06, flyingSpeed: 0, walkingSpeed: 0 },
   };
 }
@@ -165,7 +163,7 @@ export function createTitlePackets(
   subtitle: string,
 ): readonly TitlePacket[] {
   const packets: TitlePacket[] = [];
-  // The title outlives the 40-second lobby. Durations are measured in 20 ticks per second.
+  // The title outlives the 40-second lobby; durations are in 20 ticks/second.
   const duration = { fadeIn: 10, stay: 1200, fadeOut: 20 };
   const titleComponent = createLobbyTitleComponent(mcData, title);
   const subtitleComponent = createLobbySubtitleComponent(mcData, subtitle);
@@ -208,9 +206,7 @@ export function createTitlePackets(
   return packets;
 }
 
-// Exact sRGB conversions of the website tokens in src/api/ui/tokens.ts. Roles mirror the site:
-// near-white for headings and neutral messages, gray for body text, lime for highlights and
-// success, coral for errors.
+// sRGB conversions of the site tokens in src/api/ui/tokens.ts.
 export const WEB_TEXT_COLOR = '#E9ECE9';
 export const WEB_MUTED_COLOR = '#A7ADA7';
 export const WEB_ACCENT_COLOR = '#A2D060';
@@ -219,8 +215,8 @@ export const WEB_DANGER_COLOR = '#F47B74';
 
 type HexColor = `#${string}`;
 
-// 1.16 (protocol 735) introduced "#RRGGBB" component colors; older clients render an unknown
-// color string as plain white, so they receive the closest legacy name instead.
+// "#RRGGBB" component colors arrived in 1.16 (protocol 735); older clients get
+// the closest legacy name.
 const HEX_COLOR_MIN_PROTOCOL = 735;
 
 export function supportsHexColors(mcData: MinecraftData): boolean {
@@ -306,9 +302,8 @@ export function createLevelLoadStartPacket(mcData: MinecraftData): LevelLoadStar
   };
 }
 
-// Vanilla only loads chunks around a known center and honors a known radius; a real server sends
-// these right after Join Game, and without them the client waits on its loading screen forever.
-// Packets that do not exist on a version are skipped, so old clients keep their Join Game behavior.
+// Without a known center and radius the client waits on its loading screen
+// forever; packets a version doesn't define are skipped.
 export function createViewPackets(mcData: MinecraftData, view: ViewOptions): readonly ViewPacket[] {
   const packets: ViewPacket[] = [];
   if (hasPacket(mcData, 'packet_update_view_position')) {
@@ -366,16 +361,15 @@ export interface EntityEffectPacket {
   readonly params: Record<string, unknown>;
 }
 
-// The limbo chamber: heavy limbs, a black vignette, and Deep-Dark-style distance fog. Effect IDs
-// come from the per-version registry (classic numeric IDs up to 1.20.1, data-driven from 1.20.2),
-// so they can never drift from what the client's version expects.
+// Limbo chamber: heavy limbs, a black vignette, and distance fog. IDs resolve
+// from the per-version registry so they can't drift from the client's version.
 const LIMBO_EFFECTS: readonly (readonly [effect: string, amplifier: number])[] = [
   ['Slowness', 2],
   ['Blindness', 0],
   ['Darkness', 0],
 ];
-// ~27 minutes at 20 ticks per second, far beyond the 40-second lobby, while still fitting the
-// i16 duration field that the oldest supported versions use.
+// ~27 minutes at 20 tps, beyond the lobby lifetime, while still fitting the i16
+// duration field older versions use.
 const LIMBO_DURATION_TICKS = 32767;
 
 export function createLimboPackets(
@@ -401,7 +395,7 @@ function createEffectPacket(
   if (!hasPacket(mcData, 'packet_entity_effect')) {
     return null;
   }
-  // Effects unknown to a version resolve to undefined and are skipped (e.g. Darkness pre-1.19).
+  // Skip effects a version doesn't know (e.g. Darkness pre-1.19).
   const effectId = mcData.effectsByName?.[effect]?.id;
   if (effectId === undefined) {
     return null;
@@ -419,9 +413,8 @@ function createEffectPacket(
     amplifier,
     duration: LIMBO_DURATION_TICKS,
   };
-  // Limbo stays clean: no particles, no HUD icon. 1.8.8 models this as a bool, 1.9–1.20.x as a
-  // byte-boolean, 1.21+ as a flags bitmask (ambient/particles/icon) where zero hides everything.
-  // 1.7 has no such field and always shows particles, which is acceptable for a 40-second lobby.
+  // No particles, no HUD icon: hideParticles is a bool on 1.8.8, a byte-boolean
+  // on 1.9–1.20.x, and a zero flags bitmask on 1.21+; 1.7 lacks the field.
   const hideParticlesType = getFieldType(fields, 'hideParticles');
   if (hideParticlesType === 'bool') {
     params['hideParticles'] = true;
@@ -464,10 +457,8 @@ export function createJoinGamePacket(
   packet['isFlat'] = true;
   packet['reducedDebugInfo'] = false;
   packet['enableRespawnScreen'] = true;
-  // The minecraft-data template carries enforcesSecureChat: false, but the ghost server runs
-  // with enforceSecureProfile and validates chat signatures, so the packet must say so.
-  // Otherwise the client shows a "Chat messages can't be verified" warning and may stop
-  // signing outbound chat, which the server-side validation would then reject.
+  // The server validates chat signatures, so the packet must advertise
+  // enforcesSecureChat or the client may stop signing chat the server rejects.
   if (getFieldType(fields, 'enforcesSecureChat') !== undefined) {
     packet['enforcesSecureChat'] = true;
   }
@@ -594,9 +585,8 @@ export function createChunkPacket(
     packet['trustEdges'] = true;
   }
 
-  // prismarine-chunk reports uninitialized light (zeroed masks with no data and no empty marks),
-  // which vanilla rejects: every section must sit in either a data mask or an empty mask. Void
-  // chunks are empty by construction, so synthesize valid empty light instead of trusting the dump.
+  // prismarine-chunk reports uninitialized light that vanilla rejects: every
+  // section must sit in a data or empty mask, so synthesize valid empty light.
   if (getFieldType(fields, 'skyLightMask') !== undefined) {
     packet['skyLightMask'] = [ZERO_LIGHT_MASK];
     packet['blockLightMask'] = [ZERO_LIGHT_MASK];
@@ -640,8 +630,8 @@ export function createVoidChatComponentPacket(
 }
 
 function writeChunks(client: ServerClient, mcData: MinecraftData, chunk: ChunkLike): void {
-  // Chunk Batch Start deliberately has no fields. Packet existence must therefore be checked
-  // independently from its field list or modern clients receive an unmatched batch finish.
+  // chunk_batch_start has no fields, so check packet existence rather than its
+  // field list or modern clients get an unmatched batch finish.
   if (hasPacket(mcData, 'packet_chunk_batch_start')) {
     client.write('chunk_batch_start', {});
   }
@@ -666,10 +656,7 @@ function createTextComponent(type: unknown, input: string | MinecraftTextCompone
     : JSON.stringify(component);
 }
 
-/**
- * Builds a colored kick/disconnect reason in the encoding the client expects: JSON chat for the
- * login phase and for play-state string fields, NBT for play-state component fields (1.20.5+).
- */
+/** Kick reason encoding: JSON for login state and play-state string fields, NBT for play-state component fields (1.20.5+). */
 export function createKickReason(
   mcData: MinecraftData,
   message: string,
@@ -684,8 +671,7 @@ export function createKickReason(
   return createTextComponent(getFieldType(fields, 'reason'), component);
 }
 
-// A kick renders as a heading plus an optional detail: the first line is bold in the tone color,
-// every following line in muted gray. Messages without a line break stay a single bold line.
+// A kick renders as a bold heading plus muted detail lines.
 function createKickComponent(
   mcData: MinecraftData,
   message: string,
@@ -785,8 +771,8 @@ function findLegacyEndDimension(mcData: MinecraftData): unknown {
     if (!isRecord(element) || element['type'] !== 'compound') {
       return undefined;
     }
-    // The Join Game field uses named NBT in these protocol versions, while registry list elements
-    // are anonymous compounds. Restore the empty root name used by minecraft-data's template.
+    // The field wants named NBT but registry elements are anonymous compounds,
+    // so restore the empty root name the minecraft-data template uses.
     return { ...element, name: '' };
   }
   return undefined;

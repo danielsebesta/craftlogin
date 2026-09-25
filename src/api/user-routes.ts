@@ -16,8 +16,7 @@ import {
 } from './schemas.js';
 
 const PUBLIC_PROFILE_CACHE = 'public, max-age=3600, stale-while-revalidate=86400';
-// Offline fallback mappings are synthetic: cache them briefly so a later real
-// registration of the same name becomes visible quickly.
+// Offline fallbacks are synthetic; cache briefly so a later real registration shows quickly.
 const OFFLINE_PROFILE_CACHE = 'public, max-age=300, stale-while-revalidate=3600';
 const PUBLIC_PROFILE_CORS = {
   credentials: false,
@@ -95,9 +94,8 @@ export function registerUserRoutes(
         if (uuid !== undefined) {
           throw new ApiError(404, 'not_found', english.api.errors.minecraftPlayerNotFound);
         }
-        // A well-formed but unregistered name resolves to an offline-mode UUID
-        // with a deterministic default skin. Verified identity still comes only
-        // from the OIDC flow; this synthetic profile must never be trusted as one.
+        // Unregistered names resolve to a synthetic offline-mode profile; it
+        // must never be trusted as a verified OIDC identity.
         const offline: MinecraftPlayerProfile = {
           username: request.params.identifier,
           uuid: offlinePlayerUuid(request.params.identifier),

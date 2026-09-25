@@ -20,10 +20,8 @@ const ICON_HASH = createHash('sha256').update(ICON_PNG).digest('hex');
 describe('PostgreSQL application icons', (): void => {
   const ownerUuid = randomUUID();
   const otherDeveloperUuid = randomUUID();
-  // The administrator path only needs the role argument: the manager scopes by
-  // role, exactly like the console routes do after resolving the session. An
-  // extra persisted admin row would change the global count the developer-access
-  // suite asserts on during its concurrent-revocation test.
+  // The admin path takes the role argument directly — a persisted admin row
+  // would change the global count the developer-access suite asserts on.
   const adminRoleUuid = randomUUID();
   const clientId = `icon-test-${randomUUID()}`;
   let database: PrismaClient | null = null;

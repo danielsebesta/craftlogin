@@ -71,8 +71,7 @@ interface ContentBounds {
   readonly y: number;
 }
 
-// Alpha above this threshold counts as content. The master mark carries a soft
-// drop shadow, so near-invisible pixels must not extend the measured bounds.
+// The master's soft drop shadow must not extend the measured content bounds.
 const CONTENT_ALPHA_THRESHOLD = 8;
 
 function readContentBounds(image: Image): ContentBounds {
@@ -104,10 +103,8 @@ function readContentBounds(image: Image): ContentBounds {
   return { height: maxY - minY + 1, width: maxX - minX + 1, x: minX, y: minY };
 }
 
-// Renders a transparent square icon whose content survives a circular crop, so
-// round launchers and avatar-like tiles never cut the mark. A centered w×h box
-// fits inside a circle of diameter d when sqrt(w² + h²) ≤ d, so the content
-// bounds diagonal is scaled to the requested circle diameter.
+// Renders an icon whose content survives a circular crop: a centered w×h box
+// fits a circle of diameter d when sqrt(w²+h²) ≤ d.
 function renderCircularSafeIcon(
   sourceImage: Image,
   size: number,
@@ -181,7 +178,6 @@ export async function generateAssets(options?: {
 
   const THEME_BACKGROUND = '#111611';
 
-  // 1. Favicon 96x96 (transparent)
   const fav96 = renderSquareIcon(smallTitleImg, 96, 0.94);
   await writeFile(resolve(outputDir, 'favicon-96x96.png'), fav96.png);
   await writeFile(resolve(outputDir, 'favicon-96x96.webp'), fav96.webp);
@@ -189,12 +185,10 @@ export async function generateAssets(options?: {
     `Wrote favicon-96x96 (PNG: ${fav96.png.length.toString()}b, WebP: ${fav96.webp.length.toString()}b)\n`,
   );
 
-  // 2. Server icon 64x64 (transparent, Minecraft ping)
   const serverIcon = renderSquareIcon(smallTitleImg, 64, 0.94);
   await writeFile(resolve(outputDir, 'server-icon.png'), serverIcon.png);
   process.stdout.write(`Wrote server-icon.png (${serverIcon.png.length.toString()}b)\n`);
 
-  // 3. Apple Touch Icon 180x180 (theme background)
   const appleTouch = renderSquareIcon(smallTitleImg, 180, 0.84, THEME_BACKGROUND);
   await writeFile(resolve(outputDir, 'apple-touch-icon.png'), appleTouch.png);
   await writeFile(resolve(outputDir, 'apple-touch-icon.webp'), appleTouch.webp);
@@ -202,7 +196,6 @@ export async function generateAssets(options?: {
     `Wrote apple-touch-icon (PNG: ${appleTouch.png.length.toString()}b, WebP: ${appleTouch.webp.length.toString()}b)\n`,
   );
 
-  // 4. Web App Manifest 192x192 (theme background, maskable safe zone)
   const manifest192 = renderSquareIcon(smallTitleImg, 192, 0.78, THEME_BACKGROUND);
   await writeFile(resolve(outputDir, 'web-app-manifest-192x192.png'), manifest192.png);
   await writeFile(resolve(outputDir, 'web-app-manifest-192x192.webp'), manifest192.webp);
@@ -210,7 +203,6 @@ export async function generateAssets(options?: {
     `Wrote web-app-manifest-192x192 (PNG: ${manifest192.png.length.toString()}b, WebP: ${manifest192.webp.length.toString()}b)\n`,
   );
 
-  // 5. Web App Manifest 512x512 (theme background, maskable safe zone)
   const manifest512 = renderSquareIcon(smallTitleImg, 512, 0.78, THEME_BACKGROUND);
   await writeFile(resolve(outputDir, 'web-app-manifest-512x512.png'), manifest512.png);
   await writeFile(resolve(outputDir, 'web-app-manifest-512x512.webp'), manifest512.webp);
@@ -218,7 +210,6 @@ export async function generateAssets(options?: {
     `Wrote web-app-manifest-512x512 (PNG: ${manifest512.png.length.toString()}b, WebP: ${manifest512.webp.length.toString()}b)\n`,
   );
 
-  // 6. ICO favicon (16x16, 32x32, 48x48)
   const ico16 = renderSquareIcon(smallTitleImg, 16, 0.94);
   const ico32 = renderSquareIcon(smallTitleImg, 32, 0.94);
   const ico48 = renderSquareIcon(smallTitleImg, 48, 0.94);
@@ -230,7 +221,6 @@ export async function generateAssets(options?: {
   await writeFile(resolve(outputDir, 'favicon.ico'), icoBuffer);
   process.stdout.write(`Wrote favicon.ico (${icoBuffer.length.toString()}b)\n`);
 
-  // 7. Favicon SVG (512x512 embedding high-resolution square mark)
   const highResSquare = renderSquareIcon(smallTitleImg, 512, 0.92);
   const pngBase64 = highResSquare.png.toString('base64');
   const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
@@ -240,7 +230,6 @@ export async function generateAssets(options?: {
   await writeFile(resolve(outputDir, 'favicon.svg'), faviconSvg, 'utf-8');
   process.stdout.write(`Wrote favicon.svg (${Buffer.byteLength(faviconSvg).toString()}b)\n`);
 
-  // 8. Brand Wordmark (header / navbar / oauth)
   const wordmark1x = renderResized(titleImg, 210, 32, 98);
   const wordmark2x = renderResized(titleImg, 420, 64, 98);
   await writeFile(resolve(outputDir, 'brand-wordmark.png'), wordmark1x.png);
@@ -251,7 +240,6 @@ export async function generateAssets(options?: {
     `Wrote brand-wordmark 1x/2x (WebP 1x: ${wordmark1x.webp.length.toString()}b, 2x: ${wordmark2x.webp.length.toString()}b)\n`,
   );
 
-  // 9. CraftLogin Title (Landing hero / titlescreen)
   // The title master PNG is the committed source asset; regenerate only its
   // derived sizes and its WebP copy, otherwise every run would re-encode the
   // master and the generated assets would drift between runs.
@@ -267,7 +255,6 @@ export async function generateAssets(options?: {
     `Wrote craftlogin-title hero 1x/2x/master (WebP 1x: ${titleHero1x.webp.length.toString()}b, 2x: ${titleHero2x.webp.length.toString()}b, master: ${titleMaster.webp.length.toString()}b)\n`,
   );
 
-  // 10. Brand icon (transparent, square, safe inside a circular crop)
   const brandIcon = renderCircularSafeIcon(smallTitleImg, 512, 0.92);
   const brandIconSmall = renderCircularSafeIcon(smallTitleImg, 192, 0.92);
   await writeFile(resolve(outputDir, 'brand-icon.png'), brandIcon.png);

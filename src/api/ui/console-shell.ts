@@ -13,6 +13,7 @@ export function renderConsoleShell(
     footer: [strings.footer],
     header: {
       brand: strings.navigation.brand,
+      brandHref: '/',
       ...(options.identity === undefined
         ? {}
         : {

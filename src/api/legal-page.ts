@@ -18,8 +18,7 @@ interface LegalPageStrings {
   readonly title: string;
 }
 
-// Both pages share one renderer so their structure, headings, and footer can
-// never drift apart; only the translated content differs.
+// One renderer for both pages so structure can't drift; only content differs.
 const LEGAL_PAGES: Record<LegalPageKind, LegalPageStrings> = {
   privacy: english.legal.privacy,
   terms: english.legal.terms,
@@ -56,7 +55,7 @@ ${strings.sections.map((section, index): string => renderSection(kind, index, se
     description: strings.description,
     footer: siteFooter(),
     header: siteHeader('/'),
-    mainClass: 'container',
+    mainClass: 'container section',
     stylesheet: '/assets/legal.css',
     title: `${english.landing.navigation.brand} · ${strings.title}`,
   });

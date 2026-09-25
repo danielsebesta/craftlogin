@@ -6,8 +6,7 @@ import type { MinecraftCache } from './cache.js';
 import { canonicalMinecraftUuid } from './uuid.js';
 
 const USER_AGENT = 'CraftLogin/0.1 (+https://github.com/danielsebesta/craftlogin)';
-// Pinned vanilla asset release. The nine default skins rarely change; when they
-// do, update this version together with the catalogue below.
+// Pinned vanilla asset release; bump together with the catalogue below.
 const DEFAULT_SKIN_VERSION = '1.21.5';
 const DEFAULT_SKIN_BASE_URL = `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/${DEFAULT_SKIN_VERSION}/assets/minecraft/textures/entity/player/`;
 
@@ -19,10 +18,8 @@ export interface DefaultSkin {
   readonly name: 'alex' | 'ari' | 'efe' | 'kai' | 'makena' | 'noor' | 'steve' | 'sunny' | 'zuri';
 }
 
-// The nine default skins Mojang ships since 1.19.3 (Steve and Alex plus seven
-// new characters). Wide-armed characters use the classic model, slim-armed the
-// slim model. Order is the CraftLogin catalogue order, used for deterministic
-// hash selection, not a vanilla claim.
+// The nine default skins Mojang ships since 1.19.3. Order is the CraftLogin
+// catalogue order used for deterministic hash selection, not a vanilla claim.
 export const DEFAULT_SKINS: readonly DefaultSkin[] = [
   { assetPath: 'slim/alex.png', model: 'slim', name: 'alex' },
   { assetPath: 'wide/ari.png', model: 'classic', name: 'ari' },
@@ -39,10 +36,8 @@ export function defaultSkinUrl(skin: DefaultSkin): string {
   return `${DEFAULT_SKIN_BASE_URL}${skin.assetPath}`;
 }
 
-// Offline-mode UUID from vanilla servers: MD5("OfflinePlayer:" + name) with
-// UUID version 3 and RFC 4122 variant bits, exactly like
-// java.util.UUID.nameUUIDFromBytes. Fake or unregistered names resolve to this
-// synthetic identity; it must never be treated as a verified Mojang identity.
+// MD5("OfflinePlayer:" + name) as a v3/RFC 4122 UUID, exactly like
+// java.util.UUID.nameUUIDFromBytes; never a verified Mojang identity.
 export function offlinePlayerUuid(username: string): string {
   const digest = createHash('md5').update(`OfflinePlayer:${username}`, 'utf8').digest();
   const versionByte = digest.at(6);
@@ -56,15 +51,13 @@ export function offlinePlayerUuid(username: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-// Offline-mode UUIDs are MD5 name hashes (version 3, RFC 4122 variant) while
-// Mojang assigns random version-4 UUIDs, so a version-3 identifier can never
-// resolve to a signed profile and always maps to a default skin.
+// Offline UUIDs are v3 MD5 name hashes while Mojang assigns random v4, so a v3
+// id can never resolve to a signed profile.
 export function isOfflinePlayerUuid(uuid: string): boolean {
   return uuid.charAt(14) === '3' && '89ab'.includes(uuid.charAt(19));
 }
 
-// Replicates java.util.UUID.hashCode so hash-derived selection matches JVM
-// behavior: (int)((msb ^ lsb) >>> 32) ^ (int)(msb ^ lsb).
+// Replicates java.util.UUID.hashCode so hash-derived selection matches the JVM.
 export function javaUuidHashCode(uuid: string): number {
   const hex = uuid.replaceAll('-', '');
   if (!/^[0-9a-fA-F]{32}$/u.test(hex)) {

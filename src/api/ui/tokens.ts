@@ -3,7 +3,6 @@ export const uiTokenStyles = `
   color-scheme: dark;
   --bg: oklch(0.16 0.008 150);
   --surface: oklch(0.2 0.01 150);
-  --surface-raised: oklch(0.24 0.012 150);
   --line: oklch(0.32 0.012 150);
   --line-strong: oklch(0.55 0.014 150);
   --text: oklch(0.94 0.005 150);
@@ -36,5 +35,30 @@ export const uiTokenStyles = `
   --measure: 68ch;
   --container: 72rem;
   --page-width: var(--container);
+  --reading-width: 44rem;
+  --auth-width: 42rem;
+  --gutter: var(--s4);
+  --panel-padding: var(--s5);
+  --control-height: 2.75rem;
+  --leading-normal: 1.6;
+  --motion-duration: 120ms;
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --gutter: var(--s5);
+  }
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --panel-padding: var(--s4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: 0s;
+  }
 }
 `;

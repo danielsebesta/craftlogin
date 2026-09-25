@@ -30,8 +30,8 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
   const forward = createOidcForwarder(handler);
   const limitTokenRequests = server.rateLimit(tokenRateLimit);
   const limitAuthorizeRequests = server.rateLimit(authorizeRateLimit);
-  // Hook limiters skip the rest of the chain once one has run, so the shared
-  // ceiling goes through createRateLimit(), which only inspects the store.
+  // Hook limiters skip the chain once one runs, so the shared ceiling uses
+  // createRateLimit(), which only inspects the store.
   const checkGlobalTokenBudget = server.createRateLimit(tokenEndpointGlobalRateLimit);
   const enforceGlobalTokenBudget = async (
     request: FastifyRequest,
@@ -51,7 +51,7 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    // The limiter must precede the raw bridge because the bridge hijacks the Fastify lifecycle.
+    // The limiter precedes the raw bridge, which hijacks the Fastify lifecycle.
     onRequest: [limitAuthorizeRequests, forward],
     schema: oauthAuthorizationRouteSchema,
     url: '/oauth2/authorize',
@@ -66,8 +66,8 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    // The global ceiling runs first so an over-limit request does not spend
-    // per-address budget; both precede the hijacking bridge.
+    // The global ceiling runs first so an over-limit request doesn't spend
+    // per-address budget.
     onRequest: [enforceGlobalTokenBudget, limitTokenRequests, forward],
     schema: oauthTokenRouteSchema,
     url: '/oauth2/token',

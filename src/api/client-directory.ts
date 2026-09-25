@@ -5,9 +5,8 @@ export interface RegisteredOriginLookup {
   isAllowedOrigin(origin: string): Promise<boolean>;
 }
 
-// The origin allowlist is read on every CORS-bearing request, so the full app
-// scan runs at most once per window. A stale answer for up to 30 seconds is
-// acceptable: CORS here only gates read access to public endpoints.
+// The origin allowlist scans at most once per window; up to 30s stale is fine
+// since CORS here only gates reads on public endpoints.
 const ALLOWED_ORIGINS_TTL_MS = 30 * 1_000;
 
 interface AllowedOriginsSnapshot {

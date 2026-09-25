@@ -51,9 +51,8 @@ describe('configuration tags', (): void => {
         return;
       }
 
-      // New references fail closed here so a data update cannot silently reintroduce the vanilla
-      // "Missing tag" disconnect. Tags that vanilla code (not data) reads, such as dialog and
-      // timeline tags, are asserted separately below.
+      // New references fail closed so a data update can't silently reintroduce
+      // the vanilla "Missing tag" disconnect.
       const bound = new Set(Object.values(getTagBindings()).flat());
       for (const reference of collectRegistryTagReferences(mcData)) {
         expect(bound.has(reference)).toBe(true);

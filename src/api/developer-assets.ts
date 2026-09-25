@@ -3,54 +3,8 @@ import { uiControlStyles } from './ui/controls.js';
 import { signInSurfaceStyles } from './ui/surface.js';
 
 const consoleStyles = `
-.page-header,
-.page-footer {
-  border-color: transparent;
-}
-
-.page-header {
-  background: color-mix(in oklch, var(--bg) 92%, transparent);
-}
-
-.page-header-inner,
-.page-footer-inner {
-  --page-width: 72rem;
-}
-
-body {
-  overflow-x: clip;
-}
-
-
 .console-main {
-  position: relative;
-  isolation: isolate;
-  width: min(72rem, 100% - (2 * var(--s4)));
-  padding-block: var(--s8);
-}
-
-.message-layout {
-  position: relative;
-  isolation: isolate;
-}
-
-.console-main::before,
-.message-layout::before {
-  position: absolute;
-  top: 0;
-  right: calc(50% - 50vw);
-  left: calc(50% - 50vw);
-  z-index: -1;
-  height: 40rem;
-  content: "";
-  background-image: url("/assets/grid-fade.svg");
-  background-repeat: no-repeat;
-  background-position: top center;
-  background-size: cover;
-  opacity: 0.35;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 50%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 50%, transparent 100%);
-  pointer-events: none;
+  padding-block: var(--s7);
 }
 
 .console-intro {
@@ -58,10 +12,6 @@ body {
   gap: var(--s3);
   max-width: 48rem;
   padding-bottom: var(--s7);
-}
-
-.console-intro h1 {
-  font-size: var(--t-3xl);
 }
 
 .console-main > .notice {
@@ -73,18 +23,18 @@ body {
   flex-wrap: wrap;
   gap: var(--s2);
   align-items: center;
+  max-width: 100%;
   color: var(--muted);
   font-size: var(--t-xs);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 0;
-  overflow: hidden;
 }
 
 .console-session-player {
   display: inline-flex;
   gap: var(--s2);
   align-items: center;
+  min-width: 0;
   padding: var(--s1) 0 var(--s1) var(--s1);
   color: var(--text);
   font-size: var(--t-sm);
@@ -96,10 +46,6 @@ body {
   border-left: 1px solid var(--line);
 }
 
-.console-session .button {
-  border-radius: 0;
-}
-
 .console-session form {
   display: inline;
 }
@@ -108,7 +54,7 @@ body {
   flex: none;
   width: 2rem;
   height: 2rem;
-  background: var(--surface-raised);
+  background: var(--surface);
   border: 1px solid var(--line-strong);
   image-rendering: pixelated;
 }
@@ -117,14 +63,6 @@ body {
   display: grid;
   gap: var(--s5);
   align-items: start;
-}
-
-.console-section {
-  min-width: 0;
-  padding: var(--s5);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 0;
 }
 
 .console-section-head {
@@ -142,35 +80,19 @@ body {
   font-size: var(--t-sm);
 }
 
-.console-main .button,
-.message-layout .button,
-.console-main input:not([type="radio"]):not([type="checkbox"]),
-.console-main select,
-.console-main textarea,
-.message-layout input:not([type="radio"]):not([type="checkbox"]),
-.message-layout select,
-.message-layout textarea {
-  border-radius: 0;
-}
-
 .app-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
   gap: var(--s4);
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-.app-card {
-  min-width: 0;
-  background: var(--surface-raised);
-  border: 1px solid var(--line);
-  border-radius: 0;
-  overflow: hidden;
-}
-
 .app-card article {
   display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
 }
 
 .app-card-header {
@@ -190,8 +112,13 @@ body {
   min-width: 0;
 }
 
+.app-card-identity > div {
+  min-width: 0;
+}
+
 /* Icons are 64x64 pixel art; pixelated keeps them crisp at the 2rem preview. */
 .app-card-icon {
+  flex: none;
   width: 2rem;
   height: 2rem;
   image-rendering: pixelated;
@@ -264,7 +191,7 @@ body {
   flex: none;
   width: 1.25rem;
   height: 1.25rem;
-  background: var(--surface-raised);
+  background: var(--surface);
   border: 1px solid var(--line-strong);
   image-rendering: pixelated;
 }
@@ -311,7 +238,7 @@ body {
 }
 
 .app-card-actions {
-  padding: var(--s2) var(--s3);
+  padding: var(--s4);
   border-top: 1px solid var(--line);
 }
 
@@ -319,14 +246,6 @@ body {
   padding: var(--s7) var(--s5);
   text-align: center;
   border: 1px dashed var(--line-strong);
-  border-radius: 0;
-}
-
-/* Verification actions sit beside the destructive delete link, so they must not
-   inherit its danger hover treatment. */
-.table-actions .row-actions .button-quiet:hover,
-.row-actions-stacked .button-quiet:hover {
-  color: var(--text);
 }
 
 .verification-queue {
@@ -347,10 +266,6 @@ body {
 .request-card {
   display: grid;
   gap: var(--s3);
-  padding: var(--s4);
-  background: var(--surface-raised);
-  border: 1px solid var(--line);
-  border-radius: 0;
 }
 
 .request-note {
@@ -375,35 +290,16 @@ body {
 
 .console-create,
 .console-admin {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 0;
-}
-
-.console-create {
-  padding-inline: var(--s5);
+  padding-block: 0;
 }
 
 .console-admin {
   margin-top: var(--s5);
-  padding-inline: var(--s5);
-}
-
-.console-create .choice {
-  border-width: 1px;
-}
-
-.console-create .choice:first-child {
-  border-radius: 0;
-}
-
-.console-create .choice:last-child {
-  border-radius: 0;
 }
 
 .console-create .disclosure-body,
 .console-admin .disclosure-body {
-  padding-bottom: var(--s5);
+  padding-bottom: var(--panel-padding);
 }
 
 .console-create .notice {
@@ -414,19 +310,11 @@ body {
   .admin-grant {
     grid-template-columns: minmax(0, 1fr) 12rem auto;
   }
-
-  .app-card-details {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (min-width: 64rem) {
   .console-workspace {
     grid-template-columns: minmax(0, 1.75fr) minmax(19rem, 0.75fr);
-  }
-
-  .app-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -434,7 +322,7 @@ body {
   display: grid;
   gap: var(--s2);
   padding: var(--s4);
-  background: var(--surface-raised);
+  background: var(--surface);
   border: 2px solid var(--line-strong);
 }
 
@@ -443,51 +331,13 @@ body {
 }
 
 .message-layout {
-  position: relative;
   display: grid;
   place-items: center;
-  min-height: calc(100vh - 12rem);
   padding-block: var(--s7);
 }
 
 .message-card {
-  width: min(44rem, 100%);
-  border-width: 1px;
-  border-radius: 0;
-}
-
-@media (max-width: 40rem) {
-  .console-main {
-    width: min(100% - (2 * var(--s3)), 72rem);
-    padding-block: var(--s7);
-  }
-
-  .console-section,
-  .console-create,
-  .console-admin {
-    padding-inline: var(--s4);
-  }
-
-  .console-session-role {
-    display: none;
-  }
-
-  .app-card-header,
-  .app-card-details {
-    padding: var(--s3);
-  }
-
-  .console-admin .table-wrap {
-    margin-inline: calc(-1 * var(--s4));
-    padding-inline: var(--s4);
-  }
-}
-
-@media (forced-colors: active) {
-  .console-main::before,
-  .message-layout::before {
-    display: none;
-  }
+  width: min(var(--reading-width), 100%);
 }
 `;
 

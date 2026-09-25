@@ -102,9 +102,7 @@ export async function registerOpenApi(
     transformObject: (document) => {
       if ('swaggerObject' in document) return document.swaggerObject;
 
-      // This plugin instance is configured above to emit OpenAPI 3.1. The upstream callback type
-      // cannot discriminate OpenAPI 3.0 from 3.1, so narrow only at this documented boundary.
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- configuration guarantees OpenAPI 3.1
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the plugin is configured above to emit OpenAPI 3.1
       const source = document.openapiObject as Partial<OpenAPIV3_1.Document>;
       const schemas = Object.fromEntries(
         Object.entries(source.components?.schemas ?? {}).filter(([name]): boolean =>

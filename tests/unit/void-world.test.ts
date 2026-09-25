@@ -141,8 +141,7 @@ describe('void world packet encoding', (): void => {
         return;
       }
 
-      // Every light section must sit in either a data mask or an empty mask; zeroed masks with
-      // no empty marks is what vanilla rejects with a network protocol error.
+      // Zeroed masks with no empty marks are what vanilla rejects.
       const packet = createChunkPacket(
         mcData,
         new chunkConstructor({ minY: 0, worldHeight: 256 }),
@@ -512,8 +511,8 @@ describe('void world packet encoding', (): void => {
 
       expect(modernWorldStateSchema.safeParse(packet['worldState']).success).toBe(true);
       expect(packet['gameMode']).toBeUndefined();
-      // The template defaults this to false, which makes clients show a
-      // "Chat messages can't be verified" warning despite server-side enforcement.
+      // The template defaults this to false, making clients warn despite
+      // server-side enforcement.
       expect(packet['enforcesSecureChat']).toBe(true);
     },
   );

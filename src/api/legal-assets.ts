@@ -3,12 +3,12 @@ import { uiControlStyles } from './ui/controls.js';
 
 const legalPageStyles = `
 .legal-page {
-  max-width: 44rem;
+  max-width: var(--reading-width);
   margin-inline: auto;
 }
 
-.legal-page .section-intro {
-  color: var(--muted);
+.legal-page > h1 {
+  margin-bottom: var(--s3);
 }
 
 .legal-updated {
@@ -18,20 +18,13 @@ const legalPageStyles = `
 }
 
 .legal-section {
+  display: grid;
+  gap: var(--s3);
   margin-top: var(--s6);
-}
-
-.legal-section h2 {
-  font-size: var(--t-lg);
-}
-
-.legal-section p {
-  line-height: 1.6;
 }
 
 .legal-list {
   padding-left: 1.25rem;
-  line-height: 1.6;
 }
 
 .legal-list li {

@@ -94,8 +94,8 @@ export class HttpSkinStore implements SkinStore {
           `Minecraft texture service returned HTTP ${response.status.toString()}`,
         );
       }
-      // Mojang mislabels cape textures as application/octet-stream, so the
-      // signature check below — not this header — guarantees PNG content.
+      // Mojang mislabels cape textures as octet-stream; the signature check
+      // below is what guarantees PNG content.
       const contentType = response.headers.get('content-type') ?? '';
       if (!contentType.startsWith('image/png') && contentType !== 'application/octet-stream') {
         throw new MinecraftSkinUnavailableError('Minecraft texture service returned a non-PNG');

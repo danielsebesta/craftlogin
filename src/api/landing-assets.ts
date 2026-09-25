@@ -2,104 +2,6 @@ import { uiBaseStyles } from './ui/base.js';
 import { uiControlStyles } from './ui/controls.js';
 
 const landingPageStyles = `
-/* Landing header: no rule line below it; navigation links sit apart from each
-   other as quiet chips on the raised surface instead of bare text links. */
-.page-header {
-  border-bottom: 0;
-}
-
-.page-footer {
-  border-top: 0;
-}
-
-.page-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-.page-nav a {
-  min-height: 2.5rem;
-  padding: 0.25rem var(--s3);
-  color: var(--muted);
-  text-decoration: none;
-  background: transparent;
-  border: 1px solid var(--line);
-}
-
-.page-nav a:hover {
-  color: var(--text);
-  text-decoration: none;
-  border-color: var(--accent);
-}
-
-/* Grid glow bands at the top and bottom of the landing page: absolutely
-   positioned layers the exact height of the asset scroll away with the
-   content, their inner edges melting into the plain page background so the
-   middle of the page stays clear. */
-main.container {
-  position: relative;
-  isolation: isolate;
-}
-
-/* Full-bleed guard: the glow below escapes the centered content column to
-   cover the whole viewport width without causing horizontal scrolling. */
-body {
-  overflow-x: clip;
-}
-
-main.container::before,
-main.container::after {
-  position: absolute;
-  left: calc(50% - 50vw);
-  right: calc(50% - 50vw);
-  z-index: -1;
-  height: min(calc(100vw * 530 / 690), 64rem);
-  content: "";
-  background-image: url("/assets/grid-fade.svg");
-  background-repeat: no-repeat;
-  background-position: top center;
-  background-size: cover;
-  opacity: 0.1;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 18%,
-    black 50%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 50%, transparent 100%);
-  pointer-events: none;
-}
-
-main.container::before {
-  top: 0;
-}
-
-/* The footer band mirrors the hero band: its dense edge sits at the bottom
-   of the page and the middle of the page stays clear between them. */
-main.container::after {
-  bottom: 0;
-  transform: scaleY(-1);
-}
-
-/* Narrow viewports would compute only a short strip from the asset ratio, so
-   the glow gets a taller minimum there and cover crops the sides instead of
-   leaving a seam. */
-@media (max-width: 34rem) {
-  main.container::before,
-  main.container::after {
-    height: 24rem;
-  }
-}
-
-@media (forced-colors: active) {
-  main.container::before,
-  main.container::after {
-    display: none;
-  }
-}
-
 .landing-hero {
   display: grid;
   gap: var(--s4);
@@ -143,13 +45,9 @@ main.container::after {
   text-align: center;
 }
 
-.section-intro {
-  max-width: 44rem;
+.landing-section > .section-intro {
   margin-inline: auto;
-  margin-bottom: var(--s5);
-  color: var(--muted);
   text-align: center;
-  text-wrap: pretty;
 }
 
 /* One card treatment for every grouped item on the page: steps, use cases,
@@ -166,9 +64,6 @@ main.container::after {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  padding: var(--s5);
-  background: var(--surface);
-  border: 1px solid var(--line);
 }
 
 .landing-card > .list-icon {
@@ -188,11 +83,8 @@ main.container::after {
    identity panel whose header shows a real verified player and whose divided
    lower half explains each field. */
 .player-card {
-  max-width: 44rem;
-  padding: var(--s5);
+  max-width: var(--reading-width);
   margin-inline: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
 }
 
 .player-card-head {
@@ -252,6 +144,7 @@ main.container::after {
 .claim-row {
   display: grid;
   gap: var(--s1);
+  min-width: 0;
 }
 
 .claim-row dd {
@@ -299,58 +192,8 @@ main.container::after {
   text-align: center;
 }
 
-.avatar-lookup-row {
-  display: flex;
-  gap: var(--s2);
-}
-
 .avatar-lookup-row input {
-  flex: 1;
-  min-width: 0;
   font-family: var(--font-mono);
-}
-
-.avatar-lookup-row .button {
-  flex: none;
-}
-
-.avatar-showcase {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
-  gap: var(--s4);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.avatar-card {
-  align-items: center;
-  padding: var(--s4);
-  text-align: center;
-}
-
-/* Every view samples nearest texels, so pixelated scaling stays crisp even on
-   the angled head projection. */
-.avatar-card img {
-  width: 100%;
-  max-width: 7rem;
-  height: auto;
-  aspect-ratio: 1;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-.avatar-card code {
-  color: var(--muted);
-  font-size: var(--t-xs);
-  overflow-wrap: anywhere;
-}
-
-.avatar-credit {
-  margin-top: var(--s4);
-  color: var(--muted);
-  font-size: var(--t-sm);
-  text-align: center;
 }
 
 /* Get-started cards pin their action to the bottom so the row stays level. */
@@ -366,7 +209,7 @@ main.container::after {
   display: flex;
   gap: var(--s2);
   align-items: center;
-  min-height: 2rem;
+  min-height: var(--control-height);
   color: var(--muted);
   font-size: var(--t-sm);
   cursor: pointer;

@@ -40,6 +40,8 @@ export const interactionScript = `
   const choices = Array.from(document.querySelectorAll('[data-method-choice]'));
   const activePolls = new WeakSet();
 
+  if (continueForm instanceof HTMLFormElement && panels.length > 0) continueForm.hidden = true;
+
   const startPolling = (region) => {
     if (!(region instanceof HTMLElement) || activePolls.has(region)) return;
     const status = region.querySelector('[data-verification]') ?? region;

@@ -66,9 +66,8 @@ export function registerMicrosoftOAuthRoutes(
   server: FastifyInstance,
   options: MicrosoftOAuthRoutesOptions,
 ): void {
-  // A plain link (GET) starts verification: the server answers with a 303 redirect
-  // to the Microsoft authorize endpoint, and GET navigations are not restricted
-  // by form-action. A POST form would have its cross-origin redirect blocked.
+  // A plain GET link answers with a 303 to Microsoft; a POST form's cross-origin
+  // redirect would be blocked by form-action.
   server.get<{ Params: InteractionParams }>(
     '/interaction/:uid/microsoft/start',
     {
@@ -115,9 +114,8 @@ export function registerMicrosoftOAuthRoutes(
       schema: microsoftOAuthCallbackRouteSchema,
     },
     async (request, reply): Promise<void> => {
-      // Browser callback: malformed Microsoft querystrings become the friendly
-      // expired page, never a JSON envelope (the OpenAPI contract promises
-      // HTML for this route).
+      // This route's contract is HTML, so malformed querystrings become the
+      // friendly expired page, never a JSON envelope.
       if (request.validationError !== undefined) {
         await sendResultPage(reply, 400, { kind: 'expired' });
         return;
@@ -138,15 +136,13 @@ export function registerMicrosoftOAuthRoutes(
       }
       clearTransactionCookie(reply, transaction.cookieName);
       try {
-        // Cookie-less guard: the fixed callback path sits outside the
-        // oidc-provider interaction cookie scope (Path=/interaction/<uid>),
-        // so request cookies cannot identify the interaction here. The
-        // signed transaction cookie binds the interaction instead.
+        // The fixed callback path sits outside the interaction cookie scope
+        // (Path=/interaction/<uid>), so the signed transaction cookie binds
+        // the interaction instead.
         await options.interactions.prepareMicrosoftCallback(transaction.interactionId);
       } catch (error: unknown) {
-        // The interaction may have expired while the user was at Microsoft.
-        // Like every other browser navigation here, that becomes a redirect
-        // to the friendly interaction page instead of a JSON envelope.
+        // The interaction may have expired while the user was at Microsoft;
+        // that becomes a redirect to the friendly interaction page.
         if (isInteractionClientError(error)) {
           await reply.redirect(homeUrlForInteraction(transaction.interactionId), 303);
           return;
@@ -212,8 +208,7 @@ export function registerMicrosoftOAuthRoutes(
           return;
         }
         if (error instanceof MicrosoftOAuthUnavailableError) {
-          // The message carries only the failed stage (for example which
-          // token endpoint rejected the request) and never token material.
+          // The message carries only the failed stage, never token material.
           options.logger.warn(
             {
               errorKind: getErrorKind(error),

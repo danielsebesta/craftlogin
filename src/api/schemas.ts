@@ -801,8 +801,7 @@ export const developerAppIconRouteSchema: FastifySchema = {
   },
 };
 
-// The multipart body is parsed by @fastify/multipart, so this route declares
-// only params and responses; invalid icons re-render the page as HTML.
+// The body is parsed by @fastify/multipart, so only params and responses are declared.
 export const developerAppIconUploadRouteSchema: FastifySchema = {
   hide: true,
   params: appIdParamsSchema,

@@ -36,7 +36,7 @@ export interface PageDocument {
 }
 
 const brandWordmark =
-  '<picture class="brand-wordmark"><source srcset="/assets/brand-wordmark.webp 210w, /assets/brand-wordmark-2x.webp 420w, /assets/craftlogin-title.webp 640w, /assets/craftlogin-title-2x.webp 1280w, /assets/craftlogin-title-master.webp 2048w" sizes="(max-width: 48rem) 85vw, 420px" type="image/webp"><source srcset="/assets/brand-wordmark.png 210w, /assets/brand-wordmark-2x.png 420w, /assets/craftlogin-title.png 640w, /assets/craftlogin-title-2x.png 1280w, /assets/craftlogin-title-master.png 2048w" sizes="(max-width: 48rem) 85vw, 420px" type="image/png"><img class="brand-wordmark-image" src="/assets/craftlogin-title.png" alt="CraftLogin" width="640" height="97" decoding="async"></picture>';
+  '<picture class="brand-wordmark"><source srcset="/assets/brand-wordmark.webp 210w, /assets/brand-wordmark-2x.webp 420w, /assets/craftlogin-title.webp 640w, /assets/craftlogin-title-2x.webp 1280w, /assets/craftlogin-title-master.webp 2048w" sizes="min(85vw, 240px)" type="image/webp"><source srcset="/assets/brand-wordmark.png 210w, /assets/brand-wordmark-2x.png 420w, /assets/craftlogin-title.png 640w, /assets/craftlogin-title-2x.png 1280w, /assets/craftlogin-title-master.png 2048w" sizes="min(85vw, 240px)" type="image/png"><img class="brand-wordmark-image" src="/assets/craftlogin-title.png" alt="CraftLogin" width="640" height="97" decoding="async"></picture>';
 
 export function renderPageDocument(page: PageDocument): string {
   const description =
@@ -51,9 +51,7 @@ export function renderPageDocument(page: PageDocument): string {
           .join('');
   const headExtra = page.headExtra === undefined ? '' : `\n    ${page.headExtra}`;
   const brandText =
-    page.header.brand === 'CraftLogin'
-      ? `<span class="visually-hidden">${escapeHtml(page.header.brand)}</span>${brandWordmark}`
-      : escapeHtml(page.header.brand);
+    page.header.brand === 'CraftLogin' ? brandWordmark : escapeHtml(page.header.brand);
   const brand =
     page.header.brandHref === undefined
       ? `<span class="brand">${brandText}</span>`
@@ -109,7 +107,7 @@ ${page.header.navigation.trailing ?? ''}
         ${brand}${navigation}
       </div>
     </header>
-    <main id="main" class="${escapeHtml(page.mainClass)}"${page.mainAttributes ?? ''}>
+    <main id="main" class="page-backdrop ${escapeHtml(page.mainClass)}"${page.mainAttributes ?? ''}>
 ${page.content}
     </main>
     <footer class="page-footer">

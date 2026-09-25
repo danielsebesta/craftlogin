@@ -18,6 +18,32 @@ body {
   font-family: var(--font-sans);
 }
 
+.swagger-ui .wrapper {
+  max-width: var(--container);
+  padding-inline: var(--gutter);
+}
+
+.swagger-ui :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .swagger-ui :focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
+
+.swagger-ui .btn,
+.swagger-ui .models-control,
+.swagger-ui .opblock-tag,
+.swagger-ui a {
+  transition:
+    background-color var(--motion-duration) ease-out,
+    border-color var(--motion-duration) ease-out,
+    color var(--motion-duration) ease-out;
+}
+
 .swagger-ui .wrapper,
 .swagger-ui .info,
 .swagger-ui .scheme-container,
@@ -148,7 +174,7 @@ body {
 .swagger-ui textarea,
 .swagger-ui .info .title small {
   color: var(--text);
-  background: var(--surface-raised);
+  background: var(--surface);
   border: 2px solid var(--line-strong);
 }
 
@@ -224,7 +250,7 @@ body {
 .swagger-ui .opblock-tag:hover,
 .swagger-ui .model-container:hover,
 .swagger-ui .models-control:hover {
-  background: var(--surface-raised);
+  background: var(--surface);
 }
 
 .swagger-ui .error,
@@ -304,7 +330,7 @@ body {
 .swagger-ui .version-stamp,
 .swagger-ui .version-stamp .version {
   color: var(--muted);
-  background: var(--surface-raised);
+  background: var(--surface);
 }
 
 .swagger-ui .json-schema-2020-12,
@@ -319,7 +345,7 @@ body {
 .swagger-ui input,
 .swagger-ui .models-control,
 .swagger-ui .json-schema-2020-12-expand-deep-button {
-  min-height: 2.75rem;
+  min-height: var(--control-height);
 }
 
 .swagger-ui .json-schema-2020-12-expand-deep-button,

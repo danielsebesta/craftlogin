@@ -39,9 +39,8 @@ import {
 // Shutdown must not stall on a client that never completes configuration; the reason is best effort.
 const SHUTDOWN_WORLD_WAIT_TIMEOUT_MS = 1_500;
 const MAX_PLAYERS = 10_000;
-// minecraft-protocol only reports maxPlayers in the status ping; it never
-// refuses a TCP connection. These gates bound pre-login socket floods, and a
-// rejected socket costs only a destroy.
+// minecraft-protocol never refuses a TCP connection itself, so these gates
+// bound pre-login socket floods.
 const MAX_CONNECTIONS = 10_000;
 const MAX_CONNECTIONS_PER_ADDRESS = 64;
 const CONNECTION_LIMIT_LOG_INTERVAL_MS = 10_000;
@@ -166,15 +165,14 @@ export async function startGhostServer(
     host: config.host,
     port: config.port,
     version: false,
-    // Clients on protocols newer than minecraft-data supports still get login-state serializers
-    // from the newest known version, so they can finish online-mode authentication and receive
-    // the verification result as a login-state disconnect instead of a silent socket close.
+    // Newer-than-known protocols still get login-state serializers from the
+    // newest known version, so they finish auth and get a login-state disconnect.
     fallbackVersion: minecraftProtocol.defaultVersion,
     'online-mode': true,
     hideErrors: true,
     keepAlive: true,
-    // Modern vanilla clients otherwise label the session as unverified even though online-mode
-    // authentication succeeded. The library validates Mojang's signed profile key during login.
+    // Without this, modern clients label the session unverified despite
+    // successful online-mode auth.
     enforceSecureProfile: true,
     maxPlayers: MAX_PLAYERS,
     motd: english.minecraft.motd,
@@ -190,8 +188,7 @@ export async function startGhostServer(
         { errorKind: getErrorKind(error) },
         'Minecraft client connection failed',
       );
-      // The library types this as a bare Client, but error paths always carry the server-side
-      // client object; without it there is nothing to disconnect.
+      // Error paths always carry the server-side client despite the bare Client typing.
       if (isServerClient(client)) {
         void disconnect(client, english.minecraft.temporaryFailure, { tone: 'error' });
       }
@@ -247,9 +244,8 @@ export async function startGhostServer(
 
       const { serverHost, protocolVersion } = parsedHandshake.data;
 
-      // minecraft-data only knows a fixed protocol range. With the fallback version a newer
-      // client still completes login; it just cannot enter the world. A code subdomain can
-      // therefore verify it, while hosts that need the play state are rejected up front.
+      // A newer-than-known client completes login but never enters the world,
+      // so only a code subdomain can verify it.
       const protocolSupported = getMinecraftData(protocolVersion) !== null;
       if (!protocolSupported) {
         // The server host is never logged: for code subdomains it carries the verification code.
@@ -284,8 +280,7 @@ export async function startGhostServer(
       }
 
       if (!protocolSupported) {
-        // Without a code subdomain there is nothing to resolve; the lobby needs play-state chat,
-        // which requires protocol data this client does not have.
+        // The lobby needs play-state chat, which this client's protocol lacks.
         client.removeAllListeners('login_start');
         void disconnect(client, english.minecraft.unsupportedVersion, { tone: 'error' });
         return;
@@ -300,25 +295,25 @@ export async function startGhostServer(
     });
   });
 
-  // minecraft-protocol emits login only after online-mode session authentication populated the
-  // UUID and username. Resolving earlier would treat an unauthenticated profile as verified.
+  // 'login' fires only after online-mode auth populated the UUID; resolving
+  // earlier would trust an unauthenticated profile.
   server.on('login', (client): void => {
     const pending = pendingClients.get(client);
     if (pending?.kind === 'verification') {
       pending.outcome = settleVerification(client, pending, dependencies);
       if (pending.compat) {
-        // The withheld success packet keeps this client in the login state, so the outcome is
-        // delivered as a login-state disconnect instead of a play-state kick after the void world.
+        // This client stays in the login state, so the outcome goes out as a
+        // login-state disconnect rather than a play-state kick.
         void finalizeVerification(client, pending.outcome, dependencies.logger);
         return;
       }
     }
 
-    // Login success has been written, so the client is no longer addressable in the login state.
+    // Login success is written, so the client is no longer addressable in login state.
     markLoggedIn(client);
   });
 
-  // The play state exists here, so the Join Game packet can be written and a later kick is rendered.
+  // Play state exists here, so a later kick renders instead of dropping silently.
   server.on('playerJoin', (client): void => {
     const pending = pendingClients.get(client);
     try {
@@ -403,15 +398,14 @@ async function settleVerification(
       value: await resolveVerification(client, pending, dependencies),
     };
   } catch (error: unknown) {
-    // The resolver starts before modern clients finish configuration. Settle failures immediately
-    // so a fast persistence rejection cannot become unhandled while playerJoin is still pending.
+    // Settle failures immediately so a fast rejection can't become unhandled
+    // while playerJoin is still pending.
     return { kind: 'failure', errorKind: getErrorKind(error) };
   }
 }
 
-// A code typed into lobby chat runs the same atomic claim as the subdomain handshake. The
-// identity still comes from the online-mode-authenticated connection, so chat is only a
-// transport for the code, never a source of identity.
+// Chat is only a transport for the code; identity always comes from the
+// online-mode-authenticated connection.
 async function resolveLobbyCode(
   client: ServerClient,
   code: string,
@@ -477,11 +471,9 @@ async function lookupCodeAvailability(
   }
 }
 
-// The status ping expects a data URI, while the login exchange decodes raw base64. Keep the option
-// as raw base64 and enrich the ping response so both paths receive the format they expect.
-// version.name renders as small gray text under the MOTD and players.sample as the hover tooltip
-// over the player count. The count slot itself is client-rendered "online/max" numbers with no
-// text field, so custom text lives in those two places instead.
+// The ping wants a data URI while the login exchange wants raw base64. Custom
+// text lives in version.name (under the MOTD) and players.sample (hover
+// tooltip); the online/max count itself has no text field.
 const pingVersionSchema = z.looseObject({ name: z.string(), protocol: z.number() });
 const pingPlayersSchema = z.looseObject({
   online: z.number(),
@@ -518,8 +510,8 @@ function createPingHook(
             },
           }
         : {}),
-      // The static motdMsg stays in legacy colors as the fallback for ancient clients; modern
-      // clients receive the exact website palette instead.
+      // motdMsg stays in legacy colors for ancient clients; modern clients get
+      // the exact website palette.
       ...(hex
         ? {
             description: {

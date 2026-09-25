@@ -50,8 +50,6 @@ export class CanvasAvatarRenderer implements AvatarRenderer {
     options: AvatarRenderOptions,
     capeTexture?: TexturePixels,
   ): Promise<Buffer> {
-    // Vanilla renders skin overlays on separately inflated cuboids, so their
-    // projected texture is centered over, but larger than, the base surface.
     if (options.view === 'face') {
       return await renderProjectedHead(texture, options.layers, options.size);
     }
@@ -83,9 +81,8 @@ async function renderProjectedHead(
   const canvas = createCanvas(outputSize, outputSize);
   const context = canvas.getContext('2d');
   const output = context.createImageData(outputSize, outputSize);
-  // A flat face benefits from the same small visible separation as established
-  // avatar services: the helmet fills the frame while the face is inset by 5%.
-  // Full figure projections below retain the exact vanilla cuboid dimensions.
+  // Vanilla overlays sit on inflated cuboids, so the helmet fills the frame
+  // while the face insets by 5%.
   const overlayRect = { height: 8, u: 40, v: 8, width: 8 };
   const showOverlay = layers === 'all' && hasVisiblePixels(texture, overlayRect);
   const overlayRatio = showOverlay ? 1.05 : 1;
@@ -119,10 +116,8 @@ async function renderProjectedHead(
   return await canvas.encode('png');
 }
 
-// Flat front projection for bust, body, and back: the figure is laid out
-// exactly like the skin file (arms beside the torso, legs below it) and scaled
-// to fill the square canvas height. Axis-aligned texels stay crisp, and the
-// viewer-facing layout mirrors limb placement.
+// Flat projection laid out exactly like the skin file (arms beside the torso,
+// legs below it), scaled to fill the square canvas height.
 function flatLayout(part: BodyPart, armWidth: number): { readonly x: number; readonly y: number } {
   switch (part) {
     case 'head':
@@ -163,8 +158,7 @@ async function renderFlatFigure(
   return await canvas.encode('png');
 }
 
-// The duo composites the flat front and back figures side by side: the same
-// square canvas carries both, so each half keeps the figure's 1:2 proportions.
+// Duo composites the flat front and back figures side by side on one square canvas.
 async function renderDuo(
   texture: SkinTexture,
   model: MinecraftSkinModel,
@@ -214,8 +208,6 @@ function buildFlatScene(
   layers: AvatarLayers,
   texture: SkinTexture,
 ): FlatScene {
-  // The back view mirrors the figure horizontally and samples each part's back
-  // face instead of the front.
   const mirrored = view === 'back';
   const armWidth = model === 'slim' ? 3 : 4;
   const projected = buildAvatarScene(view, model, layers, texture.legacy)
@@ -223,9 +215,8 @@ function buildFlatScene(
     .filter(
       (cuboid): boolean => cuboid.layer === 'base' || hasVisiblePixels(texture, cuboid.texture),
     );
-  // Frame against the vanilla base model, not its inflated overlays. Otherwise
-  // enabling layers shrinks and shifts the entire player, which is especially
-  // visible as detached seams at small output sizes.
+  // Frame against the vanilla base model, not its inflated overlays, so
+  // enabling layers can't shrink or shift the figure.
   return {
     armWidth,
     bounds: projectedBounds(projected.filter((cuboid): boolean => cuboid.layer === 'base')),
@@ -251,9 +242,7 @@ function paintFlatScene(
   const transform = fitFlatTransform(scene.bounds, region);
   paintFlatCuboids(output, outputSize, scene, transform);
 
-  // A worn cape hangs behind the torso, so it drapes over the body's back
-  // faces in a back view. The figure bounds stay cape-free so a missing or
-  // differently sized cape can never shift the framing.
+  // Figure bounds exclude the cape so a missing or oddly sized one can't shift framing.
   const capeRect = capeTexture === undefined ? undefined : scaledCapeRect(capeTexture);
   if (capeRect !== undefined && capeTexture !== undefined) {
     paintFlatRect(
@@ -303,8 +292,7 @@ function paintFlatCuboids(
   scene: FlatScene,
   transform: FlatTransform,
 ): void {
-  // Outer surfaces all sit in front of the base model. Painting every base first
-  // prevents a neighboring limb base from incorrectly covering an inflated layer.
+  // Bases paint first so a limb base can't cover a neighbor's inflated outer layer.
   const paintOrder = [
     ...scene.projected.filter((cuboid): boolean => cuboid.layer === 'base'),
     ...scene.projected.filter((cuboid): boolean => cuboid.layer === 'outer'),
@@ -324,15 +312,13 @@ function paintFlatCuboids(
   }
 }
 
-// The cape's outward face in the shared cape atlas layout: the worn cuboid is
-// turned 180° on the model, so the visible face is the net's front panel.
+// The worn cape cuboid is turned 180° on the model, so its visible face is the
+// atlas's front panel.
 const CAPE_TEXTURE_RECT: TextureRect = { height: 16, u: 1, v: 1, width: 10 };
-// The cape hangs from the shoulders, which sit at the torso's top edge.
 const CAPE_TOP_Y = 8;
 
-// The side view is a flat left profile: the horizontal axis is the character's
-// front-to-back depth with the face toward the image's left edge. Near-side
-// parts (left arm and leg) fully cover their far counterparts.
+// Flat left profile: horizontal axis is front-to-back depth, face toward the
+// left edge; near-side parts fully cover their far counterparts.
 async function renderSideFigure(
   texture: SkinTexture,
   model: MinecraftSkinModel,
@@ -370,10 +356,8 @@ async function renderSideFigure(
   return await canvas.encode('png');
 }
 
-// The wings view is the flat back figure wearing deployed elytra instead of a
-// cape: each wing is the back face of the wing cuboid in the Mojang cape atlas
-// (a 10x20x2 box at u22,v0), rotated outward around a spine hinge. The atlas
-// artwork is pre-sheared, so the rotated silhouette reads as a spread wing.
+// The wings view is the flat back figure wearing the vanilla ElytraModel
+// cuboids in their standing pose, depth-resolved against the body like in-game.
 async function renderWingsFigure(
   texture: SkinTexture,
   model: MinecraftSkinModel,
@@ -382,16 +366,9 @@ async function renderWingsFigure(
   capeTexture?: TexturePixels,
 ): Promise<Buffer> {
   const scene = buildFlatScene('back', model, layers, texture);
-  const wingRect = capeTexture === undefined ? undefined : scaledWingRect(capeTexture);
-  let { bounds } = scene;
-  if (wingRect !== undefined) {
-    bounds = {
-      maxX: Math.max(bounds.maxX, WING_HINGE_X + scene.armWidth + WING_FOOTPRINT.maxX),
-      maxY: Math.max(bounds.maxY, WING_HINGE_Y + WING_FOOTPRINT.maxY),
-      minX: Math.min(bounds.minX, WING_HINGE_X + scene.armWidth - WING_FOOTPRINT.maxX),
-      minY: Math.min(bounds.minY, WING_HINGE_Y + WING_FOOTPRINT.minY),
-    };
-  }
+  const atlasScale = capeTexture === undefined ? undefined : wingAtlasScale(capeTexture);
+  const wings = atlasScale === undefined ? [] : buildWingQuads(scene.armWidth + 4);
+  const bounds = wings.length === 0 ? scene.bounds : unionBounds(scene.bounds, quadBounds(wings));
   const transform = fitFlatTransform(bounds, {
     height: outputSize,
     width: outputSize,
@@ -402,88 +379,235 @@ async function renderWingsFigure(
   const context = canvas.getContext('2d');
   const output = context.createImageData(outputSize, outputSize);
   paintFlatCuboids(output.data, outputSize, scene, transform);
-  if (wingRect !== undefined && capeTexture !== undefined) {
-    const { scale } = transform;
-    const hingeY = transform.offsetY + WING_HINGE_Y * scale;
-    // Vanilla pivots each wing 5 units to its own side while the plate itself
-    // stays centered on the spine, so the pair crosses over the midline instead
-    // of splaying apart; the right wing samples the same atlas face mirrored.
-    const leftHingeX = transform.offsetX + (scene.armWidth + WING_HINGE_X - 5) * scale;
-    const rightHingeX = transform.offsetX + (scene.armWidth + WING_HINGE_X + 5) * scale;
-    paintWing(
-      output.data,
-      outputSize,
-      capeTexture,
-      wingRect,
-      leftHingeX,
-      hingeY,
-      WING_SPREAD,
-      false,
-      -1 * scale,
-      (WING_WIDTH - 1) * scale,
-      WING_HEIGHT * scale,
-    );
-    paintWing(
-      output.data,
-      outputSize,
-      capeTexture,
-      wingRect,
-      rightHingeX,
-      hingeY,
-      -WING_SPREAD,
-      true,
-      -(WING_WIDTH - 1) * scale,
-      1 * scale,
-      WING_HEIGHT * scale,
-    );
+  if (atlasScale !== undefined && capeTexture !== undefined) {
+    paintDepthQuads(output.data, outputSize, capeTexture, atlasScale, wings, transform);
   }
   context.putImageData(output, 0, 0);
   return await canvas.encode('png');
 }
 
-// The wing cuboid's visible rear face in the 64x32 atlas. The front face
-// (u24-34) is the hidden inner side; the Mojang layout shares this region
-// between both wings and mirrors it for the right one.
-const WING_TEXTURE_RECT: TextureRect = { height: 20, u: 36, v: 2, width: 10 };
-// Model-space wing plate: the 10x20x2 cuboid inflated by 1, like vanilla.
-const WING_WIDTH = 12;
-const WING_HEIGHT = 22;
-const WING_HINGE_Y = 9;
-// Vanilla tilts the folded wings 15° outward while standing; the pair overlaps
-// at the spine and only the tips part, which is the canonical worn look.
-const WING_SPREAD = Math.PI / 12;
-// The spine sits at the torso's horizontal center; each wing pivots
-// WING_PIVOT_OFFSET to its own side of it, near the neckline.
-const WING_HINGE_X = 4;
+// Vanilla ElytraModel geometry: a 10x20x2 cuboid at texOffs(22,0) inflated by
+// 1, hinged beside the spine, pushed 2 units behind the body, and posed with a
+// 15° pitch plus 15° roll toward the midline.
+const WING_CUBOID = {
+  max: { x: 1, y: 21, z: 3 },
+  min: { x: -11, y: -1, z: -1 },
+  texture: { depth: 2, height: 20, u: 22, v: 0, width: 10 },
+} as const;
+const WING_HINGE: Vector3 = { x: 5, y: 0, z: 2 };
+const WING_PITCH = Math.PI / 12;
+const WING_ROLL = Math.PI / 12;
+// In-game cutout rendering discards texels below 10% alpha.
+const CUTOUT_ALPHA = 26;
 
-// Half-extent of the rotated wing pair relative to the spine: each plate is
-// centered on the midline but pivots 5 units to its own side, so a tip lands
-// WING_PIVOT + corner-dx out while the plates cross over the center. The pair
-// is symmetric, so one wing's corners bound both sides.
-const WING_PIVOT_OFFSET = 5;
-const WING_FOOTPRINT = ((): {
-  readonly maxX: number;
-  readonly maxY: number;
-  readonly minY: number;
-} => {
-  const cos = Math.cos(WING_SPREAD);
-  const sin = Math.sin(WING_SPREAD);
-  let maxX = 0;
-  let maxY = 0;
-  let minY = 0;
-  for (const lx of [-1, WING_WIDTH - 1]) {
-    for (const ly of [0, WING_HEIGHT]) {
-      maxX = Math.max(maxX, Math.abs(-WING_PIVOT_OFFSET + lx * cos - ly * sin));
-      const dy = lx * sin + ly * cos;
-      maxY = Math.max(maxY, dy);
-      minY = Math.min(minY, dy);
+interface TexturedVertex {
+  readonly u: number;
+  readonly v: number;
+  readonly x: number;
+  readonly y: number;
+  // Depth toward the viewer: larger values are nearer.
+  readonly z: number;
+}
+
+type TexturedQuad = readonly [TexturedVertex, TexturedVertex, TexturedVertex, TexturedVertex];
+
+// Both wings in figure units; the right wing is the left wing mirrored across the spine.
+function buildWingQuads(spine: number): readonly TexturedQuad[] {
+  const cosPitch = Math.cos(WING_PITCH);
+  const sinPitch = Math.sin(WING_PITCH);
+  const cosRoll = Math.cos(WING_ROLL);
+  const sinRoll = Math.sin(WING_ROLL);
+  const quads: TexturedQuad[] = [];
+  for (const side of [1, -1] as const) {
+    // ModelPart rotationZYX: pitch first, then roll; the mirrored right wing
+    // negates the roll with x.
+    const pose = (vertex: TexturedVertex): TexturedVertex => {
+      const pitchedY = vertex.y * cosPitch - vertex.z * sinPitch;
+      const pitchedZ = vertex.y * sinPitch + vertex.z * cosPitch;
+      const rolledX = vertex.x * cosRoll + pitchedY * sinRoll;
+      const rolledY = -vertex.x * sinRoll + pitchedY * cosRoll;
+      return {
+        u: vertex.u,
+        v: vertex.v,
+        x: spine - side * (WING_HINGE.x + rolledX),
+        y: CAPE_TOP_Y + WING_HINGE.y + rolledY,
+        z: WING_HINGE.z + pitchedZ,
+      };
+    };
+    for (const face of modelCuboidFaces(WING_CUBOID.min, WING_CUBOID.max, WING_CUBOID.texture)) {
+      quads.push([pose(face[0]), pose(face[1]), pose(face[2]), pose(face[3])]);
     }
   }
-  return { maxX, maxY, minY };
-})();
+  return quads;
+}
 
-// The cape face sits at the same coordinates in every supported atlas, scaled
-// by the atlas factor; empty faces simply paint nothing.
+// Vanilla ModelPart cuboid faces with the game's texel-corner assignment.
+// Model y points down; z points behind the player.
+function modelCuboidFaces(
+  min: Vector3,
+  max: Vector3,
+  texture: TextureBox,
+): readonly TexturedQuad[] {
+  const { depth, height, u, v, width } = texture;
+  const corner = (x: number, y: number, z: number): Vector3 => ({ x, y, z });
+  const v0 = corner(min.x, min.y, min.z);
+  const v1 = corner(max.x, min.y, min.z);
+  const v2 = corner(max.x, max.y, min.z);
+  const v3 = corner(min.x, max.y, min.z);
+  const v4 = corner(min.x, min.y, max.z);
+  const v5 = corner(max.x, min.y, max.z);
+  const v6 = corner(max.x, max.y, max.z);
+  const v7 = corner(min.x, max.y, max.z);
+  const face = (
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    d: Vector3,
+    u1: number,
+    v1: number,
+    u2: number,
+    v2: number,
+  ): TexturedQuad => [
+    { ...a, u: u2, v: v1 },
+    { ...b, u: u1, v: v1 },
+    { ...c, u: u1, v: v2 },
+    { ...d, u: u2, v: v2 },
+  ];
+  return [
+    face(v5, v4, v0, v1, u + depth, v, u + depth + width, v + depth),
+    face(v2, v3, v7, v6, u + depth + width, v + depth, u + depth + 2 * width, v),
+    face(v0, v4, v7, v3, u, v + depth, u + depth, v + depth + height),
+    face(v1, v0, v3, v2, u + depth, v + depth, u + depth + width, v + depth + height),
+    face(v5, v1, v2, v6, u + depth + width, v + depth, u + 2 * depth + width, v + depth + height),
+    face(
+      v4,
+      v5,
+      v6,
+      v7,
+      u + 2 * depth + width,
+      v + depth,
+      u + 2 * depth + 2 * width,
+      v + depth + height,
+    ),
+  ];
+}
+
+function quadBounds(quads: readonly TexturedQuad[]): SceneBounds {
+  const vertices = quads.flat();
+  return {
+    maxX: Math.max(...vertices.map((vertex): number => vertex.x)),
+    maxY: Math.max(...vertices.map((vertex): number => vertex.y)),
+    minX: Math.min(...vertices.map((vertex): number => vertex.x)),
+    minY: Math.min(...vertices.map((vertex): number => vertex.y)),
+  };
+}
+
+function unionBounds(first: SceneBounds, second: SceneBounds): SceneBounds {
+  return {
+    maxX: Math.max(first.maxX, second.maxX),
+    maxY: Math.max(first.maxY, second.maxY),
+    minX: Math.min(first.minX, second.minX),
+    minY: Math.min(first.minY, second.minY),
+  };
+}
+
+// Depth-buffered quad rasterizer. The painted figure acts as the body's back
+// plane at the wing hinge depth, so wing corners vanilla tucks inside the
+// torso stay hidden.
+function paintDepthQuads(
+  output: Uint8ClampedArray,
+  outputSize: number,
+  texture: TexturePixels,
+  atlasScale: number,
+  quads: readonly TexturedQuad[],
+  transform: FlatTransform,
+): void {
+  const depth = new Float32Array(outputSize * outputSize);
+  for (let index = 0; index < depth.length; index += 1) {
+    depth[index] = (output[index * 4 + 3] ?? 0) === 0 ? Number.NEGATIVE_INFINITY : WING_HINGE.z;
+  }
+  const project = (vertex: TexturedVertex): TexturedVertex => ({
+    ...vertex,
+    x: transform.offsetX + vertex.x * transform.scale,
+    y: transform.offsetY + vertex.y * transform.scale,
+  });
+  for (const quad of quads) {
+    const projected = quad.map(project);
+    const faceU = quad.map((vertex): number => vertex.u);
+    const faceV = quad.map((vertex): number => vertex.v);
+    const texelRect: TextureRect = {
+      height: (Math.max(...faceV) - Math.min(...faceV)) * atlasScale,
+      u: Math.min(...faceU) * atlasScale,
+      v: Math.min(...faceV) * atlasScale,
+      width: (Math.max(...faceU) - Math.min(...faceU)) * atlasScale,
+    };
+    for (const [a, b, c] of [
+      [projected[0], projected[1], projected[2]],
+      [projected[0], projected[2], projected[3]],
+    ]) {
+      if (a === undefined || b === undefined || c === undefined) {
+        continue;
+      }
+      paintDepthTriangle(output, outputSize, depth, texture, atlasScale, texelRect, a, b, c);
+    }
+  }
+}
+
+function paintDepthTriangle(
+  output: Uint8ClampedArray,
+  outputSize: number,
+  depth: Float32Array,
+  texture: TexturePixels,
+  atlasScale: number,
+  texelRect: TextureRect,
+  a: TexturedVertex,
+  b: TexturedVertex,
+  c: TexturedVertex,
+): void {
+  const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+  // Edge-on faces of the orthographic projection cover no pixels.
+  if (Math.abs(area) < 1e-9) {
+    return;
+  }
+  const startX = Math.max(0, Math.floor(Math.min(a.x, b.x, c.x)));
+  const endX = Math.min(outputSize, Math.ceil(Math.max(a.x, b.x, c.x)));
+  const startY = Math.max(0, Math.floor(Math.min(a.y, b.y, c.y)));
+  const endY = Math.min(outputSize, Math.ceil(Math.max(a.y, b.y, c.y)));
+  for (let y = startY; y < endY; y += 1) {
+    for (let x = startX; x < endX; x += 1) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const weightA = ((b.x - px) * (c.y - py) - (c.x - px) * (b.y - py)) / area;
+      const weightB = ((c.x - px) * (a.y - py) - (a.x - px) * (c.y - py)) / area;
+      const weightC = 1 - weightA - weightB;
+      if (weightA < 0 || weightB < 0 || weightC < 0) {
+        continue;
+      }
+      const z = weightA * a.z + weightB * b.z + weightC * c.z;
+      const index = y * outputSize + x;
+      if (z <= (depth[index] ?? Number.NEGATIVE_INFINITY)) {
+        continue;
+      }
+      const u = (weightA * a.u + weightB * b.u + weightC * c.u) * atlasScale;
+      const v = (weightA * a.v + weightB * b.v + weightC * c.v) * atlasScale;
+      const texelX = Math.min(
+        texelRect.u + texelRect.width - 1,
+        Math.max(texelRect.u, Math.floor(u)),
+      );
+      const texelY = Math.min(
+        texelRect.v + texelRect.height - 1,
+        Math.max(texelRect.v, Math.floor(v)),
+      );
+      const sampled = readColor(texture, texelX, texelY);
+      if (sampled.alpha < CUTOUT_ALPHA) {
+        continue;
+      }
+      depth[index] = z;
+      writeColor(output, index * 4, { ...sampled, alpha: 255 });
+    }
+  }
+}
+
 function scaledCapeRect(capeTexture: TexturePixels): TextureRect | undefined {
   const atlasScale = capeAtlasScale(capeTexture);
   if (atlasScale === undefined) {
@@ -498,9 +622,8 @@ function scaledCapeRect(capeTexture: TexturePixels): TextureRect | undefined {
   return hasVisiblePixels(capeTexture, rect) ? rect : undefined;
 }
 
-// Mojang canvases are 64x32 while OptiFine ships the same layout cropped to
-// its 46x22 content; both repeat at integer scales for HD textures, and any
-// other size carries no usable atlas faces.
+// Mojang cape atlases are 64x32; OptiFine crops the same layout to 46x22. Both
+// repeat at integer scales for HD textures; other sizes carry no usable faces.
 function capeAtlasScale(capeTexture: TexturePixels): number | undefined {
   const mojang = capeTexture.width / 64;
   if (Number.isInteger(mojang) && mojang >= 1 && capeTexture.height === mojang * 32) {
@@ -513,83 +636,20 @@ function capeAtlasScale(capeTexture: TexturePixels): number | undefined {
   return undefined;
 }
 
-// Third-party atlases share the Mojang face coordinates, so the wing face
-// scales with whatever atlas family the texture matches.
-function scaledWingRect(capeTexture: TexturePixels): TextureRect | undefined {
+// A wing texture net without any cutout-visible texel paints no wings.
+function wingAtlasScale(capeTexture: TexturePixels): number | undefined {
   const atlasScale = capeAtlasScale(capeTexture);
   if (atlasScale === undefined) {
     return undefined;
   }
-  const rect = {
-    height: WING_TEXTURE_RECT.height * atlasScale,
-    u: WING_TEXTURE_RECT.u * atlasScale,
-    v: WING_TEXTURE_RECT.v * atlasScale,
-    width: WING_TEXTURE_RECT.width * atlasScale,
+  const { depth, height, u, v, width } = WING_CUBOID.texture;
+  const net: TextureRect = {
+    height: (depth + height) * atlasScale,
+    u: u * atlasScale,
+    v: v * atlasScale,
+    width: (2 * depth + 2 * width) * atlasScale,
   };
-  return hasVisiblePixels(capeTexture, rect) ? rect : undefined;
-}
-
-// Paints a wing plate rotated around its pivot: the rect spans [lo, hi]
-// relative to the pivot — vanilla pivots sit near the plate's outer top corner
-// so most of the plate reaches across the spine — and `mirror` flips the
-// texture's horizontal axis for the right wing. Sampling is nearest-texel,
-// matching the flat rect painter.
-function paintWing(
-  output: Uint8ClampedArray,
-  outputSize: number,
-  texture: TexturePixels,
-  rect: TextureRect,
-  hingeX: number,
-  hingeY: number,
-  angle: number,
-  mirror: boolean,
-  lo: number,
-  hi: number,
-  height: number,
-): void {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const width = hi - lo;
-  let minX = hingeX;
-  let maxX = hingeX;
-  let minY = hingeY;
-  let maxY = hingeY;
-  for (const lx of [lo, hi]) {
-    for (const ly of [0, height]) {
-      minX = Math.min(minX, hingeX + lx * cos - ly * sin);
-      maxX = Math.max(maxX, hingeX + lx * cos - ly * sin);
-      minY = Math.min(minY, hingeY + lx * sin + ly * cos);
-      maxY = Math.max(maxY, hingeY + lx * sin + ly * cos);
-    }
-  }
-  const startX = Math.max(0, Math.floor(minX));
-  const endX = Math.min(outputSize, Math.ceil(maxX));
-  const startY = Math.max(0, Math.floor(minY));
-  const endY = Math.min(outputSize, Math.ceil(maxY));
-  for (let y = startY; y < endY; y += 1) {
-    for (let x = startX; x < endX; x += 1) {
-      const dx = x + 0.5 - hingeX;
-      const dy = y + 0.5 - hingeY;
-      const lx = dx * cos + dy * sin;
-      const ly = -dx * sin + dy * cos;
-      if (lx < lo || lx >= hi || ly < 0 || ly >= height) {
-        continue;
-      }
-      const along = mirror ? 1 - (lx - lo) / width : (lx - lo) / width;
-      const texelX = Math.min(rect.width - 1, Math.floor(along * rect.width));
-      const texelY = Math.min(rect.height - 1, Math.floor((ly / height) * rect.height));
-      const sampled = readColor(texture, rect.u + texelX, rect.v + texelY);
-      if (sampled.alpha === 0) {
-        continue;
-      }
-      const outputIndex = (y * outputSize + x) * 4;
-      writeColor(
-        output,
-        outputIndex,
-        compositeColor(readOutputColor(output, outputIndex), sampled),
-      );
-    }
-  }
+  return hasVisiblePixels(capeTexture, net, CUTOUT_ALPHA) ? atlasScale : undefined;
 }
 
 interface ProjectedCuboid {
@@ -604,8 +664,7 @@ interface ProjectedCuboid {
 function projectCuboid(cuboid: AvatarCuboid, armWidth: number, mirrored: boolean): ProjectedCuboid {
   const layout = flatLayout(cuboid.part, armWidth);
   const texture = mirrored ? backTextureRect(cuboid.texture) : frontTextureRect(cuboid.texture);
-  // Mirroring a painted rect inside the 2*armWidth+8 wide figure is a flip of
-  // its painted extent, not just its layout origin.
+  // Mirroring flips the cuboid's painted extent, not just its layout origin.
   const frontX = layout.x + (texture.width - cuboid.size.width) / 2;
   const x = mirrored ? 2 * armWidth + 8 - frontX - cuboid.size.width : frontX;
   return {
@@ -650,9 +709,8 @@ function paintFlatRect(
       rect.v + Math.min(rect.height - 1, Math.floor(((y - destY) * rect.height) / destHeight));
     for (let x = startX; x < endX; x += 1) {
       const texelX = Math.min(rect.width - 1, Math.floor(((x - destX) * rect.width) / destWidth));
-      // Back faces are already pre-mirrored by the skin atlas layout: their
-      // left edge borders the character's left side, which is the viewer's
-      // left in a rear view. Both projections therefore sample unflipped.
+      // Back faces are pre-mirrored by the skin atlas layout, so both
+      // projections sample unflipped.
       const sourceX = rect.u + texelX;
       const sampled = readColor(texture, sourceX, sourceY);
       const outputIndex = (y * outputSize + x) * 4;
@@ -866,10 +924,10 @@ function leftTextureRect(texture: TextureBox): TextureRect {
   };
 }
 
-function hasVisiblePixels(texture: TexturePixels, rect: TextureRect): boolean {
+function hasVisiblePixels(texture: TexturePixels, rect: TextureRect, minAlpha = 1): boolean {
   for (let y = rect.v; y < rect.v + rect.height; y += 1) {
     for (let x = rect.u; x < rect.u + rect.width; x += 1) {
-      if (readColor(texture, x, y).alpha !== 0) {
+      if (readColor(texture, x, y).alpha >= minAlpha) {
         return true;
       }
     }

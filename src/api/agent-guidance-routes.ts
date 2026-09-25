@@ -33,8 +33,7 @@ function registerTextFile(
   filename: string,
   mediaType: string,
 ): void {
-  // These are committed build artifacts, so the file is read once per process
-  // instead of hitting the filesystem on every request.
+  // Committed build artifacts: read once per process.
   let cached: string | undefined;
   server.get(
     route,

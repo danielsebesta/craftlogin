@@ -19,8 +19,7 @@ const appRegistrationInputSchema = z
       .max(100)
       .refine((value): boolean => value === value.trim(), 'App names cannot have outer whitespace')
       .refine(containsOnlyDisplayCharacters, 'App names cannot contain control characters')
-      // The first-party name is reserved so a third-party app can never
-      // impersonate the console on the consent screen.
+      // The first-party name is reserved so a third-party app can't impersonate the console.
       .refine(
         (value): boolean => value.toLowerCase() !== CONSOLE_CLIENT_NAME.toLowerCase(),
         'This app name is reserved',

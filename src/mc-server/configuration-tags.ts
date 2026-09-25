@@ -4,12 +4,10 @@ import { getMinecraftData, hasConfigurationPacket, type MinecraftData } from './
 
 type ClientWrite = (packetName: string, params: unknown) => void;
 
-// Vanilla validates data-driven registries against tags while configuration finishes and drops the
-// connection with a network protocol error when a referenced tag was never bound. The groups below
-// are the exact set a 26.1 client demands for the registries we ship; entries stay empty because
-// nothing is enchanted, damaged, opened, or spawned before the kick. Re-derive from a vanilla
-// client log ("Missing tag" / "Unbound tags" lines) or the vanilla tag files (see Misode's mcmeta
-// `data/minecraft/tags` for the release) whenever shipped registry data changes.
+// Vanilla validates data-driven registries against tags during configuration
+// and drops the connection on unbound references. Entries stay empty because
+// nothing is enchanted or spawned before the kick; re-derive from a vanilla
+// client log or Misode's mcmeta files when shipped registries change.
 const TAG_BINDINGS: Readonly<Record<string, readonly string[]>> = {
   'minecraft:item': [
     'minecraft:enchantable/armor',
@@ -104,8 +102,8 @@ const TAG_BINDINGS: Readonly<Record<string, readonly string[]>> = {
     'minecraft:infiniburn_nether',
     'minecraft:infiniburn_overworld',
   ],
-  // Vanilla builds item components (banners, goat horns) while configuration finishes and throws
-  // on the same missing-tag basis; these tags are read by vanilla code rather than registry data.
+  // Vanilla builds item components during configuration and throws on the same
+  // missing-tag basis; these are read by vanilla code, not registry data.
   'minecraft:banner_pattern': [
     'minecraft:no_item_required',
     'minecraft:pattern_item/bordure_indented',
@@ -126,9 +124,8 @@ const TAG_BINDINGS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-// Registries every vanilla version carries, so their tags are always safe to bind. Data-driven
-// registries (dialog, enchantment, timeline) are bound only when the shipped codec actually syncs
-// them; tags for an unsynced registry would be meaningless on older versions.
+// Data-driven registries (dialog, enchantment, timeline) bind their tags only
+// when the shipped codec syncs them; unsynced-registry tags are meaningless.
 const CORE_TAG_REGISTRIES: ReadonlySet<string> = new Set([
   'minecraft:item',
   'minecraft:block',
@@ -176,11 +173,7 @@ export function createTagsPacket(mcData: MinecraftData): TagsPacket | null {
   return { name: 'tags', params: { tags: groups } };
 }
 
-/**
- * Flushes the bound tags after the registry stream and before the configuration finish, which is
- * the point where vanilla consumes both. Installed outside-in after the versioned registry codec
- * so registry writes still flow through that wrapper untouched.
- */
+/** Flushes bound tags after the registry stream and before configuration finish, where vanilla consumes both. Installed outside-in after the registry codec so registry writes still flow through that wrapper. */
 export function installConfigurationTags(client: ServerClient): void {
   const writePacket: ClientWrite = client.write.bind(client);
   let tagsSent = false;

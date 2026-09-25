@@ -81,7 +81,7 @@ describe('CachedAvatarService', (): void => {
     expect(renderer.calls).toBe(1);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v15:${textureHash}:slim:face:all:128`,
+        key: `avatar-render:v17:${textureHash}:slim:face:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -112,15 +112,15 @@ describe('CachedAvatarService', (): void => {
     expect(skins.calls).toBe(3);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v15:${textureHash}:slim:body:all:64`,
+        key: `avatar-render:v17:${textureHash}:slim:body:all:64`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v15:${textureHash}:slim:body:base:64`,
+        key: `avatar-render:v17:${textureHash}:slim:body:base:64`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v15:${textureHash}:slim:body:all:128`,
+        key: `avatar-render:v17:${textureHash}:slim:body:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -165,7 +165,7 @@ describe('CachedAvatarService', (): void => {
     const expectedDefault = selectDefaultSkin(playerUuid);
     expect(missingCache.writes).toEqual([
       {
-        key: `avatar-render:v15:default:${expectedDefault.name}:${expectedDefault.model}:face:all:128`,
+        key: `avatar-render:v17:default:${expectedDefault.name}:${expectedDefault.model}:face:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -253,7 +253,7 @@ describe('CachedAvatarService', (): void => {
     // A transparent pixel inside a used base-layer UV face becomes opaque.
     expect(readFixturePixel(image, 50, 16).alpha).toBe(255);
     expect(cache.writes).toEqual([
-      { key: `avatar-processed:v15:${textureHash}`, ttlSeconds: 24 * 60 * 60 },
+      { key: `avatar-processed:v17:${textureHash}`, ttlSeconds: 24 * 60 * 60 },
     ]);
   });
 
@@ -381,15 +381,15 @@ describe('CachedAvatarService', (): void => {
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v15:${textureHash}:classic:back:all:128:mojang:${capeHash}`,
+        key: `avatar-render:v17:${textureHash}:classic:back:all:128:mojang:${capeHash}`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v15:${textureHash}:classic:duo:all:128:mojang:${capeHash}`,
+        key: `avatar-render:v17:${textureHash}:classic:duo:all:128:mojang:${capeHash}`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v15:${textureHash}:classic:wings:all:128:mojang:${capeHash}`,
+        key: `avatar-render:v17:${textureHash}:classic:wings:all:128:mojang:${capeHash}`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -432,7 +432,7 @@ describe('CachedAvatarService', (): void => {
     expect(cache.writes).toEqual([
       { key: `avatar-cape:optifine:${playerUuid}`, ttlSeconds: 60 * 60 },
       {
-        key: `avatar-render:v15:${textureHash}:slim:wings:all:128:optifine:${capeKey}`,
+        key: `avatar-render:v17:${textureHash}:slim:wings:all:128:optifine:${capeKey}`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -582,13 +582,13 @@ describe('CachedAvatarService', (): void => {
     expect(missed.status).toBe('found');
     expect(failed.status).toBe('found');
     expect(repeated.status).toBe('found');
-    // The repeat render served from the render cache, so the renderer ran
-    // only for the first miss and the failed provider.
+    // The repeat render serves from cache, so the renderer ran only for the
+    // first miss and the failed provider.
     expect(renderer.capeTextures).toEqual([undefined, undefined]);
     expect(cache.writes).toEqual([
       { key: `avatar-cape-miss:labymod:${playerUuid}`, ttlSeconds: 10 * 60 },
       {
-        key: `avatar-render:v15:${textureHash}:slim:duo:all:128:none`,
+        key: `avatar-render:v17:${textureHash}:slim:duo:all:128:none`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -680,7 +680,7 @@ describe('CachedAvatarService', (): void => {
     expect(lookedUpIds).toEqual([playerUuid]);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v15:${textureHash}:slim:face:all:128`,
+        key: `avatar-render:v17:${textureHash}:slim:face:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -718,7 +718,7 @@ describe('CachedAvatarService', (): void => {
     expect(lookedUpIds).toEqual([]);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v15:default:${expected.name}:${expected.model}:face:all:128`,
+        key: `avatar-render:v17:default:${expected.name}:${expected.model}:face:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);
@@ -753,11 +753,11 @@ describe('CachedAvatarService', (): void => {
     expect(renderer.models).toEqual(['slim', 'classic']);
     expect(cache.writes).toEqual([
       {
-        key: `avatar-render:v15:${textureHash}:slim:bust:all:128`,
+        key: `avatar-render:v17:${textureHash}:slim:bust:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
       {
-        key: `avatar-render:v15:${textureHash}:classic:bust:all:128`,
+        key: `avatar-render:v17:${textureHash}:classic:bust:all:128`,
         ttlSeconds: 24 * 60 * 60,
       },
     ]);

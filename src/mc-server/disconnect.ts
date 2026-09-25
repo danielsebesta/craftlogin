@@ -1,9 +1,9 @@
 import minecraftProtocol, { type Client, type ServerClient } from 'minecraft-protocol';
 
 declare module 'minecraft-protocol' {
-  // The server runtime patches end() with a (reason, fullReason) override that writes fullReason
-  // verbatim as the kick/disconnect reason (see minecraft-protocol/src/server.js); the shipped
-  // types only declare the single-argument form.
+  // The runtime patches end() with a (reason, fullReason) override that writes
+  // fullReason verbatim as the kick reason; the shipped types only declare the
+  // single-argument form (see minecraft-protocol/src/server.js).
   interface ServerClient {
     end(reason?: string, fullReason?: unknown): void;
   }
@@ -19,11 +19,9 @@ import {
   type MinecraftColor,
 } from './void-world.js';
 
-// A disconnecting client is addressed in the protocol state it currently occupies. Before the
-// login success packet the login-state disconnect is shown immediately. After success the client
-// switches protocol state, so a login-state disconnect is no longer parsed and surfaces to the
-// player as a generic connection error. Logged-in clients are therefore tracked separately and are
-// only kicked once the void world has been presented, which is also when the play state exists.
+// A disconnect must be sent in the client's current protocol state: a
+// login-state disconnect stops being parsed once login succeeds, so logged-in
+// clients are kicked only after the void world puts them in the play state.
 const loggedInClients = new WeakSet<Client>();
 const worldReadyClients = new WeakSet<Client>();
 const worldReadyWaiters = new WeakMap<Client, Set<() => void>>();
@@ -71,14 +69,14 @@ export async function disconnect(
   }
   disconnectingClients.add(client);
 
-  // The client has not completed login yet, so a login-state disconnect is valid and immediate.
+  // Login hasn't completed, so a login-state disconnect is valid and immediate.
   if (!loggedInClients.has(client) && client.state !== minecraftProtocol.states.PLAY) {
     endWithReason(client, message, options, true);
     return;
   }
 
-  // The login success was already sent. Wait until the void world has been presented so the reason
-  // is delivered as a play-state kick instead of being dropped as an out-of-state packet.
+  // Wait for the play state so the reason goes out as a play-state kick instead
+  // of being dropped as an out-of-state packet.
   await waitForWorldReady(client, options.worldWaitTimeoutMs ?? DEFAULT_WORLD_WAIT_TIMEOUT_MS);
   endWithReason(client, message, options, false);
 }
@@ -141,7 +139,7 @@ async function waitForWorldReady(client: Client, timeoutMs: number): Promise<voi
     const timer = setTimeout(finish, timeoutMs);
 
     waiters.add(finish);
-    // Re-check after subscribing to close the gap between the initial check and the listener.
+    // Re-check after subscribing to close the check/subscribe gap.
     if (worldReadyClients.has(client)) {
       finish();
     }

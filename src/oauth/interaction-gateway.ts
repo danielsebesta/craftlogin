@@ -69,8 +69,8 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
   public constructor(private readonly provider: Provider) {}
 
   public async abort(request: IncomingMessage, response: ServerResponse): Promise<string> {
-    // A denied request is finished through oidc-provider itself so the client
-    // receives a standard access_denied error redirect. No grant is created.
+    // A denied request finishes through oidc-provider so the client gets a
+    // standard access_denied redirect.
     return await this.provider.interactionResult(request, response, {
       error: 'access_denied',
       error_description: 'The user denied the authorization request.',
@@ -99,10 +99,9 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
     return authorizationUrl.toString();
   }
 
-  // An expired or otherwise unknown OIDC interaction surfaces as the
-  // provider's SessionNotFound (HTTP 400). Convert it into the shared
-  // interaction state error so browser pages render the friendly card or
-  // redirect to it instead of leaking a raw JSON envelope.
+  // An expired interaction surfaces as SessionNotFound (HTTP 400); converting it
+  // to the shared state error lets pages render the friendly card instead of a
+  // raw JSON envelope.
   private async details(
     request: IncomingMessage,
     response: ServerResponse,
@@ -122,9 +121,8 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
   }
 
   public async findInteraction(interactionId: string): Promise<OAuthInteractionContext> {
-    // Cookie-less lookup for fixed callback paths outside the oidc-provider
-    // interaction cookie scope. The caller binds the id through its own
-    // unforgeable channel (here: the signed Microsoft transaction cookie).
+    // Cookie-less lookup for callback paths outside the interaction cookie
+    // scope; the caller binds the id through the signed transaction cookie.
     const interaction = await this.provider.Interaction.find(interactionId);
     if (interaction === undefined) {
       throw new OAuthInteractionStateError('The OIDC interaction is no longer available');

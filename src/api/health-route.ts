@@ -14,8 +14,8 @@ const healthRouteSchema: FastifySchema = {
   },
 };
 
-// A degraded database or Redis client can stall a probe forever; the check gets
-// its own bound so orchestrators see a fast failure instead of a hung probe.
+// A degraded database or Redis client can stall a probe forever, so the check
+// gets its own bound.
 const READINESS_TIMEOUT_MS = 2_000;
 
 export interface ReadinessCheck {

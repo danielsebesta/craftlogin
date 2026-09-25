@@ -167,11 +167,8 @@ export function registerDeveloperRoutes(
   server: FastifyInstance,
   options: DeveloperRoutesOptions,
 ): void {
-  // The console authenticates exactly like any other OAuth client: the login
-  // redirects to the standard authorization endpoint, the player verifies on
-  // the shared interaction page, and this callback consumes the resulting
-  // code. Token exchange and userinfo run against the loopback listener so no
-  // TLS trust is needed for the server-to-server calls.
+  // The console authenticates like any other OAuth client; token exchange and
+  // userinfo hit the loopback listener so no TLS trust is needed server-to-server.
   const redirectUri = `${options.issuer}/developers/callback`;
   const oidcEndpoints = {
     authorizationEndpoint: `${options.issuer}/oauth2/authorize`,
@@ -243,8 +240,8 @@ export function registerDeveloperRoutes(
         setDeveloperSessionCookie(reply, session.sessionId, session.expiresInSeconds);
         await reply.redirect('/developers', 303);
       } catch {
-        // The access token stays server-side and is never logged; a fresh
-        // login attempt is the safe recovery for every callback failure.
+        // The access token stays server-side and unlogged; a fresh login is
+        // the safe recovery for every callback failure.
         options.logger.warn('Developer Console OIDC callback failed');
         await reply.redirect('/developers/login', 303);
       }
@@ -397,8 +394,7 @@ export function registerDeveloperRoutes(
       if (session === undefined) {
         return;
       }
-      // The CSRF token travels as a multipart field so the upload form works
-      // without JavaScript; it is checked before any storage work happens.
+      // The CSRF token travels as a multipart field so the form works without JavaScript.
       const upload = await readIconUpload(request);
       options.authentication.requireCsrf(session, upload.csrfToken);
       const app = await findManagedApp(options, session, request.params.id);
@@ -516,8 +512,7 @@ export function registerDeveloperRoutes(
         await reply.redirect('/developers?notice=invalid-form', 303);
         return;
       }
-      // The note is optional free text: trailing whitespace from a textarea is
-      // formatting, not content, so trim it and treat the result as absent.
+      // Textarea whitespace is formatting, not content.
       const note = (readStringField(request.body, 'note') ?? '').trim();
       const parsedNote = note.length === 0 ? undefined : appVerificationNoteSchema.safeParse(note);
       if (parsedNote !== undefined && !parsedNote.success) {
@@ -796,7 +791,7 @@ async function resolvePlayerNicknames(
             return;
           }
         } catch {
-          // Fall back to database record
+          // Fall back to the database record.
         }
       }
       if (results[uuid] === undefined) {
@@ -806,7 +801,7 @@ async function resolvePlayerNicknames(
             results[uuid] = stored.username;
           }
         } catch {
-          // Ignored
+          // A missing record just leaves the UUID unresolved.
         }
       }
     }),
@@ -888,9 +883,8 @@ interface IconUpload {
   readonly tooLarge: boolean;
 }
 
-// Reads the single `icon` file plus the CSRF field. Unexpected files are drained
-// so the multipart stream can finish, and an oversized file is detected through
-// the truncation flag instead of an exception.
+// Unexpected files are drained so the multipart stream finishes; oversized
+// files surface via the truncation flag rather than an exception.
 async function readIconUpload(request: FastifyRequest): Promise<IconUpload> {
   let bytes: Buffer | undefined;
   let csrfToken: string | undefined;

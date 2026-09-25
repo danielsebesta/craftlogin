@@ -7,20 +7,22 @@ export const uiBaseStyles = `${fontFaceStyles}${uiTokenStyles}
 }
 
 html {
-  min-width: 320px;
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
 }
 
 body {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   color: var(--text);
   background: var(--bg);
   font-family: var(--font-sans);
   font-size: var(--t-base);
-  line-height: 1.6;
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
 }
 
 ::selection {
@@ -133,26 +135,36 @@ textarea {
 main {
   position: relative;
   isolation: isolate;
+  flex: 1;
+  min-width: 0;
+}
+
+[hidden]:not([hidden="until-found"]) {
+  display: none;
+}
+
+:where(form, fieldset, input, select, textarea, pre) {
+  min-width: 0;
 }
 
 .container,
 .page-column,
 .page-header-inner,
 .page-footer-inner {
-  width: min(var(--page-width), 100% - (2 * var(--s4)));
+  width: min(var(--page-width), 100% - (2 * var(--gutter)));
   margin-inline: auto;
 }
 
 .page-narrow {
-  --page-width: 42rem;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  --page-width: var(--auth-width);
+}
+
+.page-narrow main {
+  flex: none;
 }
 
 .page-header {
-  border-bottom: 1px solid var(--line);
+  padding-block: var(--s3);
 }
 
 .page-header-inner {
@@ -161,33 +173,43 @@ main {
   gap: var(--s3) var(--s4);
   align-items: center;
   justify-content: space-between;
-  min-height: 4rem;
+}
+
+/* Header nav links as quiet chips, identical on every page. */
+.page-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  min-width: 0;
 }
 
 .page-nav a {
   display: inline-flex;
   gap: var(--s2);
   align-items: center;
-  min-height: 2.75rem;
+  min-height: var(--control-height);
+  padding: var(--s1) var(--s3);
   color: var(--muted);
   text-decoration: none;
+  border: 1px solid var(--line);
 }
 
 .page-nav a:hover {
   color: var(--text);
-  text-decoration: underline;
+  border-color: var(--line-strong);
 }
 
 .page-nav a[aria-current="page"] {
   color: var(--text);
-  text-decoration: underline;
+  border-color: var(--line-strong);
 }
 
 .brand {
   display: inline-flex;
   gap: var(--s2);
   align-items: center;
-  min-height: 2.75rem;
+  min-width: 0;
+  min-height: var(--control-height);
   color: var(--text);
   font-weight: 700;
   text-decoration: none;
@@ -206,39 +228,25 @@ main {
 .brand-wordmark {
   display: inline-flex;
   align-items: center;
+  max-width: 100%;
 }
 
 .brand-wordmark-image {
   display: block;
-  width: auto;
-  height: 1.85rem;
-  max-width: 100%;
-  aspect-ratio: 2048 / 311;
+  width: min(100%, 15rem);
+  height: auto;
+  image-rendering: pixelated;
 }
 
 .page-narrow .page-header {
-  border-bottom: 0;
   margin-top: auto;
-  padding-top: var(--s5);
 }
 
 .page-narrow .page-header-inner {
   justify-content: center;
-  min-height: auto;
-  padding-block: var(--s2);
-}
-
-.page-narrow .brand {
-  justify-content: center;
-}
-
-.page-narrow .brand-wordmark-image {
-  height: 2.75rem;
-  max-width: 85vw;
 }
 
 .page-narrow .page-footer {
-  border-top: 0;
   margin-top: auto;
   padding-block: var(--s4) var(--s6);
   text-align: center;
@@ -254,7 +262,6 @@ main {
   padding-block: var(--s5);
   color: var(--muted);
   font-size: var(--t-xs);
-  border-top: 1px solid var(--line);
 }
 
 .page-footer p {
@@ -268,12 +275,6 @@ main {
   gap: var(--s2);
 }
 
-.page-footer .footer-legal {
-  font-size: 0.6875rem;
-  letter-spacing: 0.02em;
-  opacity: 0.75;
-}
-
 .footer-links {
   display: flex;
   flex-wrap: wrap;
@@ -281,6 +282,9 @@ main {
 }
 
 .footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
   color: var(--muted);
   text-decoration: none;
   border-bottom: 1px solid var(--line);
@@ -288,16 +292,6 @@ main {
 
 .footer-links a:hover {
   color: var(--text);
-}
-
-.page-footer .footer-operator {
-  font-size: 0.75rem;
-  opacity: 0.9;
-}
-
-.page-footer .footer-note {
-  font-size: 0.75rem;
-  opacity: 0.9;
 }
 
 .skip-link {
@@ -329,14 +323,24 @@ main {
   clip-path: inset(50%);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+/* Ambient grid glow behind the page top that melts into the background. */
+.page-backdrop::before {
+  position: absolute;
+  top: 0;
+  right: calc(50% - 50vw);
+  left: calc(50% - 50vw);
+  z-index: -1;
+  height: min(40rem, 100%);
+  content: "";
+  background: url("/assets/grid-fade.svg") top center / cover no-repeat;
+  opacity: 0.1;
+  mask-image: linear-gradient(to bottom, transparent, black 18%, black 50%, transparent);
+  pointer-events: none;
+}
+
+@media (forced-colors: active) {
+  .page-backdrop::before {
+    display: none;
   }
 }
 

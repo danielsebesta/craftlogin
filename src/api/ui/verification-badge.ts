@@ -14,7 +14,6 @@ export interface VerificationBadgeInput {
 export function renderVerificationBadge(input: VerificationBadgeInput): string {
   const icon =
     input.kind === 'developer' ? 'shield' : input.state === 'verified' ? 'check' : 'clock';
-  // A small status dot beside the name: sighted users get the label as a
-  // hover tooltip, assistive technology reads the visually hidden label.
+  // Status dot: sighted users get a hover tooltip, assistive tech reads the hidden label.
   return `<span class="verification-badge verification-badge-${input.state}" title="${escapeHtml(input.label)}"><span class="verification-badge-dot">${renderIcon(icon, 'verification-badge-icon')}</span><span class="visually-hidden">${escapeHtml(input.label)}</span></span>`;
 }

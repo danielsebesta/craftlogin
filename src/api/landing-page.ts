@@ -1,5 +1,6 @@
 import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
+import { highlightCode } from './ui/code-highlight.js';
 import { renderPageDocument } from './ui/document.js';
 import { renderIcon, type IconName } from './ui/icons.js';
 import { DEMO_PLAYER, formatShowcaseCaption, type DemoPlayer } from './demo-players.js';
@@ -27,7 +28,7 @@ function renderSteps(): string {
   return english.landing.flow.items
     .map(
       (item, index): string => `
-            <li class="landing-card">
+            <li class="card landing-card">
               ${renderIcon(FLOW_ICONS[index] ?? 'check', 'list-icon')}
               <h3>${escapeHtml(item.title)}</h3>
               <p>${escapeHtml(item.detail)}</p>
@@ -38,7 +39,7 @@ function renderSteps(): string {
 
 function renderPlayerCard(demoPlayer: DemoPlayer): string {
   const strings = english.landing;
-  return `<div class="player-card">
+  return `<div class="card player-card">
             <div class="player-card-head">
               <img src="/api/avatars/${demoPlayer.uuid}/bust" alt="${escapeHtml(strings.avatars.exampleAlt)}" width="128" height="128" loading="lazy" decoding="async">
               <div class="player-card-identity">
@@ -81,7 +82,7 @@ export function renderLandingPage(input: LandingPageInput): string {
       body: `<ul class="use-list card-grid">${strings.useCases.items
         .map(
           (item, index): string => `
-            <li class="landing-card">
+            <li class="card landing-card">
               ${renderIcon(USE_CASE_ICONS[index] ?? 'check', 'list-icon')}
               <h3>${escapeHtml(item.title)}</h3>
               <p>${escapeHtml(item.detail)}</p>
@@ -112,7 +113,7 @@ export function renderLandingPage(input: LandingPageInput): string {
     {
       body: `<form class="avatar-lookup" data-avatar-lookup>
             <label class="field-label" for="avatar-lookup-input">${escapeHtml(strings.avatars.lookupLabel)}</label>
-            <div class="avatar-lookup-row">
+            <div class="input-action-row avatar-lookup-row">
               <input id="avatar-lookup-input" name="player" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" placeholder="${escapeHtml(demoPlayer.name)}">
               <button class="button" type="submit">${escapeHtml(strings.avatars.lookupAction)}</button>
             </div>
@@ -122,19 +123,9 @@ export function renderLandingPage(input: LandingPageInput): string {
               { label: strings.avatars.face, view: 'face' },
               { label: strings.avatars.bust, view: 'bust' },
               { label: strings.avatars.body, view: 'body' },
-              { label: strings.avatars.back, view: 'back' },
-              { label: strings.avatars.side, view: 'side' },
-              { label: strings.avatars.duo, view: 'duo' },
-              { label: strings.avatars.processedSkin, view: 'processed-skin' },
-              ...(demoPlayer.hasCape !== false
-                ? [
-                    { label: strings.avatars.cape, view: 'cape' },
-                    { label: strings.avatars.wings, view: 'wings' },
-                  ]
-                : []),
             ]
               .map(
-                (item): string => `<li class="landing-card avatar-card">
+                (item): string => `<li class="card card-compact avatar-card">
               <img src="/api/avatars/${demoPlayer.uuid}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async" data-avatar-view="${item.view}">
               <h3>${escapeHtml(item.label)}</h3>
               <code>/api/avatars/:identifier/${item.view}</code>
@@ -158,25 +149,25 @@ export function renderLandingPage(input: LandingPageInput): string {
     },
     {
       body: `<ul class="start-list card-grid">
-            <li class="landing-card start-card">
+            <li class="card landing-card start-card">
               ${renderIcon('key', 'list-icon')}
               <h3>${escapeHtml(strings.getStarted.console.title)}</h3>
               <p>${escapeHtml(strings.getStarted.console.detail)}</p>
               <a class="button" href="/developers">${escapeHtml(strings.getStarted.console.action)}</a>
             </li>
-            <li class="landing-card start-card">
+            <li class="card landing-card start-card">
               ${renderIcon('bookOpen', 'list-icon')}
               <h3>${escapeHtml(strings.getStarted.docs.title)}</h3>
               <p>${escapeHtml(strings.getStarted.docs.detail)}</p>
               <a class="button button-secondary" href="/docs/">${escapeHtml(strings.getStarted.docs.action)}</a>
             </li>
-            <li class="landing-card start-card" id="implement-with-ai">
+            <li class="card landing-card start-card" id="implement-with-ai">
               ${renderIcon('sparkles', 'list-icon')}
               <h3 id="implement-with-ai-heading">${escapeHtml(strings.aiPrompt.heading)}</h3>
               <p>${escapeHtml(strings.aiPrompt.text)}</p>
               <details class="prompt-details">
                 <summary>${escapeHtml(strings.aiPrompt.preview)}</summary>
-                <pre id="craftlogin-agent-prompt" class="code-block" tabindex="0"><code>${escapeHtml(strings.aiPrompt.prompt)}</code></pre>
+                <pre id="craftlogin-agent-prompt" class="code-block" tabindex="0"><code>${highlightCode(strings.aiPrompt.prompt)}</code></pre>
               </details>
               <button class="button button-secondary" type="button" data-copy-target="#craftlogin-agent-prompt" data-copied-label="${escapeHtml(strings.aiPrompt.copied)}">${escapeHtml(strings.aiPrompt.copy)}</button>
             </li>

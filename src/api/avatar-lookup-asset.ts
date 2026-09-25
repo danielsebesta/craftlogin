@@ -1,7 +1,5 @@
-// Landing-page avatar lookup: submits an identifier and retargets every
-// showcase image at that player's renders. Cards whose image fails to load
-// (a capeless player's /cape, or an invalid name) hide themselves, and the
-// status line appears only once every card has failed.
+// Landing-page avatar lookup: retargets showcase images at the entered player.
+// Cards hide themselves on load failure; the status line appears once all fail.
 export const avatarLookupScript = `
 (() => {
   'use strict';

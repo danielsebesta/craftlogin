@@ -2,9 +2,8 @@ import { createRequire } from 'node:module';
 
 import { z } from 'zod';
 
-// minecraft-data and prismarine-chunk are CommonJS packages whose generated declarations do not
-// describe the protocol tables and chunk runtime surface we consume. Validate the runtime shape
-// once at load and expose a narrow, typed adapter instead of leaking `any` through the module.
+// The CommonJS declarations don't describe the protocol tables we consume, so
+// the runtime shape is validated once at load behind a narrow typed adapter.
 const require = createRequire(import.meta.url);
 
 export interface PacketField {
@@ -37,8 +36,8 @@ export interface MinecraftData {
     readonly type: string;
   };
   readonly loginPacket?: Readonly<Record<string, unknown>> | undefined;
-  // Version-specific effect registry (classic numeric IDs up to 1.20.1, data-driven registry
-  // IDs from 1.20.2). Effects unknown to a version are simply absent, e.g. Darkness pre-1.19.
+  // Per-version effect registry (numeric IDs to 1.20.1, data-driven from 1.20.2);
+  // unknown effects are absent, e.g. Darkness pre-1.19.
   readonly effectsByName?: Readonly<Record<string, MinecraftEffectData>> | undefined;
   readonly protocol: {
     readonly play: {
@@ -111,8 +110,8 @@ export function getChunkConstructor(mcData: MinecraftData): ChunkConstructor | n
   try {
     return loadChunkConstructor(mcData);
   } catch {
-    // prismarine-chunk throws for protocol versions without a chunk implementation (for example
-    // 1.7). The caller then presents the void without chunks and still disconnects cleanly.
+    // prismarine-chunk throws for versions without a chunk implementation (e.g.
+    // 1.7); the caller then presents the void without chunks.
     return null;
   }
 }

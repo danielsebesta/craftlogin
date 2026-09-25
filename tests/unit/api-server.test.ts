@@ -228,7 +228,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['content-security-policy']).toContain("manifest-src 'self'");
     expect(response.headers['content-security-policy']).toContain("script-src 'self'");
     expect(response.headers['cache-control']).toBe('public, max-age=300');
-    expect(response.body).toContain('<main id="main" class="container">');
+    expect(response.body).toContain('<main id="main" class="page-backdrop container">');
     expect(response.body).toContain(
       '<h1 id="hero-heading">Let your users log in with Minecraft</h1>',
     );
@@ -260,8 +260,9 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('https://craftlogin.com/llms-full.txt');
     expect(response.body).toContain('Never ask me to paste a client secret');
     expect(response.body).toContain('class="avatar-showcase"');
-    expect(response.body).toContain('/processed-skin');
-    expect(response.body).toContain('/cape');
+    expect(response.body).toContain('/api/avatars/');
+    expect(response.body).not.toContain('/processed-skin');
+    expect(response.body).not.toContain('/cape');
     expect(response.body).not.toContain('integration-form');
     expect(response.body).not.toContain('integration-stack');
     expect(response.body).toContain('<script src="/assets/prompt-copy.js" defer></script>');
@@ -537,8 +538,8 @@ describe('CraftLogin API server', (): void => {
 
   it('redirects expired Microsoft callbacks back to the friendly interaction page', async (): Promise<void> => {
     const interactions = new InteractionStub();
-    // The callback guard is cookie-less, so expiry is armed on the callback
-    // method directly: the start call succeeds, the callback fails.
+    // The callback guard is cookie-less, so expiry is armed on the callback:
+    // start succeeds, callback fails.
     interactions.prepareMicrosoftCallback = (): Promise<never> =>
       Promise.reject(new OAuthInteractionStateError('The interaction is gone'));
     const server = await buildServer(

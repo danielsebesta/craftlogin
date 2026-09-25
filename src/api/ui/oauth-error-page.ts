@@ -34,7 +34,7 @@ export function renderOAuthErrorPage(input: OAuthErrorPageInput): string {
     footer: [input.footer],
     header: { brand: input.brand },
     layout: 'narrow',
-    mainClass: 'page-column signin signin-compact',
+    mainClass: 'page-column signin',
     ...(input.action?.kind === 'back' ? { script: '/assets/interaction.js' } : {}),
     stylesheet: '/assets/interaction.css',
     title: input.title,

@@ -5,9 +5,9 @@ import { getMinecraftData } from './minecraft-data.js';
 type ClientWrite = (packetName: string, params: unknown) => void;
 
 /**
- * Replaces minecraft-protocol's process-wide default registry codec with the codec belonging to
- * this connection's negotiated protocol version. The library otherwise sends the newest codec to
- * every client when `version: false` is used, which vanilla rejects during configuration.
+ * Replaces the process-wide default registry codec with this connection's
+ * negotiated version; with `version: false` the library otherwise sends the
+ * newest codec to every client, which vanilla rejects.
  */
 export function installVersionedRegistryCodec(client: ServerClient): void {
   const writePacket: ClientWrite = client.write.bind(client);
@@ -19,8 +19,8 @@ export function installVersionedRegistryCodec(client: ServerClient): void {
       return;
     }
 
-    // minecraft-protocol writes the configured default registry once per default registry entry.
-    // Replace its first write with the complete negotiated-version codec and suppress the rest.
+    // The library writes the default registry once per entry; replace the first
+    // write with the negotiated codec and suppress the rest.
     if (registryCodecWritten) {
       return;
     }

@@ -21,8 +21,8 @@ describe('PostgreSQL application verification', (): void => {
   beforeAll(async (): Promise<void> => {
     database = createDatabaseClient(databaseUrl);
     await database.$connect();
-    // Plain inserts keep the setup out of the serializable access-registry
-    // transactions that the developer-access suite runs in parallel.
+    // Plain inserts keep the setup out of the serializable transactions the
+    // developer-access suite runs in parallel.
     await database.developer.createMany({
       data: [{ uuid: ownerUuid }, { uuid: otherDeveloperUuid }],
       skipDuplicates: true,
@@ -50,8 +50,7 @@ describe('PostgreSQL application verification', (): void => {
     await expect(apps.requestVerification(app.id, ownerUuid, 'Community project')).resolves.toBe(
       'applied',
     );
-    // A queued request keeps the first submission: a second one must not overwrite
-    // the note an administrator is about to review.
+    // A second submission must not overwrite the note an admin is reviewing.
     await expect(apps.requestVerification(app.id, ownerUuid, 'Second note')).resolves.toBe(
       'unavailable',
     );

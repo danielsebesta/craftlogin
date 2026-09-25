@@ -37,16 +37,12 @@ export interface LobbyConfig {
   readonly verifyCode?: LobbyCodeVerification | undefined;
 }
 
-/**
- * Keeps verified Minecraft players in the void lobby and answers chat without exposing any
- * verification state. Every session is bounded by a lifetime timeout so a public endpoint cannot
- * accumulate idle connections.
- */
 interface LobbyTimers {
   readonly lifetime: NodeJS.Timeout;
   readonly countdown: NodeJS.Timeout;
 }
 
+/** Void lobby: answers chat without exposing verification state; sessions are bounded by a lifetime timeout so idle connections can't accumulate. */
 export class MinecraftLobby {
   private readonly timers = new Map<ServerClient, LobbyTimers>();
   private readonly lastPromptAt = new WeakMap<ServerClient, number>();
@@ -68,8 +64,7 @@ export class MinecraftLobby {
     });
     sendVoidTitle(client, english.minecraft.lobbyTitle, english.minecraft.lobbySubtitle);
     sendVerifyCommand(client);
-    // Limbo chamber dressing: heavy, dark and foggy, with no HUD trace. One shot outlives the
-    // lobby, and unknown effects are skipped per version (Darkness needs 1.19+).
+    // Limbo chamber dressing; unknown effects are skipped per version (Darkness needs 1.19+).
     sendLimboEffects(client, client.id);
 
     const expiresAt = Date.now() + this.config.lifetimeMs;
@@ -99,8 +94,8 @@ export class MinecraftLobby {
     };
     client.on('chat', onChat);
     client.on('chat_message', onChat);
-    // 1.19+ delivers slash commands through dedicated packets (with the slash stripped) instead
-    // of plain chat; pre-1.19 clients keep sending them as chat text with the slash included.
+    // 1.19+ delivers slash commands via dedicated packets (slash stripped);
+    // older clients send them as chat text with the slash included.
     client.on('chat_command', onChat);
     client.on('chat_command_signed', onChat);
 
@@ -109,11 +104,9 @@ export class MinecraftLobby {
     }, this.config.lifetimeMs);
     const countdown = setInterval(updateCountdown, 1_000);
     this.timers.set(client, { lifetime, countdown });
-    // Vanilla has no camera-lock packet, so a reported look change is answered with the spawn
-    // teleport carrying fixed yaw/pitch. Correcting only on look packets instead of a blind timer
-    // keeps the connection quiet while the mouse is still and avoids teleport artifacts.
-    // 'look'/'position_look' carry rotation on every supported version; if a future version
-    // renames them, the listener simply never fires and the view stays free.
+    // Vanilla has no camera-lock packet, so look changes are answered with the
+    // spawn teleport's fixed yaw/pitch. Correcting on look packets — not a
+    // timer — keeps the connection quiet; a renamed packet just never fires.
     let teleportId = 2;
     const correctOrientation = (): void => {
       const mcData = getMinecraftData(client.version);
@@ -153,8 +146,8 @@ export class MinecraftLobby {
 
     const now = Date.now();
     const lastPromptAt = this.lastPromptAt.get(client) ?? 0;
-    // The shared cooldown also throttles code attempts: at most one verification claim every
-    // few seconds, which keeps the 31^8 code space out of reach of chat brute force.
+    // The shared cooldown throttles code attempts, keeping the 31^8 code space
+    // out of reach of chat brute force.
     if (now - lastPromptAt < this.config.promptCooldownMs) {
       return;
     }
@@ -217,8 +210,7 @@ interface LobbyPalette {
   readonly danger: MinecraftColor;
 }
 
-// Website roles applied to chat: gray body text, lime highlights, coral urgency. Pre-1.16 clients
-// receive the closest legacy names.
+// Site colors applied to chat; pre-1.16 clients get the closest legacy names.
 function lobbyPalette(client: ServerClient): LobbyPalette {
   const mcData = getMinecraftData(client.version);
   return {

@@ -134,8 +134,7 @@ export class HttpMojangClient implements MinecraftPlayerLookup, FreshMinecraftPl
 
     const key = `profile-by-name:${normalized.toLowerCase()}`;
     const cached = await this.cache.read(key);
-    // A null value is the negative-lookup marker: its short Redis TTL already
-    // bounds it, so it answers without another Mojang request.
+    // A null value is the negative-lookup marker, bounded by its short TTL.
     if (cached?.value === null) {
       return undefined;
     }
@@ -460,8 +459,8 @@ function textureHashFromUrl(rawUrl: string): string | undefined {
     return undefined;
   }
   if (
-    // Mojang's signed texture payloads still use the historical HTTP URL. We
-    // retain only its identifier; HttpSkinStore always fetches it over HTTPS.
+    // Signed payloads still carry the historical HTTP URL; only its identifier
+    // is kept and HttpSkinStore always fetches over HTTPS.
     (url.protocol !== 'http:' && url.protocol !== 'https:') ||
     url.hostname !== 'textures.minecraft.net' ||
     url.username !== '' ||

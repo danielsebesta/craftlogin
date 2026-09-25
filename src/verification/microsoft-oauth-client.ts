@@ -261,9 +261,8 @@ export class HttpMicrosoftOAuthClient {
   }
 }
 
-// Carries only the upstream HTTP status, the fixed service endpoint, and a
-// static stage message, never token material, so instances are safe for
-// structured logs.
+// Carries only the upstream status, endpoint, and stage — never token material —
+// so instances are safe for structured logs.
 export class MicrosoftOAuthHttpError extends MicrosoftOAuthUnavailableError {
   public constructor(
     public readonly statusCode: number,

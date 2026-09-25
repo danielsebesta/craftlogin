@@ -52,8 +52,7 @@ export function inspectSkinPng(body: Buffer): SkinPngHeader {
     width !== SKIN_WIDTH ||
     (height !== 32 && height !== 64) ||
     bitDepth !== 8 ||
-    // Indexed (palette) PNGs are valid skins: the bundled default-skin
-    // catalogue ships them, and the canvas decoder expands them to RGBA.
+    // Indexed (palette) PNGs are valid skins; the decoder expands them to RGBA.
     (colorType !== 2 && colorType !== 3 && colorType !== 6) ||
     compression !== 0 ||
     filter !== 0 ||
@@ -72,9 +71,8 @@ export function isPngImage(body: Buffer): boolean {
   );
 }
 
-// Decodes a non-skin texture (cape, elytra) into raw RGBA pixels. Unlike
-// decodeSkinTexture this applies no layout validation or normalization: cape
-// atlases are not 64x64 and must not be mirrored or alpha-cleared.
+// Decodes a non-skin texture (cape, elytra) into raw RGBA — unlike
+// decodeSkinTexture, no layout validation or normalization applies.
 export async function decodeTexturePixels(body: Buffer): Promise<TexturePixels> {
   if (body.length > MAX_SKIN_BYTES || !isPngImage(body)) {
     throw new InvalidSkinImageError('Minecraft texture is not a PNG image');
@@ -150,9 +148,8 @@ function clearOpaqueCompatibilityLayers(pixels: Uint8ClampedArray, legacy: boole
   }
 }
 
-// UV-mapped faces of the base layer in the modern 64x64 layout. Only pixels
-// inside these rectangles become opaque; atlas padding between faces keeps
-// the source alpha so transparent holes stay transparent.
+// Base-layer UV faces in the modern 64x64 layout. Only pixels inside these
+// rects become opaque; atlas padding keeps its alpha so holes stay transparent.
 const SKIN_BASE_REGIONS: readonly AlphaRegion[] = [
   { height: 8, width: 16, x: 8, y: 0 },
   { height: 8, width: 32, x: 0, y: 8 },
@@ -168,9 +165,8 @@ const SKIN_BASE_REGIONS: readonly AlphaRegion[] = [
   { height: 12, width: 16, x: 16, y: 52 },
 ];
 
-// Re-encode a decoded texture the way the vanilla client treats it: legacy
-// skins arrive converted to the modern layout by decodeSkinTexture, base
-// layer UV faces are fully opaque, and overlay translucency is preserved.
+// Re-encodes a texture the way the vanilla client treats it: modern layout,
+// opaque base faces, overlay translucency preserved.
 export async function encodeProcessedSkin(texture: SkinTexture): Promise<Buffer> {
   const pixels = new Uint8ClampedArray(texture.pixels);
   for (const region of SKIN_BASE_REGIONS) {
@@ -199,9 +195,8 @@ function normalizeLegacySkin(source: Uint8ClampedArray): Uint8ClampedArray {
   const target = new Uint8ClampedArray(SKIN_WIDTH * SKIN_WIDTH * 4);
   target.set(source);
 
-  // Legacy skins only contain right limbs. Minecraft's 1.8 conversion mirrors
-  // each face into the modern left-limb layout and swaps the inner/outer sides;
-  // mirroring the complete 16x16 atlas block would put bottom pixels on top.
+  // The 1.8 conversion mirrors each face into the left-limb layout and swaps
+  // inner/outer sides; mirroring the whole 16x16 block would flip pixels.
   const mirroredFaces: readonly MirrorRegion[] = [
     { height: 4, sourceX: 4, sourceY: 16, targetX: 20, targetY: 48, width: 4 },
     { height: 4, sourceX: 8, sourceY: 16, targetX: 24, targetY: 48, width: 4 },

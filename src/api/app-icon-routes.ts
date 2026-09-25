@@ -24,8 +24,8 @@ export function registerAppIconRoutes(
       }
 
       const etag = `"${icon.hash}"`;
-      // A versioned URL is immutable; the bare URL revalidates so an icon change
-      // is visible immediately wherever the page does not carry the version.
+      // Versioned URLs are immutable; the bare URL revalidates so an icon
+      // change shows immediately.
       void reply.headers({
         'cache-control':
           request.query.v === icon.hash

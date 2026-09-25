@@ -4,8 +4,8 @@ import type { SpecificCapeProvider } from './types.js';
 
 const CRAFTLOGIN_USER_AGENT = 'CraftLogin/0.1 (+https://github.com/danielsebesta/craftlogin)';
 const FETCH_TIMEOUT_MS = 3_000;
-// OptiFine is cleartext HTTP and the other endpoints are third-party: a bounded
-// read keeps a hostile or broken provider from buffering an unbounded body.
+// OptiFine is cleartext HTTP and the rest are third-party, so reads stay
+// bounded against hostile or broken providers.
 const MAX_CAPE_BYTES = 256 * 1_024;
 
 export async function fetchOptifineCape(

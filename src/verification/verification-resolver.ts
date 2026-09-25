@@ -74,8 +74,8 @@ export class VerificationResolver {
     }
 
     if (this.profiles !== undefined) {
-      // Warm the profile cache while the player is still in the verification flow. A lookup
-      // failure must never fail verification, so the result is intentionally discarded.
+      // Warm the profile cache during verification; the discarded result means
+      // a lookup failure can never fail verification.
       await this.profiles.findProfileById(player.uuid).catch((): undefined => undefined);
     }
 

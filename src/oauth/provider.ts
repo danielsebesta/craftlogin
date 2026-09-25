@@ -167,9 +167,8 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
 }
 
 function installHashedClientSecretVerifier(provider: Provider): void {
-  // oidc-provider has no configuration hook for password-hash verification. Replacing this public
-  // model method keeps all token endpoint parsing and authentication inside oidc-provider while
-  // ensuring the adapter never returns or persists a plaintext client secret.
+  // oidc-provider has no hook for password-hash verification; overriding this
+  // keeps auth inside oidc-provider while never returning a plaintext secret.
   Object.defineProperty(provider.Client.prototype, 'compareClientSecret', {
     configurable: false,
     enumerable: false,

@@ -8,8 +8,8 @@ import { createLogger } from '../../src/logging/logger.js';
 import { type MinecraftGhostServer, startGhostServer } from '../../src/mc-server/ghost-server.js';
 import { findAvailablePort } from './support/tcp-port.js';
 
-// A protocol number newer than anything minecraft-data ships (26.2 = 776). The handshake is
-// written by hand so the client does not need protocol definitions for the unknown version.
+// A protocol newer than minecraft-data's range (26.2 = 776); the handshake is
+// hand-written so the client needs no protocol definitions for it.
 const UNSUPPORTED_PROTOCOL_VERSION = 776;
 
 const loginDisconnectSchema = z.object({ reason: z.string() });

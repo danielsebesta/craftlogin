@@ -305,3 +305,12 @@ Document every environment variable in `.env.example`, commit no secrets, and ke
 defaults fail-closed. Maintain the root `README.md`, MIT `LICENSE`, generated `openapi.yaml`, and
 this guide as required repository artifacts. The README must clearly state that CraftLogin is not
 affiliated with Mojang or Microsoft.
+
+## UI fixture verification
+
+Every page renderer and stylesheet is a pure string export with no environment dependencies, so an
+isolated fixture server can serve all page families plus the `public/` assets (fonts, brand images,
+`grid-fade.svg`) without `.env`, PostgreSQL, Redis, or real authentication. Browser checks can run
+through `@playwright/test` installed outside the repository driving an installed Edge or Chrome via
+`executablePath` (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`); keep fixture servers and such tooling out
+of the work tree.

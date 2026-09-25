@@ -1,6 +1,5 @@
-// Shared hard cap for reading fetch response bodies. A declared content-length
-// above the cap is rejected up front; chunked responses are cut off mid-stream so
-// a hostile or broken upstream cannot exhaust memory.
+// Hard cap for reading response bodies so a hostile or broken upstream can't
+// exhaust memory.
 export class BoundedResponseError extends Error {
   public override readonly name: string = 'BoundedResponseError';
 }

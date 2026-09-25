@@ -71,8 +71,7 @@ export function renderInteractionPage(input: InteractionPageInput): string {
   const isConsent = input.kind === 'consent';
   const allowsOnlineVerification = input.allowsOnlineVerification !== false;
   const skinChallenge = input.skinChallenge;
-  // A client that requests only the skin verification method never sees the
-  // Minecraft join address, so its status is the skin status.
+  // A skin-verification-only client never sees the join address, so its status is the skin status.
   const verification =
     isConsent || !allowsOnlineVerification
       ? undefined

@@ -154,11 +154,9 @@ export class OAuthInteractionService {
   public async prepareMicrosoftCallback(
     interactionId: string,
   ): Promise<{ readonly interactionId: string }> {
-    // The Microsoft callback lives at a fixed path outside the oidc-provider
-    // interaction cookie scope (Path=/interaction/<uid>), so the OIDC session
-    // cookie is never sent there. Resolve the interaction by the id bound in
-    // the signed transaction cookie instead of request cookies; the atomic
-    // claim inside resolveInteraction still gives exactly one winner.
+    // The callback path sits outside the interaction cookie scope, so resolve
+    // by the id bound in the signed transaction cookie; the atomic claim still
+    // gives exactly one winner.
     const interaction = await this.gateway.findInteraction(interactionId);
     if (interaction.interactionId !== interactionId || interaction.promptName !== 'login') {
       throw new OAuthInteractionStateError('Verification requires a login interaction');

@@ -34,8 +34,8 @@ describe('Minecraft disconnect delivery', (): void => {
   });
 
   it('delivers a post-login kick as a play disconnect after configuration', async (): Promise<void> => {
-    // Regression: a login-state disconnect sent after the login success packet is dropped by the
-    // client, which then only surfaces a generic connection error to the player.
+    // Regression: a login-state disconnect sent after login success is dropped,
+    // surfacing to the player as a generic connection error.
     const delivery = await deliverDisconnect('after-login');
 
     expect(delivery.packet).toBe('kick_disconnect');

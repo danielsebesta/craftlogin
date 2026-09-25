@@ -1,5 +1,6 @@
 import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
+import { highlightCode } from './ui/code-highlight.js';
 import { renderPageDocument } from './ui/document.js';
 import { renderIcon } from './ui/icons.js';
 import { DEMO_PLAYER, formatShowcaseCaption, type DemoPlayer } from './demo-players.js';
@@ -19,16 +20,20 @@ const DOCS_NAVIGATION_ICONS = [
 ] as const;
 const QUICKSTART_ICONS = ['briefcase', 'link', 'user'] as const;
 
+// Capeless players would render an empty image, so the gallery skips cape views.
+const CAPE_TEXTURE_VIEWS = new Set(['cape', 'elytra', 'wings']);
+
 function codeBlock(code: string, label: string): string {
-  return `<pre class="code-block docs-code" tabindex="0" aria-label="${escapeHtml(label)}"><code>${escapeHtml(code)}</code></pre>`;
+  return `<pre class="code-block docs-code" tabindex="0" aria-label="${escapeHtml(label)}"><code>${highlightCode(code)}</code></pre>`;
 }
 
 function renderEndpointTable(
   endpoints: readonly { readonly detail: string; readonly method: string; readonly path: string }[],
+  label: string,
 ): string {
   const strings = english.docs.api;
-  return `<div class="table-wrap">
-              <table class="table docs-endpoints">
+  return `<div class="table-wrap" role="region" aria-label="${escapeHtml(label)}" tabindex="0">
+              <table class="table table-scrollable docs-endpoints">
                 <thead>
                   <tr>
                     <th scope="col">${escapeHtml(strings.methodHeading)}</th>
@@ -151,7 +156,7 @@ ${strings.claims.claims
 ${strings.sessions.items
   .map(
     (item): string =>
-      `            <div><dt>${escapeHtml(item.title)}</dt><dd>${escapeHtml(item.detail)}</dd></div>`,
+      `            <div class="card card-compact"><dt>${escapeHtml(item.title)}</dt><dd>${escapeHtml(item.detail)}</dd></div>`,
   )
   .join('\n')}
           </dl>
@@ -166,7 +171,7 @@ ${strings.api.groups
       group,
       index,
     ): string => `          <h3 class="icon-heading">${renderIcon(index === 0 ? 'link' : 'users', 'heading-icon')}${escapeHtml(group.heading)}</h3>
-          ${renderEndpointTable(group.endpoints)}`,
+          ${renderEndpointTable(group.endpoints, group.heading)}`,
   )
   .join('\n')}
           <p class="docs-reference-link">${escapeHtml(strings.api.openApiText)} <a href="/openapi.yaml">${escapeHtml(strings.api.openApiAction)}</a></p>
@@ -175,21 +180,28 @@ ${strings.api.groups
         <section class="docs-section" id="avatars" aria-labelledby="avatars-heading">
           <h2 class="icon-heading" id="avatars-heading">${renderIcon('gamepad', 'heading-icon')}${escapeHtml(strings.avatars.heading)}</h2>
           <p class="section-intro">${escapeHtml(strings.avatars.intro)}</p>
-          <div class="avatar-docs">
-            <img src="/api/avatars/${demoPlayer.uuid}/bust?size=256&amp;layers=all" alt="${escapeHtml(strings.avatars.exampleAlt)}" width="256" height="256" loading="lazy" decoding="async">
-            <div>
-              ${codeBlock(strings.avatars.template, strings.avatars.heading)}
-              <dl class="summary-list">
+          ${codeBlock(strings.avatars.template, strings.avatars.heading)}
+          <dl class="summary-list summary-list-stacked">
 ${strings.avatars.parameters
   .map(
     (parameter): string =>
-      `                <div><dt><code>${escapeHtml(parameter.name)}</code></dt><dd>${escapeHtml(parameter.detail)}</dd></div>`,
+      `            <div><dt><code>${escapeHtml(parameter.name)}</code></dt><dd>${escapeHtml(parameter.detail)}</dd></div>`,
   )
   .join('\n')}
-              </dl>
-              <p class="avatar-credit">${escapeHtml(formatShowcaseCaption(strings.avatars.showcaseCaption, demoPlayer))}</p>
-            </div>
-          </div>
+          </dl>
+          <ul class="avatar-showcase">
+${strings.avatars.views
+  .filter((view): boolean => demoPlayer.hasCape !== false || !CAPE_TEXTURE_VIEWS.has(view.name))
+  .map(
+    (view): string => `            <li class="card card-compact avatar-card">
+              <img src="/api/avatars/${demoPlayer.uuid}/${view.name}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(view.name)}" width="128" height="128" loading="lazy" decoding="async">
+              <h3><code>${escapeHtml(view.name)}</code></h3>
+              <p>${escapeHtml(view.detail)}</p>
+            </li>`,
+  )
+  .join('\n')}
+          </ul>
+          <p class="avatar-credit">${escapeHtml(formatShowcaseCaption(strings.avatars.showcaseCaption, demoPlayer))}</p>
         </section>
 
         <section class="docs-section" id="security" aria-labelledby="security-heading">
@@ -208,7 +220,7 @@ ${strings.security.items
     description: strings.description,
     footer: siteFooter(),
     header: siteHeader('/docs/'),
-    mainClass: 'docs-shell',
+    mainClass: 'container docs-shell',
     stylesheet: '/assets/docs.css',
     title: strings.title,
   });

@@ -53,8 +53,7 @@ describe('skin verification marker', (): void => {
 
   it('renders the CL signature with the derived challenge colors', async (): Promise<void> => {
     const skin = await createSkinPng([]);
-    // All-zero entropy: red letters (hue 0) on a near-black red-tinted backdrop,
-    // shade index 0 in every region.
+    // All-zero entropy: red letters on a near-black red backdrop, shade 0 everywhere.
     const entropy = Buffer.alloc(32, 0x00);
     const challenge = await createSkinMarkerChallenge(skin, entropy);
     const image = await decodePng(challenge.body);
@@ -129,8 +128,7 @@ describe('skin verification marker', (): void => {
   });
 
   it('keeps every random palette readable with distinct shades', (): void => {
-    // Sweep hues, lightness corners, and saturations; every letter shade must
-    // keep a luminance gap against every background shade.
+    // Every letter shade must keep a luminance gap against every background shade.
     for (let hueHigh = 0; hueHigh < 256; hueHigh += 51) {
       for (let hueLow = 0; hueLow < 256; hueLow += 51) {
         for (const lightness of [0, 255]) {

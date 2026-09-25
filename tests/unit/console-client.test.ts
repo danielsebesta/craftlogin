@@ -33,8 +33,7 @@ describe('ensureConsoleClient', (): void => {
       clientId: CONSOLE_CLIENT_ID,
       redirectUri: 'https://craftlogin.com/developers/callback',
     });
-    // One atomic upsert keyed on the stable client id: no name lookup, no
-    // separate create that could race a concurrent instance.
+    // One atomic upsert keyed on the stable client id — no separate create that could race.
     expect(upserts).toHaveLength(1);
     expect(upserts[0]?.where).toEqual({ clientId: CONSOLE_CLIENT_ID });
     expect(upserts[0]?.create).toMatchObject({

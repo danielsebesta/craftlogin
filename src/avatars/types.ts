@@ -33,9 +33,8 @@ export interface AvatarRenderOptions {
   readonly size: AvatarSize;
   readonly view: AvatarView;
   // Cape-bearing views (back, duo, wings) resolve the worn cape through this
-  // provider; 'any' walks the provider chain in order like the cape endpoint.
+  // provider; 'any' walks the chain in order.
   readonly capeProvider?: CapeProvider;
-  // Texture-hash subjects carry no Mojang model metadata, so this hint picks
-  // the arm width; player subjects always use their signed profile model.
+  // Texture-hash subjects carry no profile model, so this hint picks the arm width.
   readonly model?: MinecraftSkinModel;
 }
