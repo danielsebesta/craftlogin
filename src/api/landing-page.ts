@@ -39,9 +39,10 @@ function renderSteps(): string {
 
 function renderPlayerCard(demoPlayer: DemoPlayer): string {
   const strings = english.landing;
+  const uuid = encodeURIComponent(demoPlayer.uuid);
   return `<div class="card player-card">
             <div class="player-card-head">
-              <img src="/api/avatars/${demoPlayer.uuid}/bust" alt="${escapeHtml(strings.avatars.exampleAlt)}" width="128" height="128" loading="lazy" decoding="async">
+              <img src="/api/avatars/${uuid}/bust" alt="${escapeHtml(strings.avatars.exampleAlt)}" width="128" height="128" loading="lazy" decoding="async">
               <div class="player-card-identity">
                 <span class="player-name">${escapeHtml(demoPlayer.name)}</span>
                 <code class="player-uuid">${escapeHtml(demoPlayer.uuid)}</code>
@@ -126,7 +127,7 @@ export function renderLandingPage(input: LandingPageInput): string {
             ]
               .map(
                 (item): string => `<li class="card card-compact avatar-card">
-              <img src="/api/avatars/${demoPlayer.uuid}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async" data-avatar-view="${item.view}">
+              <img src="/api/avatars/${encodeURIComponent(demoPlayer.uuid)}/${item.view}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(item.label)}" width="128" height="128" loading="lazy" decoding="async" data-avatar-view="${item.view}">
               <h3>${escapeHtml(item.label)}</h3>
               <code>/api/avatars/:identifier/${item.view}</code>
             </li>`,

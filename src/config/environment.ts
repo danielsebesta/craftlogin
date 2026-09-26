@@ -47,6 +47,7 @@ const environmentSchema = z
     nodeEnvironment: z.enum(['development', 'test', 'production']),
     logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']),
     databaseUrl: postgresUrlSchema,
+    developerOwner: z.string().min(1).max(64).optional(),
     httpHost: z.string().min(1),
     httpPort: portSchema,
     httpTrustProxy: booleanSchema,
@@ -79,6 +80,7 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     databaseUrl:
       source['DATABASE_URL'] ??
       'postgresql://craftlogin:craftlogin-dev-only@localhost:5432/craftlogin?schema=public',
+    developerOwner: source['DEVELOPER_OWNER'],
     redisUrl: source['REDIS_URL'] ?? 'redis://localhost:6379',
     httpHost: source['HTTP_HOST'] ?? '0.0.0.0',
     httpPort: source['HTTP_PORT'] ?? '3000',

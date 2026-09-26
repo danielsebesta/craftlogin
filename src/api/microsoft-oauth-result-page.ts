@@ -1,14 +1,7 @@
 import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
 import { renderPageDocument } from './ui/document.js';
-import { renderIcon, renderMicrosoftIcon, type IconName } from './ui/icons.js';
-
-interface MicrosoftOAuthSuccessPageInput {
-  readonly interactionId: string;
-  readonly kind: 'success';
-  readonly username: string;
-  readonly homeUrl: string;
-}
+import { renderIcon, renderMicrosoftIcon } from './ui/icons.js';
 
 interface MicrosoftOAuthFailurePageInput {
   readonly interactionId: string;
@@ -34,7 +27,6 @@ interface MicrosoftOAuthExpiredPageInput {
 }
 
 export type MicrosoftOAuthResultPageInput =
-  | MicrosoftOAuthSuccessPageInput
   | MicrosoftOAuthFailurePageInput
   | MicrosoftOAuthUnavailablePageInput
   | MicrosoftOAuthRejectedPageInput
@@ -46,20 +38,6 @@ export function renderMicrosoftOAuthResultPage(input: MicrosoftOAuthResultPageIn
   const interactionPath =
     interactionId === undefined ? undefined : `/interaction/${encodeURIComponent(interactionId)}`;
   const homeUrl = input.homeUrl ?? '/';
-  const details =
-    input.kind === 'success'
-      ? `
-        <dl class="summary-list">
-          <div>
-            <dt>${escapeHtml(strings.usernameLabel)}</dt>
-            <dd><bdi>${escapeHtml(input.username)}</bdi></dd>
-          </div>
-          <div>
-            <dt>${escapeHtml(strings.editionLabel)}</dt>
-            <dd>${escapeHtml(strings.javaEdition)}</dd>
-          </div>
-        </dl>`
-      : '';
   const action = renderAction(input, interactionPath, homeUrl);
   const heading = renderHeading(input);
   const lead = renderLead(input);
@@ -68,9 +46,9 @@ export function renderMicrosoftOAuthResultPage(input: MicrosoftOAuthResultPageIn
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="microsoft-result-heading">
         <div class="consent-title">
-          <h1 class="icon-heading" id="microsoft-result-heading">${renderIcon(resultIcon(input), 'heading-icon')}${escapeHtml(heading)}</h1>
+          <h1 class="icon-heading" id="microsoft-result-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(heading)}</h1>
           <p class="lead">${escapeHtml(lead)}</p>
-        </div>${details}
+        </div>
         <div class="consent-actions">${action}
         </div>
         <p class="field-hint icon-note">${renderIcon('lock', 'list-icon')}<span>${escapeHtml(strings.privacyNote)}</span></p>
@@ -90,16 +68,6 @@ function renderAction(
   homeUrl: string,
 ): string {
   const strings = english.interaction.microsoft;
-  if (input.kind === 'success') {
-    if (interactionPath !== undefined && homeUrl === interactionPath) {
-      return `
-        <form action="${interactionPath}/complete" method="post">
-          <button class="button" type="submit">${renderIcon('login', 'button-icon')}${escapeHtml(strings.continueButton)}</button>
-        </form>`;
-    }
-    return `
-        <a class="button" href="${escapeHtml(homeUrl)}">${renderIcon('login', 'button-icon')}${escapeHtml(strings.continueButton)}</a>`;
-  }
   if (input.kind !== 'expired' && interactionPath !== undefined) {
     return `
         <a class="button" href="${interactionPath}/microsoft/start">${renderMicrosoftIcon('button-icon')}${escapeHtml(strings.retryButton)}</a>
@@ -113,15 +81,9 @@ function renderAction(
         <a class="button button-secondary" href="${escapeHtml(homeUrl)}">${renderIcon('gamepad', 'button-icon')}${escapeHtml(strings.otherMethodButton)}</a>`;
 }
 
-function resultIcon(input: MicrosoftOAuthResultPageInput): IconName {
-  return input.kind === 'success' ? 'check' : 'warning';
-}
-
 function renderHeading(input: MicrosoftOAuthResultPageInput): string {
   const strings = english.interaction.microsoft;
   switch (input.kind) {
-    case 'success':
-      return strings.successHeading;
     case 'ownership-required':
       return strings.ownershipHeading;
     case 'temporarily-unavailable':
@@ -136,8 +98,6 @@ function renderHeading(input: MicrosoftOAuthResultPageInput): string {
 function renderLead(input: MicrosoftOAuthResultPageInput): string {
   const strings = english.interaction.microsoft;
   switch (input.kind) {
-    case 'success':
-      return strings.successLead;
     case 'ownership-required':
       return strings.ownershipLead;
     case 'temporarily-unavailable':
@@ -152,8 +112,6 @@ function renderLead(input: MicrosoftOAuthResultPageInput): string {
 function renderTitle(input: MicrosoftOAuthResultPageInput): string {
   const strings = english.interaction.microsoft;
   switch (input.kind) {
-    case 'success':
-      return strings.successTitle;
     case 'ownership-required':
       return strings.ownershipTitle;
     case 'temporarily-unavailable':

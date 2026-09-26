@@ -28,7 +28,11 @@ describe('RedisDeveloperSessionStore', (): void => {
   });
 
   it('touches, atomically rotates, and revokes opaque developer sessions', async (): Promise<void> => {
-    const store = new RedisDeveloperSessionStore(requireRedis(redis), keyPrefix);
+    const store = new RedisDeveloperSessionStore(
+      requireRedis(redis),
+      keyPrefix,
+      `${keyPrefix}-index`,
+    );
     const created = await store.create({
       ipAddress: '203.0.113.12',
       role: 'developer',
@@ -40,6 +44,12 @@ describe('RedisDeveloperSessionStore', (): void => {
       role: 'developer',
       userUuid: created.userUuid,
     });
+
+    // The per-user index tracks the live session for the console listing.
+    const listed = await store.listForUser(created.userUuid);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.sessionKeyId).toBe(store.keyIdFor(created.sessionId));
+    expect(listed[0]?.userAgent).toBe('Integration Browser');
 
     const rotations = await Promise.all(
       Array.from(
@@ -57,8 +67,17 @@ describe('RedisDeveloperSessionStore', (): void => {
       throw new Error('Expected one developer session rotation winner');
     }
     expect(rotated.role).toBe('admin');
-    await store.revoke(rotated.sessionId);
+
+    // Rotation moves the index entry from the old key to the rotated one.
+    const relisted = await store.listForUser(created.userUuid);
+    expect(relisted.map((session): string => session.sessionKeyId)).toEqual([
+      store.keyIdFor(rotated.sessionId),
+    ]);
+
+    // Revocation by key ID removes the session and prunes its index entry.
+    await store.revokeByKeyId(store.keyIdFor(rotated.sessionId));
     await expect(store.read(rotated.sessionId)).resolves.toBeUndefined();
+    await expect(store.listForUser(created.userUuid)).resolves.toEqual([]);
   });
 });
 

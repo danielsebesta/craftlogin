@@ -67,6 +67,7 @@ export const signInSurfaceStyles = `
 .consent-identity {
   display: grid;
   gap: var(--s4);
+  justify-items: center;
 }
 
 .consent-title {
@@ -119,11 +120,10 @@ export const signInSurfaceStyles = `
   overflow-wrap: anywhere;
 }
 
-/* Application icons are 64x64 pixel art; pixelated keeps them crisp at 2rem. */
+/* Application icons are 64x64 pixel art shown at native size above the title. */
 .consent-app-icon {
-  flex: none;
-  width: 2rem;
-  height: 2rem;
+  width: 4rem;
+  height: 4rem;
   image-rendering: pixelated;
 }
 
@@ -204,6 +204,20 @@ export const signInSurfaceStyles = `
   font-weight: 700;
 }
 
+.skin-lookup-result {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+  min-height: 2.5rem;
+}
+
+.skin-lookup-avatar {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  image-rendering: pixelated;
+}
+
 .consent-owner {
   display: inline-flex;
   flex-wrap: wrap;
@@ -218,8 +232,6 @@ export const signInSurfaceStyles = `
   flex: none;
   width: 2rem;
   height: 2rem;
-  background: var(--surface);
-  border: 2px solid var(--line);
   image-rendering: pixelated;
 }
 
@@ -273,9 +285,14 @@ export const signInSurfaceStyles = `
 
 .consent-verify,
 .microsoft-verification,
-.skin-verification {
+.skin-verification,
+.verified-confirmation {
   display: grid;
   gap: var(--s4);
+}
+
+.verified-confirmation .account-chip {
+  font-size: var(--t-lg);
 }
 
 .skin-download {
@@ -295,18 +312,26 @@ export const signInSurfaceStyles = `
 
 .signin-address-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3);
-  align-items: center;
+  gap: var(--s2);
+  align-items: stretch;
 }
 
 .signin-address {
-  overflow-wrap: anywhere;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: var(--control-height);
+  padding: var(--s3) var(--s4);
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--line-strong);
   font-family: var(--font-mono);
   font-size: var(--t-xl);
   font-weight: 700;
   line-height: 1.2;
-  color: var(--text);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
 }
 
 .signin-status {

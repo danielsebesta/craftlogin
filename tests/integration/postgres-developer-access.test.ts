@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaAppManager } from '../../src/developers/app-management.js';
 import {
   LastAdministratorError,
+  OwnerAccessError,
   PrismaDeveloperAccessRepository,
 } from '../../src/developers/developer-repository.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
@@ -38,7 +39,11 @@ describe('PostgreSQL developer access', (): void => {
   });
 
   it('preserves at least one administrator during concurrent revocation', async (): Promise<void> => {
-    const access = new PrismaDeveloperAccessRepository(requireDatabase(database));
+    const databaseClient = requireDatabase(database);
+    // The last-administrator check only exists when the two granted rows are
+    // the only admins; TEST_DATABASE_URL points at a disposable database.
+    await databaseClient.developer.deleteMany();
+    const access = new PrismaDeveloperAccessRepository(databaseClient);
     await access.grant(firstAdminUuid, 'admin');
     await access.grant(secondAdminUuid, 'admin');
 
@@ -54,6 +59,18 @@ describe('PostgreSQL developer access', (): void => {
     }
     const remaining = await access.list();
     expect(remaining.filter((developer): boolean => developer.role === 'admin')).toHaveLength(1);
+  });
+
+  it('refuses to revoke or demote the configured owner', async (): Promise<void> => {
+    const databaseClient = requireDatabase(database);
+    const protectedAccess = new PrismaDeveloperAccessRepository(databaseClient, secondAdminUuid);
+    await protectedAccess.grant(secondAdminUuid, 'admin');
+
+    await expect(protectedAccess.revoke(secondAdminUuid)).rejects.toBeInstanceOf(OwnerAccessError);
+    await expect(protectedAccess.grant(secondAdminUuid, 'developer')).rejects.toBeInstanceOf(
+      OwnerAccessError,
+    );
+    await expect(protectedAccess.find(secondAdminUuid)).resolves.toMatchObject({ role: 'admin' });
   });
 
   it('isolates developer-owned apps while allowing administrators to manage all clients', async (): Promise<void> => {

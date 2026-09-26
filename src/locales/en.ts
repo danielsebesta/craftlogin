@@ -115,6 +115,11 @@ export const english = {
             'Resolve a Minecraft Java username or UUID. Unknown usernames return an offline-mode UUID with a deterministic default skin; that synthetic profile is never a verified identity.',
           summary: 'Resolve a Minecraft player',
         },
+        rejectVerifiedIdentity: {
+          description:
+            'Discard the server-verified Minecraft identity and restart the sign-in methods.',
+          summary: 'Restart Minecraft verification',
+        },
         discovery: { summary: 'Get authorization server metadata' },
         interactionPage: {
           description: 'Render the Minecraft account verification interaction.',
@@ -138,11 +143,11 @@ export const english = {
         skinVerificationDownload: { summary: 'Download the marked Minecraft skin' },
         skinVerificationStart: {
           description:
-            'Create a short-lived marked skin for a Minecraft Java player in the active interaction.',
+            'Create a temporarily marked skin for a Minecraft Java player in the active interaction.',
           summary: 'Start skin verification',
         },
         skinVerificationStatus: {
-          description: 'Check a fresh signed Minecraft profile for the short-lived skin marker.',
+          description: 'Check a fresh signed Minecraft profile for the temporary skin marker.',
           summary: 'Check skin verification',
         },
         introspection: {
@@ -153,6 +158,11 @@ export const english = {
         logout: {
           description: 'End the CraftLogin provider session using RP-initiated logout.',
           summary: 'End the provider session',
+        },
+        par: {
+          description:
+            'Push authorization parameters through the backchannel and receive a request_uri for the authorize endpoint.',
+          summary: 'Push an authorization request',
         },
         revoke: { summary: 'Revoke a token' },
         token: {
@@ -261,7 +271,7 @@ export const english = {
         'GET https://craftlogin.com/oauth2/authorize\n  ?response_type=code\n  &client_id=cl_replace_me\n  &redirect_uri=https%3A%2F%2Fexample.com%2Fauth%2Fcraftlogin%2Fcallback\n  &scope=openid%20profile\n  &state=<random-value>\n  &code_challenge=<s256-challenge>\n  &code_challenge_method=S256',
       callbackHeading: '2. Validate the callback',
       callbackText:
-        'Require the returned state to match the browser-bound, short-lived transaction. Reject missing, changed, expired, or replayed state before exchanging the code.',
+        'Require the returned state to match the browser-bound, temporary transaction. Reject missing, changed, expired, or replayed state before exchanging the code.',
       tokenHeading: '3. Exchange the code',
       tokenCode:
         'POST /oauth2/token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\n&client_id=cl_replace_me\n&code=<one-time-code>\n&redirect_uri=https%3A%2F%2Fexample.com%2Fauth%2Fcraftlogin%2Fcallback\n&code_verifier=<original-verifier>',
@@ -426,7 +436,7 @@ export const english = {
       items: [
         'Use discovery and a maintained OIDC library.',
         'Require Authorization Code Flow, state, and PKCE S256.',
-        'Bind state, nonce, and the PKCE verifier to one short-lived browser transaction.',
+        'Bind state, nonce, and the PKCE verifier to one temporary browser transaction.',
         'Accept only exact, preconfigured callback and post-logout URIs.',
         'Validate issuer, signature, audience, expiry, nonce, and protocol errors.',
         'Use sub (UUID), not username, as the permanent account key.',
@@ -459,6 +469,9 @@ export const english = {
       lastAdminNotice: 'The final administrator cannot be demoted or removed.',
       noNote: 'No note was provided.',
       notFoundNotice: 'That developer account was not found.',
+      ownerBadge: 'Owner',
+      ownerProtectedNotice:
+        'The configured owner account cannot be demoted or removed while it is set in the environment.',
       rejectAction: 'Reject',
       removeAction: 'Remove',
       requestedLabel: 'Requested',
@@ -560,6 +573,18 @@ export const english = {
       logout: 'Sign out',
       signedInAs: 'Signed in as',
       uuidLabel: 'Signed in UUID',
+    },
+    sessions: {
+      currentBadge: 'This device',
+      deviceLabel: 'Device',
+      empty: 'Only this session is active.',
+      expiresLabel: 'Expires in',
+      heading: 'Console sessions',
+      ipLabel: 'IP address',
+      minutesSuffix: 'min',
+      revokedNotice: 'Session signed out.',
+      revokeAction: 'Sign out',
+      signedInLabel: 'Signed in',
     },
     footer: 'Developer access is restricted to administrator-approved Minecraft UUIDs.',
     navigation: {
@@ -686,8 +711,8 @@ export const english = {
       consoleAction: 'Set up login',
       documentationAction: 'Read the API docs',
       githubAction: 'View source',
-      heading: 'Let your users log in with Minecraft',
-      lead: 'No one wants to register for another server forum. Let them log in with the game they already have open. Zero emails to collect, zero passwords to hash. Open-source, secure, and built for Minecraft.',
+      heading: 'Let your players log in with Minecraft',
+      lead: 'No one wants to register for another server forum. Let your players log in with the game they already have open. CraftLogin handles the rest through standard OAuth 2.0: open source, secure, and free.',
     },
     navigation: {
       ariaLabel: 'Primary navigation',
@@ -698,7 +723,7 @@ export const english = {
     },
     security: {
       heading: 'Safe by design',
-      text: 'There are no CraftLogin passwords to steal. Players never type a password on our pages, and we store no emails. Logins are short-lived and single-use, return addresses must match exactly, and everything is open source, so anyone can check our work.',
+      text: 'There are no CraftLogin passwords to steal. Players never type a password on our pages, and we store no emails. Logins are temporary and single-use, return addresses must match exactly, and everything is open source, so anyone can check our work.',
     },
   },
   legal: {
@@ -722,7 +747,7 @@ export const english = {
             'If you use the Developer Console: your allowlisted Minecraft UUID, your role, and the OAuth clients you create.',
             'For every registered application: its client ID, display name, exact redirect URIs, owner, and manual verification labels.',
             'Refresh tokens only as one-way hashes, together with the client ID, your Minecraft UUID, and an expiry time.',
-            'Short-lived verification records in Redis, which expire after about five minutes.',
+            'Temporary verification records in Redis, which expire after about five minutes.',
           ],
           paragraphs: [
             'Confidential client secrets are hashed with Argon2 before they are stored. CraftLogin cannot recover the original secret from that hash.',
@@ -739,7 +764,7 @@ export const english = {
         {
           heading: 'Cookies and sessions',
           paragraphs: [
-            'CraftLogin sets signed cookies that are HttpOnly, Secure, and SameSite=Lax. The sign-in flow uses a short-lived interaction cookie and a five-minute Microsoft PKCE transaction cookie. The Developer Console uses an opaque server-side session with sliding expiry and an absolute lifetime.',
+            'CraftLogin sets signed cookies that are HttpOnly, Secure, and SameSite=Lax. The sign-in flow uses a temporary interaction cookie and a five-minute Microsoft PKCE transaction cookie. The Developer Console uses an opaque server-side session with sliding expiry and an absolute lifetime.',
             'CraftLogin runs no analytics, no advertising, and no third-party tracking scripts.',
           ],
         },
@@ -760,6 +785,7 @@ export const english = {
           heading: 'Your rights',
           paragraphs: [
             'You can request access to, correction of, or deletion of the personal data CraftLogin holds about you, and you can object to its processing. Write to contact@craftlogin.com and include your Minecraft username or UUID.',
+            'If you signed in with Microsoft, the permission you granted lives in your Microsoft account. CraftLogin stores no Microsoft tokens and cannot revoke it for you; you can withdraw it at any time in your Microsoft account privacy settings under Apps and services that can access your data.',
           ],
         },
         {
@@ -837,7 +863,6 @@ export const english = {
     },
   },
   interaction: {
-    addressLabel: 'Minecraft server address',
     allowsHeading: 'This app will receive:',
     disallowedHeading: 'This app will never receive:',
     disallowed: [
@@ -848,6 +873,12 @@ export const english = {
     brand: 'CraftLogin',
     cancelButton: 'Cancel',
     changeAccount: 'Use a different account',
+    confirmation: {
+      continueButton: 'Continue',
+      heading: 'Is this you?',
+      lead: 'This Minecraft account is verified. Continue only if it belongs to you.',
+      notYou: 'Not you? Verify again',
+    },
     continueButton: 'Allow',
     copied: 'Copied',
     copyAddress: 'Copy address',
@@ -868,49 +899,46 @@ export const english = {
     methodHeading: 'Choose how to verify',
     methods: {
       microsoft: {
-        detail: 'Confirm ownership through Microsoft without opening Minecraft.',
+        detail: 'Confirm Java Edition ownership without opening the game.',
         label: 'Sign in with Microsoft',
       },
       online: {
-        detail: 'Join a short-lived server address in Minecraft Java Edition.',
-        label: 'Join Minecraft server',
+        detail: 'Connect to a temporary address in Minecraft Java Edition.',
+        label: 'Join a Minecraft server',
       },
       skin: {
-        detail: 'Change your skin briefly, then change it back when verification finishes.',
-        label: 'Verify with a skin',
+        detail: 'Publish a one-time marked skin, then change it back.',
+        label: 'Change your skin',
       },
     },
     signedInAs: 'Signed in as',
     consentLead: 'Review what this application is requesting.',
     noJavaScript:
-      'Automatic status checks need JavaScript. You can still connect in Minecraft, then use the continue button.',
+      'Automatic status checks need JavaScript. You can still verify, then reload this page to confirm your account.',
     ownerBy: 'by',
     ownerLabel: 'Application publisher',
     securityNote:
-      'Verify through Minecraft online mode, a fresh Mojang-signed skin, or one-shot Microsoft sign-in. CraftLogin never receives your Microsoft password or stores Microsoft tokens.',
+      'Verify by joining the Minecraft server, changing your skin once, or signing in with Microsoft. CraftLogin never receives your Microsoft password and stores no Microsoft tokens.',
     status: {
-      expired: 'This code expired. Return to the app and start again.',
+      expired: 'This code expired. Reload this page for a new one.',
       networkError: 'The status check was interrupted. Retrying shortly.',
       pending: 'Waiting for your Minecraft connection.',
-      stopped: 'Automatic checks stopped. Use the continue button after connecting.',
-      verified: 'Minecraft account verified. Returning to the app.',
+      stopped: 'Automatic checks stopped. Reload this page after connecting.',
+      verified: 'Minecraft account verified.',
     },
     steps: [
-      'Open Minecraft: Java Edition.',
-      'Choose Multiplayer, then Direct Connection.',
-      'Connect to the exact address below.',
+      'In Minecraft: Java Edition, choose Multiplayer, then Direct Connection.',
+      'Paste the server address below and press Join Server.',
+      'The server disconnects you with a success message; this page continues automatically.',
     ],
     stepsHeading: 'How to connect',
     title: 'Verify with Minecraft',
     verifiedAppBadge: 'Verified by CraftLogin',
     microsoft: {
-      continueButton: 'Continue',
-      editionLabel: 'Ownership',
       expiredHeading: 'This sign-in attempt expired',
       expiredTitle: 'Sign-in attempt expired',
-      heading: 'Or sign in with Microsoft',
-      hint: 'Use Microsoft, Xbox Live, and Minecraft Services to confirm Java Edition ownership without opening the game. CraftLogin stores none of the Microsoft-side tokens or account data.',
-      javaEdition: 'Java Edition owner',
+      heading: 'Sign in with Microsoft',
+      hint: 'Confirm Java Edition ownership with one sign-in. CraftLogin stores no Microsoft-side tokens or account data.',
       otherMethodButton: 'Use another method',
       ownershipHeading: 'Java Edition ownership not found',
       ownershipLead:
@@ -923,12 +951,8 @@ export const english = {
       rejectedTitle: 'Microsoft sign-in failed',
       retryButton: 'Try Microsoft sign-in again',
       startButton: 'Sign in with Microsoft',
-      successHeading: 'Minecraft account verified',
-      successLead: 'Microsoft sign-in confirmed this Minecraft Java Edition profile.',
-      successTitle: 'Minecraft account verified',
       unavailableHeading: 'Microsoft verification is unavailable right now',
       unavailableTitle: 'Verification unavailable',
-      usernameLabel: 'Minecraft username',
     },
     skin: {
       accountLabel: 'Minecraft Java username',
@@ -939,8 +963,7 @@ export const english = {
       formatLegacy: 'legacy 64×32',
       formatModern: 'modern 64×64',
       formatLabel: 'Skin format',
-      heading: 'Or verify by changing your skin',
-      headingAlternative: 'Verify by changing your skin',
+      heading: 'Verify by changing your skin',
       lookupFound: 'Account found. Checking its current skin…',
       lookupNotFound: 'No Minecraft account was found with that username.',
       lookupSkin: 'Account found. A current skin is available.',
@@ -951,7 +974,7 @@ export const english = {
       originalDownloadButton: 'Download current skin backup',
       startButton: 'Create verification skin',
       startHint:
-        'CraftLogin adds a one-time marker to an unused 8×8 area. Existing custom skins keep every visible base and overlay pixel; accounts using only a default skin receive a temporary template.',
+        'CraftLogin adds a tiny hidden mark to a copy of your skin so we can tell the account is really yours. Your character still looks exactly the same, and you can change it right back.',
       statusPending: 'Waiting for the marked skin to appear on your Minecraft profile.',
       steps: [
         'Download the marked PNG below.',

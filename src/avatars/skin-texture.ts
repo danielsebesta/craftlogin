@@ -5,6 +5,11 @@ const PNG_HEADER_LENGTH = 33;
 const PNG_IHDR_LENGTH = 13;
 const MAX_SKIN_BYTES = 256 * 1024;
 const SKIN_WIDTH = 64;
+// Cape/elytra textures arrive from third-party providers — cleartext OptiFine
+// included — so declared IHDR dimensions are bounded before decode: a tiny PNG
+// could otherwise force a multi-gigabyte canvas allocation. Real capes stay
+// well under 1024x512; 2048 leaves generous headroom.
+const MAX_TEXTURE_DIMENSION = 2_048;
 
 export class InvalidSkinImageError extends Error {
   public override readonly name = 'InvalidSkinImageError';
@@ -71,12 +76,48 @@ export function isPngImage(body: Buffer): boolean {
   );
 }
 
+export interface TexturePngDimensions {
+  readonly height: number;
+  readonly width: number;
+}
+
+export function inspectTexturePng(body: Buffer): TexturePngDimensions {
+  if (body.length < PNG_HEADER_LENGTH || body.length > MAX_SKIN_BYTES) {
+    throw new InvalidSkinImageError('Minecraft texture PNG has an invalid size');
+  }
+  if (
+    !isPngImage(body) ||
+    body.readUInt32BE(8) !== PNG_IHDR_LENGTH ||
+    body.subarray(12, 16).toString('ascii') !== 'IHDR'
+  ) {
+    throw new InvalidSkinImageError('Minecraft texture has an invalid PNG header');
+  }
+  const width = body.readUInt32BE(16);
+  const height = body.readUInt32BE(20);
+  if (
+    width === 0 ||
+    height === 0 ||
+    width > MAX_TEXTURE_DIMENSION ||
+    height > MAX_TEXTURE_DIMENSION
+  ) {
+    throw new InvalidSkinImageError('Minecraft texture PNG dimensions exceed the safety limit');
+  }
+  return { height, width };
+}
+
+export function isBoundedTexturePng(body: Buffer): boolean {
+  try {
+    inspectTexturePng(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Decodes a non-skin texture (cape, elytra) into raw RGBA — unlike
 // decodeSkinTexture, no layout validation or normalization applies.
 export async function decodeTexturePixels(body: Buffer): Promise<TexturePixels> {
-  if (body.length > MAX_SKIN_BYTES || !isPngImage(body)) {
-    throw new InvalidSkinImageError('Minecraft texture is not a PNG image');
-  }
+  const header = inspectTexturePng(body);
   let image: Image;
   try {
     image = await loadImage(body);
@@ -84,6 +125,9 @@ export async function decodeTexturePixels(body: Buffer): Promise<TexturePixels> 
     throw new InvalidSkinImageError('Minecraft texture PNG could not be decoded', {
       cause: error,
     });
+  }
+  if (image.width !== header.width || image.height !== header.height) {
+    throw new InvalidSkinImageError('Minecraft texture PNG dimensions changed during decode');
   }
   const canvas = createCanvas(image.width, image.height);
   const context = canvas.getContext('2d');

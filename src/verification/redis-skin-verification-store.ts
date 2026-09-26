@@ -214,6 +214,13 @@ export class RedisSkinVerificationStore {
     return result === 1;
   }
 
+  // Rejecting a verified identity discards any pending challenge so it cannot
+  // re-resolve the fresh verification record or block a different account.
+  public async discard(interactionIdInput: string): Promise<void> {
+    const interactionId = interactionIdSchema.parse(interactionIdInput);
+    await this.redis.eval(`redis.call('DEL', KEYS[1])`, 1, this.interactionKey(interactionId));
+  }
+
   private interactionKey(interactionId: string): string {
     const keyId = createHash('sha256').update(interactionId, 'utf8').digest('hex');
     return `${this.keyPrefix}:interaction:${keyId}`;

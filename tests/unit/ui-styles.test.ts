@@ -183,13 +183,15 @@ const documentPages: readonly { readonly html: string; readonly name: string }[]
     name: 'interaction consent long name',
   },
   {
-    html: renderMicrosoftOAuthResultPage({
-      homeUrl: '/interaction/interaction-id',
+    html: renderInteractionPage({
+      appName: 'Maps & More',
       interactionId: 'interaction-id',
-      kind: 'success',
-      username: 'VerifiedPlayer',
+      kind: 'login',
+      minecraftBaseDomain: 'craftlogin.com',
+      scope: 'openid profile',
+      verifiedPlayer: { uuid: developerUuid, username: 'VerifiedPlayer' },
     }),
-    name: 'microsoft result success',
+    name: 'interaction verified confirmation',
   },
   ...(['ownership-required', 'temporarily-unavailable', 'rejected'] as const).map(
     (kind): { readonly html: string; readonly name: string } => ({

@@ -1,5 +1,6 @@
 import type { DeveloperAccess, DeveloperRole } from '../developers/developer-repository.js';
 import type { ManagedApp } from '../developers/app-management.js';
+import type { DeveloperSessionView } from '../developers/session-service.js';
 import { english } from '../locales/en.js';
 import type { RegisteredApp } from './app-registration.js';
 import { escapeHtml } from './html.js';
@@ -14,6 +15,8 @@ export type DashboardNotice =
   | 'invalid-form'
   | 'last-admin'
   | 'not-found'
+  | 'owner-protected'
+  | 'session-revoked'
   | 'verification-approved'
   | 'verification-rejected'
   | 'verification-requested'
@@ -31,8 +34,10 @@ export interface DeveloperDashboardInput {
     readonly redirectUris: string;
   };
   readonly notice?: DashboardNotice;
+  readonly ownerUuid?: string;
   readonly playerNames?: Readonly<Record<string, string>>;
   readonly role: DeveloperRole;
+  readonly sessions?: readonly DeveloperSessionView[];
   readonly showDocumentation?: boolean;
   readonly username: string;
   readonly userUuid: string;
@@ -56,7 +61,13 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
     input.role === 'admin' ? strings.dashboard.adminBadge : strings.dashboard.developerBadge;
   const adminPanel =
     input.role === 'admin' && input.developers !== undefined
-      ? renderAdministratorPanel(input.developers, input.apps, input.csrfToken, input.notice)
+      ? renderAdministratorPanel(
+          input.developers,
+          input.apps,
+          input.csrfToken,
+          input.notice,
+          input.ownerUuid,
+        )
       : '';
   const formOpen = input.apps.length === 0 || input.formError !== undefined;
   const docsLink =
@@ -95,6 +106,13 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
             ${docsLink}
           </div>
           ${renderAppList(input.apps, input.role, input.csrfToken, input.playerNames)}
+        </section>
+
+        <section class="card console-section" aria-labelledby="sessions-heading">
+          <div class="console-section-head">
+            <h2 class="icon-heading" id="sessions-heading">${renderIcon('user', 'heading-icon')}${escapeHtml(strings.sessions.heading)}</h2>
+          </div>
+          ${renderSessionList(input.sessions ?? [], input.csrfToken)}
         </section>
 
         <details class="card disclosure console-create"${formOpen ? ' open' : ''}>
@@ -250,6 +268,55 @@ export function renderRemoveDeveloperPage(developer: DeveloperAccess, csrfToken:
   });
 }
 
+function renderSessionList(sessions: readonly DeveloperSessionView[], csrfToken: string): string {
+  const strings = english.developer.sessions;
+  if (sessions.length === 0) {
+    return `<p class="empty-state">${escapeHtml(strings.empty)}</p>`;
+  }
+  const rows = sessions
+    .map((session): string => {
+      const signedIn = new Date(session.issuedAtMilliseconds)
+        .toISOString()
+        .replace('T', ' ')
+        .slice(0, 16);
+      const expiresMinutes = Math.max(1, Math.ceil(session.expiresInSeconds / 60));
+      const action = session.current
+        ? `<span class="app-meta">${escapeHtml(strings.currentBadge)}</span>`
+        : `<form class="row-action-form" action="/developers/sessions/revoke" method="post">
+                ${csrfField(csrfToken)}
+                <input type="hidden" name="sessionKey" value="${escapeHtml(session.sessionKeyId)}">
+                <button class="button button-quiet button-danger-quiet" type="submit">${escapeHtml(strings.revokeAction)}</button>
+              </form>`;
+      return `<li class="card card-flush app-card">
+          <article>
+            <header class="app-card-header">
+              <div class="app-card-identity">
+                <div>
+                  <h3 class="app-name">${escapeHtml(session.userAgent)}</h3>
+                  <p class="app-meta">${escapeHtml(session.ipAddress)}</p>
+                </div>
+              </div>
+              ${action}
+            </header>
+            <dl class="app-card-details">
+              <div>
+                <dt>${escapeHtml(strings.signedInLabel)}</dt>
+                <dd><time datetime="${escapeHtml(new Date(session.issuedAtMilliseconds).toISOString())}">${escapeHtml(signedIn)} UTC</time></dd>
+              </div>
+              <div>
+                <dt>${escapeHtml(strings.expiresLabel)}</dt>
+                <dd>${escapeHtml(`${expiresMinutes.toString()} ${strings.minutesSuffix}`)}</dd>
+              </div>
+            </dl>
+          </article>
+        </li>`;
+    })
+    .join('\n        ');
+  return `<ul class="app-grid">
+        ${rows}
+      </ul>`;
+}
+
 function renderDashboardNotice(notice: DashboardNotice | undefined): string {
   const strings = english.developer;
   if (notice === undefined) {
@@ -265,6 +332,8 @@ function renderDashboardNotice(notice: DashboardNotice | undefined): string {
     'developer-unverified': strings.admin.verificationDeveloperNotice,
     'developer-verified': strings.admin.verificationDeveloperNotice,
     'last-admin': strings.admin.lastAdminNotice,
+    'owner-protected': strings.admin.ownerProtectedNotice,
+    'session-revoked': strings.sessions.revokedNotice,
     'verification-approved': strings.admin.verificationApprovedNotice,
     'verification-rejected': strings.admin.verificationRejectedNotice,
     'verification-requested': strings.admin.verificationRequestedNotice,
@@ -514,6 +583,7 @@ function renderAdministratorPanel(
   apps: readonly ManagedApp[],
   csrfToken: string,
   notice: DashboardNotice | undefined,
+  ownerUuid?: string,
 ): string {
   const strings = english.developer;
   const admin = strings.admin;
@@ -535,11 +605,13 @@ function renderAdministratorPanel(
         </thead>
         <tbody>
         ${developers
-          .map(
-            (developer): string => `<tr>
-          <th scope="row"><code class="table-identifier">${escapeHtml(developer.uuid)}</code></th>
-          <td>
-            <form class="role-form" action="/developers/admin/developers" method="post">
+          .map((developer): string => {
+            // The configured owner keeps its row read-only; the repository
+            // rejects the mutation anyway, so hiding the controls is UX only.
+            const isOwner = developer.uuid.toLowerCase() === ownerUuid?.toLowerCase();
+            const roleCell = isOwner
+              ? `<span class="app-meta">${escapeHtml(admin.ownerBadge)}</span>`
+              : `<form class="role-form" action="/developers/admin/developers" method="post">
               ${csrfField(csrfToken)}
               <input type="hidden" name="uuid" value="${escapeHtml(developer.uuid)}">
               <label class="visually-hidden" for="role-${escapeHtml(developer.uuid)}">${escapeHtml(admin.roleLabel)}</label>
@@ -548,13 +620,20 @@ function renderAdministratorPanel(
                 <option value="admin"${developer.role === 'admin' ? ' selected' : ''}>${escapeHtml(admin.adminRole)}</option>
               </select>
               <button class="button button-secondary" type="submit">${escapeHtml(admin.saveRoleAction)}</button>
-            </form>
+            </form>`;
+            const removeCell = isOwner
+              ? ''
+              : `<a class="button button-quiet button-danger-quiet" href="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete">${escapeHtml(admin.removeAction)}</a>`;
+            return `<tr>
+          <th scope="row"><code class="table-identifier">${escapeHtml(developer.uuid)}</code></th>
+          <td>
+            ${roleCell}
           </td>
           <td>${renderDeveloperVerificationCell(developer, csrfToken)}</td>
           <td><time datetime="${escapeHtml(developer.createdAt)}">${escapeHtml(developer.createdAt.slice(0, 10))}</time></td>
-          <td class="table-actions"><a class="button button-quiet button-danger-quiet" href="/developers/admin/developers/${encodeURIComponent(developer.uuid)}/delete">${escapeHtml(admin.removeAction)}</a></td>
-        </tr>`,
-          )
+          <td class="table-actions">${removeCell}</td>
+        </tr>`;
+          })
           .join('\n        ')}
         </tbody>
       </table>

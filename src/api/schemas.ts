@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifySchema } from 'fastify';
 
+import { CONSOLE_CLIENT_ID } from '../developers/console-client.js';
 import { english } from '../locales/en.js';
 
 const operations = english.api.documentation.operations;
@@ -476,6 +477,19 @@ export const skinVerificationDownloadRouteSchema: FastifySchema = {
   tags: ['Interactions'],
 };
 
+export const interactionNotYouRouteSchema: FastifySchema = {
+  description: operations.rejectVerifiedIdentity.description,
+  params: interactionParamsSchema,
+  response: {
+    303: { type: 'null' },
+    409: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.rejectVerifiedIdentity.summary,
+  tags: ['Interactions'],
+};
+
 export const interactionCompleteRouteSchema: FastifySchema = {
   description: operations.completeInteraction.description,
   params: interactionParamsSchema,
@@ -525,6 +539,20 @@ export const landingPageRouteSchema: FastifySchema = {
 };
 
 export const landingAssetRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    200: { type: 'string' },
+  },
+};
+
+export const cspReportRouteSchema: FastifySchema = {
+  hide: true,
+  response: {
+    204: { type: 'null' },
+  },
+};
+
+export const securityTxtRouteSchema: FastifySchema = {
   hide: true,
   response: {
     200: { type: 'string' },
@@ -630,11 +658,15 @@ export const appDeleteRouteSchema: FastifySchema = {
   tags: ['Applications'],
 };
 
-// Registered client ids are `cl_` plus 32 base64url characters.
+// Registered client ids are `cl_` plus 32 base64url characters; the seeded
+// Developer Console keeps a fixed public id instead.
 const appClientIdParamsSchema = {
   additionalProperties: false,
   properties: {
-    clientId: { pattern: '^cl_[A-Za-z0-9_-]{32}$', type: 'string' },
+    clientId: {
+      pattern: `^(?:${CONSOLE_CLIENT_ID}|cl_[A-Za-z0-9_-]{32})$`,
+      type: 'string',
+    },
   },
   required: ['clientId'],
   type: 'object',
@@ -704,6 +736,8 @@ export const developerDashboardRouteSchema: FastifySchema = {
           'invalid-form',
           'last-admin',
           'not-found',
+          'owner-protected',
+          'session-revoked',
           'verification-approved',
           'verification-rejected',
           'verification-requested',
@@ -719,6 +753,26 @@ export const developerDashboardRouteSchema: FastifySchema = {
     200: htmlResponseSchema,
     303: { type: 'null' },
     400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerSessionRevokeRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      csrfToken: csrfFormProperty,
+      sessionKey: { pattern: '^[0-9a-f]{64}$', type: 'string' },
+    },
+    required: ['csrfToken', 'sessionKey'],
+    type: 'object',
+  },
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
@@ -1278,6 +1332,42 @@ export const oauthIntrospectionRouteSchema: FastifySchema = {
     429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },
   summary: operations.introspection.summary,
+  tags: ['OAuth'],
+};
+
+export const oauthParRouteSchema: FastifySchema = {
+  // PAR forwards authorization parameters verbatim; oidc-provider performs the
+  // authoritative validation, so unknown extension parameters must pass through.
+  body: {
+    additionalProperties: true,
+    properties: {
+      client_id: { type: 'string' },
+      code_challenge: { type: 'string' },
+      code_challenge_method: { enum: ['S256'], type: 'string' },
+      redirect_uri: { type: 'string' },
+      response_type: { enum: ['code'], type: 'string' },
+      scope: { type: 'string' },
+      state: { type: 'string' },
+    },
+    type: 'object',
+  },
+  consumes: ['application/x-www-form-urlencoded'],
+  description: operations.par.description,
+  response: {
+    201: {
+      additionalProperties: false,
+      properties: {
+        expires_in: { type: 'integer' },
+        request_uri: { type: 'string' },
+      },
+      required: ['request_uri', 'expires_in'],
+      type: 'object',
+    },
+    400: oauthErrorSchema,
+    401: oauthErrorSchema,
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+  summary: operations.par.summary,
   tags: ['OAuth'],
 };
 

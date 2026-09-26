@@ -43,6 +43,15 @@ export const authorizeRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
+// Cheap unauthenticated OIDC endpoints (jwks, discovery, webfinger, userinfo,
+// revoke, logout) share one per-address bucket; token and authorize keep their
+// stricter dedicated budgets.
+export const publicOidcRateLimit = {
+  groupId: 'oauth-public',
+  max: 120,
+  timeWindow: 60 * 1_000,
+};
+
 // The interaction page render hits Postgres (client + owner) on every load.
 export const interactionPageRateLimit = {
   groupId: 'interaction-page',
@@ -106,6 +115,14 @@ export const playerProfileRateLimit = {
 export const appIconReadRateLimit = {
   groupId: 'app-icon-read',
   max: 240,
+  timeWindow: 60 * 1_000,
+};
+
+// The CSP collector is a telemetry sink; a strict ceiling bounds log volume
+// while staying far above real browser report rates.
+export const cspReportRateLimit = {
+  groupId: 'csp-report',
+  max: 60,
   timeWindow: 60 * 1_000,
 };
 

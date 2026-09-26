@@ -23,7 +23,9 @@ import { registerAvatarRoutes } from './avatar-routes.js';
 import { registerBackgroundAssetRoute } from './background-asset.js';
 import { registerCanonicalOriginRedirect } from './canonical-origin.js';
 import type { RegisteredOriginLookup } from './client-directory.js';
+import { CSP_REPORT_BODY_LIMIT, registerCspReportRoute } from './csp-report-route.js';
 import type { CurrentUserLookup } from './current-user.js';
+import type { DemoPlayer } from './demo-players.js';
 import type { DeveloperAuthentication } from './developer-authentication.js';
 import { registerDeveloperRoutes } from './developer-routes.js';
 import { registerDocsRoutes } from './docs-routes.js';
@@ -46,8 +48,11 @@ import {
 } from './microsoft-oauth-routes.js';
 import { registerOidcHttpRoutes, type OidcHttpHandler } from './oauth-http-routes.js';
 import { registerOpenApi } from './openapi.js';
+import { PAGE_CSP_REPORT_ONLY } from './page-csp.js';
 import { registerRateLimiting } from './rate-limit.js';
 import { registerSharedSchemas } from './schemas.js';
+import { PERMISSIONS_POLICY } from './security-headers.js';
+import { registerSecurityTxtRoute } from './security-txt.js';
 import { registerUserRoutes } from './user-routes.js';
 
 export interface ApiServerOptions {
@@ -57,10 +62,11 @@ export interface ApiServerOptions {
   readonly clients: ClientDirectoryLookup & RegisteredOriginLookup;
   readonly consoleClient: { readonly clientId: string };
   readonly cookieKeys: readonly string[];
+  readonly demoPlayer?: DemoPlayer;
   readonly fetchImplementation?: typeof fetch;
   readonly developerAuthentication: DeveloperAuthentication;
   readonly developers: DeveloperAccessRepository;
-  readonly developerSessions: Pick<DeveloperSessionService, 'create'>;
+  readonly developerSessions: Pick<DeveloperSessionService, 'create' | 'list' | 'revokeByKeyId'>;
   readonly httpPort: number;
   readonly icons: AppIconStore;
   readonly interactions: ApiInteractionService;
@@ -78,6 +84,7 @@ export interface ApiServerOptions {
   readonly microsoftVerification?: MicrosoftOAuthRoutesOptions['verification'];
   readonly nodeEnvironment: 'development' | 'production' | 'test';
   readonly oidcHandler: OidcHttpHandler;
+  readonly ownerUuid?: string;
   readonly rateLimitNamespace?: string;
   readonly rateLimitRedis?: Redis;
   readonly readiness: ReadinessCheck;
@@ -87,6 +94,9 @@ export interface ApiServerOptions {
 
 export async function createApiServer(options: ApiServerOptions): Promise<FastifyInstance> {
   const server = createFastifyInstance(options);
+  // Helmet's onRequest hooks must precede the canonical redirect so 308
+  // protocol-upgrade replies still carry the baseline security headers.
+  await server.register(helmet, { contentSecurityPolicy: false });
   if (options.nodeEnvironment === 'production') {
     registerCanonicalOriginRedirect(server, options.issuer);
   }
@@ -107,13 +117,40 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   await registerRateLimiting(server, options.rateLimitRedis, options.rateLimitNamespace);
   await server.register(cookie, { secret: [...options.cookieKeys] });
   await server.register(formBody);
+  // CSP violation reports arrive under their own media types; malformed bodies
+  // degrade to an empty object and the collector route still answers 204.
+  server.addContentTypeParser(
+    ['application/csp-report', 'application/reports+json'],
+    { bodyLimit: CSP_REPORT_BODY_LIMIT, parseAs: 'string' },
+    (_request, body, done) => {
+      try {
+        done(null, JSON.parse(String(body)));
+      } catch {
+        done(null, {});
+      }
+    },
+  );
   // Multipart keeps the icon form working without JavaScript; truncation lets
   // the route answer with its own HTML notice rather than a generic JSON error.
   await server.register(multipart, {
     limits: { fields: 4, fileSize: APP_ICON_MAX_BYTES, files: 1 },
     throwFileSizeLimit: false,
   });
-  await server.register(helmet, { contentSecurityPolicy: false });
+  // Helmet 8 has no Permissions-Policy plugin; the OIDC forwarder covers
+  // hijacked replies with its own baseline.
+  server.addHook('onSend', async (_request, reply): Promise<void> => {
+    if (!reply.hasHeader('permissions-policy')) {
+      void reply.header('permissions-policy', PERMISSIONS_POLICY);
+    }
+    const contentType = reply.getHeader('content-type');
+    if (
+      typeof contentType === 'string' &&
+      contentType.startsWith('text/html') &&
+      !reply.hasHeader('content-security-policy-report-only')
+    ) {
+      void reply.header('content-security-policy-report-only', PAGE_CSP_REPORT_ONLY);
+    }
+  });
 
   registerSharedSchemas(server);
   registerErrorHandling(server);
@@ -127,11 +164,16 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   if (options.minecraft !== undefined) {
     registerAvatarRoutes(server, options.minecraft);
   }
-  registerLandingRoutes(server, { showDocumentation: true });
+  registerLandingRoutes(server, {
+    showDocumentation: true,
+    ...(options.demoPlayer === undefined ? {} : { demoPlayer: options.demoPlayer }),
+  });
   registerLegalRoutes(server);
   registerDocsRoutes(server);
   registerAgentGuidanceRoutes(server);
   registerHealthRoute(server, options.readiness);
+  registerCspReportRoute(server);
+  registerSecurityTxtRoute(server);
   registerOidcHttpRoutes(server, options.oidcHandler);
   registerInteractionRoutes(server, {
     accounts: options.users,
@@ -169,6 +211,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     httpPort: options.httpPort,
     issuer: options.issuer,
     logger: server.log,
+    ...(options.ownerUuid === undefined ? {} : { ownerUuid: options.ownerUuid }),
     sessions: options.developerSessions,
     showDocumentation: true,
     users: options.users,

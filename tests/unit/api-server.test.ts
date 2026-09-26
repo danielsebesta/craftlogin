@@ -20,6 +20,7 @@ import {
   avatarRawRateLimit,
   avatarRenderRateLimit,
   playerProfileRateLimit,
+  publicOidcRateLimit,
   tokenRateLimit,
   verificationStatusRateLimit,
 } from '../../src/api/rate-limit.js';
@@ -48,6 +49,7 @@ class InteractionStub implements ApiInteractionService {
   public expectedIds: (string | undefined)[] = [];
   public skinChallenge: SkinVerificationChallenge | undefined;
   public skinUsername: string | undefined;
+  public verifiedPlayer: { uuid: string; username: string } | undefined;
 
   public abort(
     _request: IncomingMessage,
@@ -72,6 +74,7 @@ class InteractionStub implements ApiInteractionService {
     allowsSkinVerification: boolean;
     allowsOnlineVerification: boolean;
     allowsMicrosoftVerification: boolean;
+    verifiedPlayer?: { uuid: string; username: string };
   }> {
     this.expectedIds.push(expectedInteractionId);
     return Promise.resolve({
@@ -83,6 +86,7 @@ class InteractionStub implements ApiInteractionService {
       allowsOnlineVerification: true,
       allowsMicrosoftVerification: true,
       allowsSkinVerification: true,
+      ...(this.verifiedPlayer === undefined ? {} : { verifiedPlayer: this.verifiedPlayer }),
       ...(this.skinChallenge === undefined
         ? {}
         : {
@@ -138,6 +142,16 @@ class InteractionStub implements ApiInteractionService {
   ): Promise<VerificationStatus> {
     this.expectedIds.push(expectedInteractionId);
     return Promise.resolve(this.statusValue);
+  }
+
+  public resetVerification(
+    _request: IncomingMessage,
+    _response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<void> {
+    this.expectedIds.push(expectedInteractionId);
+    this.verifiedPlayer = undefined;
+    return Promise.resolve();
   }
 
   public status(
@@ -230,7 +244,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers['cache-control']).toBe('public, max-age=300');
     expect(response.body).toContain('<main id="main" class="page-backdrop container">');
     expect(response.body).toContain(
-      '<h1 id="hero-heading">Let your users log in with Minecraft</h1>',
+      '<h1 id="hero-heading">Let your players log in with Minecraft</h1>',
     );
     expect(response.body).toContain('landing-steps');
     expect(response.body).toContain('href="/docs/"');
@@ -403,6 +417,75 @@ describe('CraftLogin API server', (): void => {
         { sizes: '512x512', src: '/web-app-manifest-512x512.webp' },
       ],
     });
+  });
+
+  it('applies baseline security headers to provider-written OIDC responses', async (): Promise<void> => {
+    const server = await buildServer('test', new InteractionStub());
+    const urls = [
+      '/oauth2/authorize',
+      '/oauth2/introspect',
+      '/oauth2/jwks',
+      '/oauth2/userinfo',
+      '/oauth2/revoke',
+      '/oauth2/logout',
+      '/oauth2/token',
+      '/.well-known/openid-configuration',
+      '/.well-known/oauth-authorization-server',
+      '/.well-known/webfinger',
+    ];
+    const methods = new Map<string, readonly ('GET' | 'POST')[]>([
+      ['/oauth2/introspect', ['POST']],
+      ['/oauth2/logout', ['GET', 'POST']],
+      ['/oauth2/revoke', ['POST']],
+      ['/oauth2/token', ['POST']],
+      ['/oauth2/userinfo', ['GET', 'POST']],
+    ]);
+    for (const url of urls) {
+      for (const method of methods.get(url) ?? ['GET']) {
+        const response = await server.inject({ method, url });
+        expect(response.statusCode, `${method} ${url}`).toBe(200);
+        expect(response.headers['strict-transport-security']).toBe(
+          'max-age=31536000; includeSubDomains',
+        );
+        expect(response.headers['x-content-type-options']).toBe('nosniff');
+        expect(response.headers['x-frame-options']).toBe('DENY');
+        expect(response.headers['referrer-policy']).toBe('no-referrer');
+        expect(response.headers['cross-origin-opener-policy']).toBe('same-origin');
+        expect(response.headers['permissions-policy']).toContain('camera=()');
+        expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+      }
+    }
+
+    // Permissions-Policy reaches normal replies through the global onSend hook.
+    const health = await server.inject({ method: 'GET', url: '/health' });
+    expect(health.statusCode).toBe(200);
+    expect(health.headers['permissions-policy']).toContain('camera=()');
+  });
+
+  it('keeps provider-written headers ahead of the baseline', async (): Promise<void> => {
+    const server = await buildServer(
+      'test',
+      new InteractionStub(),
+      [],
+      (_request, response): void => {
+        response.statusCode = 200;
+        response.setHeader(
+          'content-security-policy',
+          "default-src 'self'; style-src 'self' 'unsafe-inline'",
+        );
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        response.end('{}');
+      },
+    );
+    const response = await server.inject({ method: 'GET', url: '/oauth2/jwks' });
+    expect(response.statusCode).toBe(200);
+    // The provider's own CSP must not be clobbered by the restrictive baseline.
+    expect(response.headers['content-security-policy']).toBe(
+      "default-src 'self'; style-src 'self' 'unsafe-inline'",
+    );
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
   });
 
   it('serves agent-ready OIDC integration guidance', async (): Promise<void> => {
@@ -606,7 +689,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.headers.location).toBe('/interaction/interaction-id');
   });
 
-  it('completes Microsoft verification with signed state and the same OIDC completion path', async (): Promise<void> => {
+  it('completes Microsoft verification with signed state and the shared confirmation screen', async (): Promise<void> => {
     const interactions = new InteractionStub();
     const microsoft = new MicrosoftVerificationStub();
     const server = await buildServer('test', interactions, [], undefined, undefined, microsoft);
@@ -633,17 +716,26 @@ describe('CraftLogin API server', (): void => {
       method: 'GET',
       url: `/interaction/microsoft/callback?code=microsoft-code&state=${encodeURIComponent(state ?? '')}`,
     });
-    expect(callback.statusCode).toBe(200);
-    expect(callback.headers['cache-control']).toBe('no-store');
-    expect(callback.headers['content-security-policy']).toContain("default-src 'none'");
-    expect(callback.body).toContain('Java Edition owner');
-    expect(callback.body).toContain('VerifiedPlayer');
-    expect(callback.body).toContain('action="/interaction/interaction-id/complete"');
+    // A successful Microsoft verification converges on the same confirm/not-you
+    // page as the online-mode and skin flows.
+    expect(callback.statusCode).toBe(303);
+    expect(callback.headers.location).toBe('/interaction/interaction-id');
     expect(microsoft.verificationInput).toMatchObject({
       authorizationCode: 'microsoft-code',
       interactionId: 'interaction-id',
     });
     expect(microsoft.verificationInput?.codeVerifier).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+
+    interactions.verifiedPlayer = { uuid: avatarUuid, username: 'VerifiedPlayer' };
+    const page = await server.inject({ method: 'GET', url: '/interaction/interaction-id' });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers['cache-control']).toBe('no-store');
+    expect(page.body).toContain('Is this you?');
+    expect(page.body).toContain('VerifiedPlayer');
+    expect(page.body).toContain('action="/interaction/interaction-id/not-you"');
+    expect(page.body).toContain('action="/interaction/interaction-id/complete"');
+    expect(page.body).not.toContain('method-picker');
+    expect(page.body).not.toContain('signin-address');
 
     interactions.completion = { status: 'complete', redirectTo: '/oauth2/authorize/resume-id' };
     const completed = await server.inject({
@@ -758,6 +850,49 @@ describe('CraftLogin API server', (): void => {
     expect(callback.body).toContain('Java Edition ownership not found');
     expect(callback.body).toContain('href="/interaction/interaction-id/microsoft/start"');
     expect(callback.body).toContain('Microsoft, Xbox Live, XSTS, and Minecraft access tokens');
+  });
+
+  it('shows the verified identity for explicit confirmation on the shared screen', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.verifiedPlayer = { uuid: avatarUuid, username: 'VerifiedPlayer' };
+    const server = await buildServer('test', interactions);
+
+    const page = await server.inject({ method: 'GET', url: '/interaction/interaction-id' });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers['cache-control']).toBe('no-store');
+    expect(page.headers['content-security-policy']).toContain("default-src 'none'");
+    // The confirmation shows the server-verified identity, never a submitted one.
+    expect(page.body).toContain('Is this you?');
+    expect(page.body).toContain(`Signed in as`);
+    expect(page.body).toContain('<bdi>VerifiedPlayer</bdi>');
+    expect(page.body).toContain(`/api/avatars/${avatarUuid}/face`);
+    expect(page.body).toContain('action="/interaction/interaction-id/complete"');
+    expect(page.body).toContain('action="/interaction/interaction-id/not-you"');
+    // Method panels stay hidden while the confirmation is up.
+    expect(page.body).not.toContain('method-picker');
+    expect(page.body).not.toContain('signin-address');
+    expect(page.body).not.toContain('skin-verification');
+    expect(page.body).not.toContain('microsoft-verification');
+  });
+
+  it('restarts verification when the confirmed identity is rejected', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.verifiedPlayer = { uuid: avatarUuid, username: 'VerifiedPlayer' };
+    const server = await buildServer('test', interactions);
+
+    const rejected = await server.inject({
+      method: 'POST',
+      url: '/interaction/interaction-id/not-you',
+    });
+    expect(rejected.statusCode).toBe(303);
+    expect(rejected.headers.location).toBe('/interaction/interaction-id');
+    expect(interactions.expectedIds).toContain('interaction-id');
+    expect(interactions.verifiedPlayer).toBeUndefined();
+
+    // The same page now offers the verification methods again.
+    const page = await server.inject({ method: 'GET', url: '/interaction/interaction-id' });
+    expect(page.body).toContain('method-picker');
+    expect(page.body).toContain('ABCDEFGH.craftlogin.com');
   });
 
   it('denies the request through the abort endpoint with a client redirect', async (): Promise<void> => {
@@ -977,6 +1112,42 @@ describe('CraftLogin API server', (): void => {
     expect(response.json()).toEqual({
       associatedApplications: [{ applicationId: '7f143b3d-bf80-4896-86ee-bd902f90ca63' }],
     });
+  });
+
+  it('serves the security.txt disclosure document', async (): Promise<void> => {
+    const server = await buildServer('test', new InteractionStub());
+    const response = await server.inject({
+      method: 'GET',
+      url: '/.well-known/security.txt',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toMatch(/^text\/plain/u);
+    expect(response.body).toContain('Contact: https://');
+    expect(response.body).toContain('Expires: ');
+  });
+
+  it('marks HTML responses with a report-only CSP and accepts violation reports', async (): Promise<void> => {
+    const server = await buildServer('test', new InteractionStub());
+
+    const page = await server.inject({ method: 'GET', url: '/' });
+    expect(page.headers['content-security-policy-report-only']).toContain('report-uri');
+    expect(page.headers['content-security-policy-report-only']).toContain('/api/csp-report');
+
+    const cases: [string, string][] = [
+      ['application/csp-report', '{"csp-report":{"violated-directive":"img-src"}}'],
+      ['application/reports+json', '[{"type":"csp-violation","body":{}}]'],
+      ['application/csp-report', 'not-json'],
+    ];
+    for (const [contentType, payload] of cases) {
+      const report = await server.inject({
+        headers: { 'content-type': contentType },
+        method: 'POST',
+        payload,
+        url: '/api/csp-report',
+      });
+      expect(report.statusCode).toBe(204);
+    }
   });
 
   it('rejects malformed app registration before calling its service', async (): Promise<void> => {
@@ -1229,6 +1400,16 @@ describe('CraftLogin API server', (): void => {
     expectRateLimited(limitedAuthorize);
     expect(oidcCalls).toBe(tokenRateLimit.max + authorizeRateLimit.max);
 
+    for (let index = 0; index < publicOidcRateLimit.max; index += 1) {
+      const response = await server.inject({ method: 'GET', url: '/oauth2/jwks' });
+      expect(response.statusCode).toBe(200);
+    }
+    const limitedJwks = await server.inject({ method: 'GET', url: '/oauth2/jwks' });
+    expectRateLimited(limitedJwks);
+    // The public bucket is shared across the cheap unauthenticated OIDC endpoints.
+    const limitedUserinfo = await server.inject({ method: 'GET', url: '/oauth2/userinfo' });
+    expectRateLimited(limitedUserinfo);
+
     for (let index = 0; index < avatarRenderRateLimit.max; index += 1) {
       const response = await server.inject({
         headers: { origin: 'https://attacker.example' },
@@ -1350,6 +1531,8 @@ describe('CraftLogin API server', (): void => {
         create: (): never => {
           throw new Error('Unexpected developer session creation');
         },
+        list: (): Promise<never[]> => Promise.resolve([]),
+        revokeByKeyId: (): Promise<boolean> => Promise.resolve(false),
       },
       developers: {
         find: (): Promise<undefined> => Promise.resolve(undefined),

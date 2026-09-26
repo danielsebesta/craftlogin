@@ -174,20 +174,15 @@ export function registerMicrosoftOAuthRoutes(
       }
 
       try {
-        const identity = await options.verification.verify(
+        await options.verification.verify(
           transaction.interactionId,
           authorizationCode,
           transaction.codeVerifier,
         );
-        setResultHeaders(reply);
-        await reply.type('text/html; charset=utf-8').send(
-          renderMicrosoftOAuthResultPage({
-            homeUrl,
-            interactionId: transaction.interactionId,
-            kind: 'success',
-            username: identity.player.username,
-          }),
-        );
+        // Success converges on the shared confirm/not-you screen with the
+        // online-mode and skin flows; the interaction page shows the verified
+        // identity and completes only after an explicit continue.
+        await reply.redirect(homeUrl, 303);
       } catch (error: unknown) {
         if (error instanceof MicrosoftJavaOwnershipRequiredError) {
           setResultHeaders(reply);

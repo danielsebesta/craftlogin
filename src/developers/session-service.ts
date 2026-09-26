@@ -23,11 +23,21 @@ export interface DeveloperSessionLogger {
   warn(bindings: SessionSignal & { readonly event: string }, message: string): void;
 }
 
+export interface DeveloperSessionView {
+  readonly current: boolean;
+  readonly expiresInSeconds: number;
+  readonly ipAddress: string;
+  readonly issuedAtMilliseconds: number;
+  readonly role: DeveloperRole;
+  readonly sessionKeyId: string;
+  readonly userAgent: string;
+}
+
 export class DeveloperSessionService {
   public constructor(
     private readonly sessions: Pick<
       RedisDeveloperSessionStore,
-      'create' | 'read' | 'revoke' | 'rotateRole'
+      'create' | 'keyIdFor' | 'listForUser' | 'read' | 'revoke' | 'revokeByKeyId' | 'rotateRole'
     >,
     private readonly developers: Pick<DeveloperAccessRepository, 'find'>,
     private readonly logger: DeveloperSessionLogger,
@@ -104,6 +114,31 @@ export class DeveloperSessionService {
 
   public async revoke(sessionId: string): Promise<void> {
     await this.sessions.revoke(sessionId);
+  }
+
+  public async list(userUuid: string, currentSessionId: string): Promise<DeveloperSessionView[]> {
+    const sessions = await this.sessions.listForUser(userUuid);
+    const currentKeyId = this.sessions.keyIdFor(currentSessionId);
+    return sessions.map((session): DeveloperSessionView => ({
+      current: session.sessionKeyId === currentKeyId,
+      expiresInSeconds: session.expiresInSeconds,
+      ipAddress: session.ipAddress,
+      issuedAtMilliseconds: session.issuedAtMilliseconds,
+      role: session.role,
+      sessionKeyId: session.sessionKeyId,
+      userAgent: session.userAgent,
+    }));
+  }
+
+  // Revocation is scoped to the caller's own index so a developer can only
+  // ever drop their own sessions.
+  public async revokeByKeyId(userUuid: string, sessionKeyId: string): Promise<boolean> {
+    const owned = await this.sessions.listForUser(userUuid);
+    if (!owned.some((session): boolean => session.sessionKeyId === sessionKeyId)) {
+      return false;
+    }
+    await this.sessions.revokeByKeyId(sessionKeyId);
+    return true;
   }
 
   public verifyCsrf(sessionId: string, candidate: string): boolean {

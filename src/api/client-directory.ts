@@ -93,7 +93,12 @@ export class PrismaClientDirectory implements ClientDirectoryLookup, RegisteredO
   }
 
   private async scanOrigins(): Promise<ReadonlySet<string>> {
-    const clients = await this.database.app.findMany({ select: { redirectUris: true } });
+    // A hard ceiling keeps the periodic rescan bounded if the registry ever
+    // grows unexpectedly; truncation fails closed (fewer allowed origins).
+    const clients = await this.database.app.findMany({
+      select: { redirectUris: true },
+      take: 10_000,
+    });
     const origins = new Set<string>();
     for (const client of clients) {
       for (const redirectUri of client.redirectUris) {

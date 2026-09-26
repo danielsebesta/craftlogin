@@ -28,7 +28,6 @@ export interface SignInCancel {
 
 export interface SignInVerification {
   readonly address?: string;
-  readonly addressLabel?: string;
   readonly initialStatus: string;
   readonly initialStatusState: string;
   readonly statusUrl: string;
@@ -56,6 +55,7 @@ export interface SignInSkinChallenge {
 export interface SignInSkinVerification {
   readonly accountLabel: string;
   readonly accountPlaceholder: string;
+  readonly avatarUrlTemplate?: string;
   readonly challenge?: SignInSkinChallenge;
   readonly error?: string;
   readonly heading: string;
@@ -82,6 +82,15 @@ export interface SignInMicrosoftVerification {
 export interface SignInOwner {
   readonly avatarUrl: string;
   readonly name: string;
+}
+
+export interface SignInVerifiedIdentity {
+  readonly avatarUrl?: string;
+  readonly heading: string;
+  readonly lead: string;
+  readonly name: string;
+  readonly notYou: SignInCancel;
+  readonly signedInAsLabel: string;
 }
 
 export interface SignInPageInput {
@@ -122,6 +131,7 @@ export interface SignInPageInput {
   readonly skinVerification?: SignInSkinVerification;
   readonly switchAccount?: SignInCancel;
   readonly verification?: SignInVerification;
+  readonly verifiedIdentity?: SignInVerifiedIdentity;
 }
 
 function renderPermission(permission: ConsentPermission): string {
@@ -165,6 +175,22 @@ function renderAccountChip(input: SignInPageInput): string {
           <p class="account-chip">${avatar}<span><span class="visually-hidden">${escapeHtml(input.accountLabel)} </span><span class="account-chip-name">${escapeHtml(input.accountName)}</span></span></p>`;
 }
 
+function renderVerifiedIdentity(identity: SignInVerifiedIdentity | undefined): string {
+  if (identity === undefined) {
+    return '';
+  }
+  const avatar =
+    identity.avatarUrl === undefined
+      ? ''
+      : `<img class="account-chip-avatar" src="${escapeHtml(identity.avatarUrl)}" alt="" width="32" height="32" decoding="async">`;
+  return `
+        <section class="verified-confirmation" aria-labelledby="verified-confirmation-heading">
+          <h2 class="icon-heading" id="verified-confirmation-heading">${renderIcon('user', 'heading-icon')}${escapeHtml(identity.heading)}</h2>
+          <p class="account-chip">${avatar}<span><span class="visually-hidden">${escapeHtml(identity.signedInAsLabel)} </span><span class="account-chip-name"><bdi>${escapeHtml(identity.name)}</bdi></span></span></p>
+          <p class="field-hint">${escapeHtml(identity.lead)}</p>
+        </section>`;
+}
+
 function renderOwner(input: SignInPageInput): string {
   const owner = input.owner;
   if (owner === undefined) {
@@ -188,10 +214,9 @@ function renderVerification(input: SignInPageInput): string {
             ${verification.steps.map((step): string => `<li>${escapeHtml(step)}</li>`).join('\n            ')}
           </ol>`;
   const address =
-    verification.addressLabel === undefined || verification.address === undefined
+    verification.address === undefined
       ? ''
       : `
-          <h2 id="address-heading">${escapeHtml(verification.addressLabel)}</h2>
           <div class="signin-address-row">
             <code class="signin-address" data-address>${escapeHtml(verification.address)}</code>
             <button type="button" class="button button-secondary" data-copy-target="[data-address]" data-copied-label="${escapeHtml(input.copiedLabel)}" hidden>${renderIcon('code', 'button-icon')}${escapeHtml(input.copyLabel)}</button>
@@ -235,13 +260,16 @@ function renderSkinVerification(input: SignInSkinVerification | undefined): stri
   const challengeMarkup =
     challenge === undefined
       ? `
-          <form class="field" action="${escapeHtml(input.startAction)}" method="post" data-skin-lookup${input.lookupUrl === undefined ? '' : ` data-lookup-url="${escapeHtml(input.lookupUrl)}"`} data-lookup-found-message="${escapeHtml(input.lookupFoundMessage ?? '')}" data-lookup-not-found-message="${escapeHtml(input.lookupNotFoundMessage ?? '')}" data-lookup-skin-message="${escapeHtml(input.lookupSkinMessage ?? '')}" data-lookup-unavailable-message="${escapeHtml(input.lookupUnavailableMessage ?? '')}">
+          <form class="field" action="${escapeHtml(input.startAction)}" method="post" data-skin-lookup${input.lookupUrl === undefined ? '' : ` data-lookup-url="${escapeHtml(input.lookupUrl)}"`}${input.avatarUrlTemplate === undefined ? '' : ` data-avatar-url-template="${escapeHtml(input.avatarUrlTemplate)}"`} data-lookup-found-message="${escapeHtml(input.lookupFoundMessage ?? '')}" data-lookup-not-found-message="${escapeHtml(input.lookupNotFoundMessage ?? '')}" data-lookup-skin-message="${escapeHtml(input.lookupSkinMessage ?? '')}" data-lookup-unavailable-message="${escapeHtml(input.lookupUnavailableMessage ?? '')}">
             <label for="skin-username">${escapeHtml(input.accountLabel)}</label>
             <div class="input-action-row">
               <input id="skin-username" name="username" type="text" minlength="3" maxlength="16" pattern="[A-Za-z0-9_]+" placeholder="${escapeHtml(input.accountPlaceholder)}" autocomplete="username" required data-skin-username>
               <button class="button button-secondary" type="submit" data-skin-start>${renderIcon('user', 'button-icon')}${escapeHtml(input.startLabel)}</button>
             </div>
-            <p class="field-hint" data-skin-lookup-status role="status" aria-live="polite"></p>
+            <div class="skin-lookup-result">
+              <img class="skin-lookup-avatar" data-skin-avatar alt="" width="40" height="40" decoding="async" hidden>
+              <p class="field-hint" data-skin-lookup-status role="status" aria-live="polite"></p>
+            </div>
           </form>`
       : `
           <dl class="summary-list">
@@ -311,6 +339,10 @@ export function renderSignInPage(input: SignInPageInput): string {
           state: 'verified',
         })
       : '';
+  const appIcon =
+    input.appIconUrl === undefined
+      ? ''
+      : `<img class="consent-app-icon" src="${escapeHtml(input.appIconUrl)}" alt="" width="64" height="64" decoding="async">`;
   const headingPrefix =
     input.appName === undefined
       ? escapeHtml(input.heading)
@@ -318,7 +350,7 @@ export function renderSignInPage(input: SignInPageInput): string {
   const headingSuffix =
     input.appName === undefined
       ? ''
-      : `<span class="consent-app">${input.appIconUrl === undefined ? '' : `<img class="consent-app-icon" src="${escapeHtml(input.appIconUrl)}" alt="" width="32" height="32" decoding="async">`}<bdi>${escapeHtml(input.appName)}</bdi>${verifiedBadge}</span>`;
+      : `<span class="consent-app"><bdi>${escapeHtml(input.appName)}</bdi>${verifiedBadge}</span>`;
   const securityNote =
     input.securityNote === undefined
       ? ''
@@ -326,7 +358,7 @@ export function renderSignInPage(input: SignInPageInput): string {
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="${SIGN_IN_HEADING_ID}">
         <div class="consent-identity">
-          <div class="consent-title">
+          ${appIcon}<div class="consent-title">
             <h1 id="${SIGN_IN_HEADING_ID}">${headingPrefix}${headingSuffix}</h1>
             ${renderOwner(input)}
             <p class="lead">${escapeHtml(input.lead)}</p>
@@ -350,8 +382,8 @@ export function renderSignInPage(input: SignInPageInput): string {
             </ul>
           </div>`
           }
-        </div>${renderMethodChooser(input)}${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
-        <div class="consent-actions">${renderFormAction(input.cancel)}${renderFormAction(input.switchAccount)}
+        </div>${renderVerifiedIdentity(input.verifiedIdentity)}${renderMethodChooser(input)}${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
+        <div class="consent-actions">${renderFormAction(input.cancel)}${renderFormAction(input.switchAccount)}${renderFormAction(input.verifiedIdentity?.notYou)}
           <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
             <button class="button" type="submit">${renderIcon('login', 'button-icon')}${escapeHtml(input.continueLabel)}</button>
           </form>

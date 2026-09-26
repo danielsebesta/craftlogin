@@ -119,7 +119,11 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
       requireCsrf: (): void => undefined,
     },
     consoleClient: { clientId: 'cl_rate-limit-test-console' },
-    developerSessions: { create: unavailable },
+    developerSessions: {
+      create: unavailable,
+      list: (): Promise<never[]> => Promise.resolve([]),
+      revokeByKeyId: (): Promise<boolean> => Promise.resolve(false),
+    },
     developers: {
       find: unavailable,
       grant: unavailable,
@@ -131,6 +135,7 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
     interactions: {
       abort: unavailable,
       complete: unavailable,
+      resetVerification: unavailable,
       start: unavailable,
       status: unavailable,
     },

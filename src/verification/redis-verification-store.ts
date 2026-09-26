@@ -96,6 +96,7 @@ if remainingTtl <= 0 then
 end
 redis.call('HSET', KEYS[2], 'status', 'processing', 'claimId', ARGV[2])
 redis.call('HDEL', KEYS[2], 'code')
+redis.call('DEL', KEYS[1])
 if remainingTtl < tonumber(ARGV[3]) then
   redis.call('PEXPIRE', KEYS[2], ARGV[3])
 end
@@ -201,6 +202,17 @@ if userUuid == false or username == false or resolvedAt == false then
 end
 redis.call('HSET', KEYS[1], 'status', 'finalizing', 'finishClaimId', ARGV[1])
 return { userUuid, username, resolvedAt, method }
+`;
+
+// "Not you" discards a verified identity: the whole record is deleted so the
+// interaction falls back to a fresh pending allocation with a new code. The
+// claim already removed the code key, so only the interaction key goes away.
+const RESET_VERIFIED_SCRIPT = `
+if redis.call('HGET', KEYS[1], 'status') ~= 'verified' then
+  return 0
+end
+redis.call('DEL', KEYS[1])
+return 1
 `;
 
 const COMPLETE_FINALIZATION_SCRIPT = `
@@ -458,6 +470,15 @@ export class RedisVerificationStore {
   public async releaseFinalization(claim: VerificationFinalizationClaim): Promise<boolean> {
     const result = scriptBooleanSchema.parse(
       await this.redis.eval(RELEASE_FINALIZATION_SCRIPT, 1, claim.interactionKey, claim.claimId),
+    );
+    return result === 1;
+  }
+
+  public async reset(interactionIdInput: string): Promise<boolean> {
+    const interactionId = interactionIdSchema.parse(interactionIdInput);
+    const interactionKey = this.interactionKey(this.interactionKeyId(interactionId));
+    const result = scriptBooleanSchema.parse(
+      await this.redis.eval(RESET_VERIFIED_SCRIPT, 1, interactionKey),
     );
     return result === 1;
   }

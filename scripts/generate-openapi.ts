@@ -37,7 +37,11 @@ async function generate(): Promise<void> {
       requireCsrf: unavailable,
     },
     consoleClient: { clientId: 'cl_openapi-test-console' },
-    developerSessions: { create: unavailable },
+    developerSessions: {
+      create: unavailable,
+      list: (): Promise<never[]> => Promise.resolve([]),
+      revokeByKeyId: (): Promise<boolean> => Promise.resolve(false),
+    },
     developers: {
       find: unavailable,
       grant: unavailable,
@@ -50,6 +54,7 @@ async function generate(): Promise<void> {
       abort: unavailable,
       complete: unavailable,
       prepareMicrosoft: unavailable,
+      resetVerification: unavailable,
       start: unavailable,
       status: unavailable,
     },

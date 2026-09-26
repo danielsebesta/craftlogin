@@ -13,16 +13,27 @@ import { renderIcon } from './ui/icons.js';
  */
 export function renderAutoForwardPage(targetUrl: string): string {
   const strings = english.interaction;
+  // Callers already pass provider-validated targets (a registered https
+  // redirect URI or an issuer-origin returnTo); the scheme check is a second
+  // line so a javascript:/data: URL can never become a clickable or
+  // meta-refresh navigation if a future caller misuses the page.
+  const parsed = URL.parse(targetUrl);
+  const safeTarget =
+    targetUrl.startsWith('/') && !targetUrl.startsWith('//')
+      ? targetUrl
+      : parsed !== null && (parsed.protocol === 'https:' || parsed.protocol === 'http:')
+        ? targetUrl
+        : '/';
   return renderPageDocument({
     content: `      <section class="card consent-card" aria-labelledby="forward-heading">
         <h1 class="icon-heading" id="forward-heading">${renderIcon('login', 'heading-icon')}${escapeHtml(strings.forwardHeading)}</h1>
         <p class="lead">${escapeHtml(strings.forwardHint)}</p>
         <div class="consent-actions">
-          <a class="button" href="${escapeHtml(targetUrl)}">${renderIcon('login', 'button-icon')}${escapeHtml(strings.forwardAction)}</a>
+          <a class="button" href="${escapeHtml(safeTarget)}">${renderIcon('login', 'button-icon')}${escapeHtml(strings.forwardAction)}</a>
         </div>
       </section>`,
     footer: [strings.footer],
-    headExtra: `<meta http-equiv="refresh" content="0;url=${escapeHtml(targetUrl)}">`,
+    headExtra: `<meta http-equiv="refresh" content="0;url=${escapeHtml(safeTarget)}">`,
     header: { brand: strings.brand },
     layout: 'narrow',
     mainClass: 'page-column signin',

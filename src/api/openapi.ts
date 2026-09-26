@@ -29,6 +29,7 @@ const PUBLIC_PATHS = new Set([
   '/oauth2/introspect',
   '/oauth2/jwks',
   '/oauth2/logout',
+  '/oauth2/par',
   '/oauth2/revoke',
   '/oauth2/token',
   '/oauth2/userinfo',

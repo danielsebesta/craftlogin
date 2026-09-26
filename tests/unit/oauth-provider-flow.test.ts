@@ -1,4 +1,10 @@
-import { createHash, generateKeyPairSync } from 'node:crypto';
+import {
+  createHash,
+  generateKeyPairSync,
+  randomUUID,
+  sign as cryptoSign,
+  type KeyObject,
+} from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 
 import type { FastifyInstance } from 'fastify';
@@ -141,7 +147,7 @@ class VerifiedInteractionStore {
     return Promise.resolve(true);
   }
 
-  public getStatus(): Promise<
+  public getStatus(interactionId: string): Promise<
     | { status: 'pending'; code: string }
     | {
         status: 'verified';
@@ -149,8 +155,9 @@ class VerifiedInteractionStore {
         resolvedAt: string;
       }
   > {
+    // Verification state is bound to one interaction, matching the real store.
     return Promise.resolve(
-      this.verified
+      this.verified && interactionId === this.interactionId
         ? {
             status: 'verified',
             player: { uuid: accountId, username: 'VerifiedPlayer' },
@@ -162,6 +169,14 @@ class VerifiedInteractionStore {
 
   public releaseFinalization(): Promise<boolean> {
     this.claimed = false;
+    return Promise.resolve(true);
+  }
+
+  public reset(interactionId: string): Promise<boolean> {
+    if (!this.verified || interactionId !== this.interactionId) {
+      return Promise.resolve(false);
+    }
+    this.verified = false;
     return Promise.resolve(true);
   }
 }
@@ -269,7 +284,11 @@ describe('CraftLogin OIDC provider', (): void => {
         requireCsrf: unavailable,
       },
       consoleClient: { clientId: 'cl_oauth-flow-test-console' },
-      developerSessions: { create: unavailable },
+      developerSessions: {
+        create: unavailable,
+        list: (): Promise<never[]> => Promise.resolve([]),
+        revokeByKeyId: (): Promise<boolean> => Promise.resolve(false),
+      },
       developers: {
         find: unavailable,
         grant: unavailable,
@@ -536,12 +555,16 @@ describe('CraftLogin OIDC provider', (): void => {
     const discovery = z
       .object({
         acr_values_supported: z.array(z.string()),
+        dpop_signing_alg_values_supported: z.array(z.string()),
         end_session_endpoint: z.string(),
         introspection_endpoint: z.string(),
+        pushed_authorization_request_endpoint: z.string(),
       })
       .parse(await discoveryResponse.json());
     expect(discovery.end_session_endpoint).toBe(`${issuer}/oauth2/logout`);
     expect(discovery.introspection_endpoint).toBe(`${issuer}/oauth2/introspect`);
+    expect(discovery.dpop_signing_alg_values_supported).toContain('ES256');
+    expect(discovery.pushed_authorization_request_endpoint).toBe(`${issuer}/oauth2/par`);
     expect(discovery.acr_values_supported).toEqual([
       'urn:craftlogin:minecraft-online-mode',
       'urn:craftlogin:minecraft-profile-skin',
@@ -554,6 +577,255 @@ describe('CraftLogin OIDC provider', (): void => {
     });
     expect(logoutPage.status).toBe(200);
     expect(await logoutPage.text()).toContain('Sign out of CraftLogin?');
+  }, 20_000);
+
+  it('accepts a pushed authorization request once and binds tokens to DPoP proofs', async (): Promise<void> => {
+    const port = await findAvailablePort();
+    const issuer = `http://127.0.0.1:${port.toString()}`;
+    const adapter = createTestAdapter({ 'public-client': publicClient() });
+    const provider = createCraftLoginProvider({
+      adapter,
+      cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      findAccount: (_context, subject) =>
+        Promise.resolve(
+          subject === accountId
+            ? {
+                accountId,
+                claims: (): {
+                  picture: string;
+                  preferred_username: string;
+                  sub: string;
+                } => ({
+                  picture: 'https://craftlogin.test/avatar/player',
+                  preferred_username: 'VerifiedPlayer',
+                  sub: accountId,
+                }),
+              }
+            : undefined,
+        ),
+      issuer,
+      jwks: { keys: [createSigningKey()] },
+      renderError: renderAuthorizationError,
+    });
+    provider.proxy = true;
+    const verification = new VerifiedInteractionStore();
+    const interactions = new OAuthInteractionService(
+      new ProviderInteractionGateway(provider),
+      verification,
+      { error: (): void => undefined },
+      undefined,
+      true,
+    );
+    server = await createApiServer({
+      icons: { findIcon: unavailable },
+      accessTokens: new ProviderAccessTokenAuthenticator(provider),
+      appManager: {
+        decideVerification: unavailable,
+        list: unavailable,
+        remove: unavailable,
+        removeIcon: unavailable,
+        setIcon: unavailable,
+        requestVerification: unavailable,
+      },
+      apps: { register: unavailable },
+      clients: {
+        findClient: (): Promise<undefined> => Promise.resolve(undefined),
+        findClientOwnerUuid: (): Promise<undefined> => Promise.resolve(undefined),
+        isAllowedOrigin: (): Promise<boolean> => Promise.resolve(false),
+      },
+      cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      developerAuthentication: {
+        authenticate: unavailable,
+        logout: unavailable,
+        require: unavailable,
+        requireAdministrator: unavailable,
+        requireCsrf: unavailable,
+      },
+      consoleClient: { clientId: 'cl_oauth-flow-test-console' },
+      developerSessions: {
+        create: unavailable,
+        list: (): Promise<never[]> => Promise.resolve([]),
+        revokeByKeyId: (): Promise<boolean> => Promise.resolve(false),
+      },
+      developers: {
+        find: unavailable,
+        grant: unavailable,
+        list: unavailable,
+        revoke: unavailable,
+        setVerified: unavailable,
+      },
+      httpPort: port,
+      interactions,
+      issuer,
+      minecraftBaseDomain: 'craftlogin.com',
+      nodeEnvironment: 'test',
+      oidcHandler: provider.callback(),
+      readiness: { check: (): Promise<void> => Promise.resolve() },
+      trustProxy: true,
+      users: {
+        findCurrentUser: (uuid) =>
+          Promise.resolve(
+            uuid === accountId ? { username: 'VerifiedPlayer', uuid: accountId } : undefined,
+          ),
+      },
+    });
+    await server.listen({ host: '127.0.0.1', port });
+
+    const parResponse = await fetch(new URL('/oauth2/par', issuer), {
+      body: new URLSearchParams({
+        client_id: 'public-client',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'openid offline_access profile',
+        state: 'par-state',
+      }),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-proto': 'https',
+      },
+      method: 'POST',
+    });
+    expect(parResponse.status).toBe(201);
+    const par = z
+      .object({ expires_in: z.number(), request_uri: z.string() })
+      .parse(await parResponse.json());
+    expect(par.request_uri.startsWith('urn:ietf:params:oauth:request_uri:')).toBe(true);
+
+    const authorizeUrl = new URL('/oauth2/authorize', issuer);
+    authorizeUrl.search = new URLSearchParams({
+      client_id: 'public-client',
+      request_uri: par.request_uri,
+    }).toString();
+    const authorizationResponse = await fetch(authorizeUrl, {
+      headers: proxyHeaders(),
+      redirect: 'manual',
+    });
+    if (authorizationResponse.status !== 303) {
+      throw new Error(
+        `PAR authorization failed with ${authorizationResponse.status.toString()}: ${await authorizationResponse.text()}`,
+      );
+    }
+    const interactionLocation = requiredLocation(authorizationResponse);
+    const cookies = responseCookies(authorizationResponse);
+
+    // Rendering the interaction allocates its verification record.
+    const interactionResponse = await fetch(localTestUrl(interactionLocation, issuer), {
+      headers: proxyHeaders(cookies),
+    });
+    expect(interactionResponse.status).toBe(200);
+
+    verification.verified = true;
+    const completionResponse = await fetch(
+      interactionChildUrl(interactionLocation, 'complete', issuer),
+      {
+        headers: proxyHeaders(cookies),
+        method: 'POST',
+        redirect: 'manual',
+      },
+    );
+    expect(completionResponse.status).toBe(200);
+    const forwardTarget = forwardTargetUrl(await completionResponse.text());
+    const resumeResponse = await fetch(localTestUrl(forwardTarget, issuer), {
+      headers: proxyHeaders(cookies),
+      redirect: 'manual',
+    });
+    const callback = new URL(requiredLocation(resumeResponse));
+    expect(callback.searchParams.get('state')).toBe('par-state');
+    const authorizationCode = callback.searchParams.get('code');
+    if (authorizationCode === null) {
+      throw new Error('PAR flow did not yield an authorization code');
+    }
+
+    // The pushed request is consumed when the authorization issues, so a
+    // replayed request_uri must be rejected now.
+    const parReplay = await fetch(authorizeUrl, {
+      headers: proxyHeaders(),
+      redirect: 'manual',
+    });
+    if (parReplay.status === 303) {
+      expect(new URL(requiredLocation(parReplay), issuer).searchParams.get('error')).toBe(
+        'invalid_request_uri',
+      );
+    } else {
+      expect(parReplay.status).toBe(400);
+      expect(await parReplay.text()).toContain('invalid_request_uri');
+    }
+
+    const dpopKeyPair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const dpopJwk = dpopKeyPair.publicKey.export({ format: 'jwk' });
+    const publicJwk = { crv: dpopJwk.crv, kty: dpopJwk.kty, x: dpopJwk.x, y: dpopJwk.y };
+    // The proof's htu must equal the URL the provider observes: the forwarded
+    // proto makes it https even though the test listener is plain http.
+    const forwardedIssuer = issuer.replace('http://', 'https://');
+    const tokenUrl = `${issuer}/oauth2/token`;
+    const tokenResponse = await fetch(tokenUrl, {
+      body: new URLSearchParams({
+        client_id: 'public-client',
+        code: authorizationCode,
+        code_verifier: verifier,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        dpop: createDpopProof(
+          'POST',
+          `${forwardedIssuer}/oauth2/token`,
+          publicJwk,
+          dpopKeyPair.privateKey,
+        ),
+        'x-forwarded-proto': 'https',
+      },
+      method: 'POST',
+    });
+    expect(tokenResponse.status).toBe(200);
+    const tokens = z
+      .object({ access_token: z.string(), token_type: z.string() })
+      .parse(await tokenResponse.json());
+    expect(tokens.token_type).toBe('DPoP');
+
+    const expectedThumbprint = createHash('sha256')
+      .update(JSON.stringify(publicJwk), 'utf8')
+      .digest('base64url');
+    const introspectionResponse = await fetch(new URL('/oauth2/introspect', issuer), {
+      body: new URLSearchParams({ client_id: 'public-client', token: tokens.access_token }),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-proto': 'https',
+      },
+      method: 'POST',
+    });
+    const introspection = z
+      .object({ active: z.boolean(), cnf: z.object({ jkt: z.string() }).optional() })
+      .parse(await introspectionResponse.json());
+    expect(introspection.active).toBe(true);
+    expect(introspection.cnf?.jkt).toBe(expectedThumbprint);
+
+    const userInfoUrl = `${issuer}/oauth2/userinfo`;
+    const prooflessUserInfo = await fetch(userInfoUrl, {
+      headers: { ...proxyHeaders(), authorization: `DPoP ${tokens.access_token}` },
+    });
+    expect(prooflessUserInfo.status).toBe(400);
+    const missingProofError = z.object({ error: z.string() }).parse(await prooflessUserInfo.json());
+    expect(missingProofError.error.startsWith('invalid_')).toBe(true);
+
+    const provedUserInfo = await fetch(userInfoUrl, {
+      headers: {
+        ...proxyHeaders(),
+        authorization: `DPoP ${tokens.access_token}`,
+        dpop: createDpopProof(
+          'GET',
+          `${forwardedIssuer}/oauth2/userinfo`,
+          publicJwk,
+          dpopKeyPair.privateKey,
+          tokens.access_token,
+        ),
+      },
+    });
+    expect(provedUserInfo.status).toBe(200);
+    expect(await provedUserInfo.json()).toMatchObject({ sub: accountId });
   }, 20_000);
 });
 
@@ -762,4 +1034,41 @@ async function closeServer(server: Server): Promise<void> {
 
 function unavailable(): never {
   throw new Error('Unexpected app registration during OAuth flow test');
+}
+
+// RFC 9449 proof: a one-off ES256 JWT with htm/htu claims. The public JWK is
+// embedded in the header so the server can bind the token to cnf.jkt.
+function createDpopProof(
+  method: string,
+  url: string,
+  publicJwk: {
+    crv: string | undefined;
+    kty: string | undefined;
+    x: string | undefined;
+    y: string | undefined;
+  },
+  privateKey: KeyObject,
+  accessToken?: string,
+): string {
+  const header = Buffer.from(
+    JSON.stringify({ alg: 'ES256', jwk: publicJwk, typ: 'dpop+jwt' }),
+  ).toString('base64url');
+  // Resource-server proofs additionally bind the access token hash (ath).
+  const payload = Buffer.from(
+    JSON.stringify({
+      ...(accessToken === undefined
+        ? {}
+        : { ath: createHash('sha256').update(accessToken, 'utf8').digest('base64url') }),
+      htm: method,
+      htu: url,
+      iat: Math.floor(Date.now() / 1_000),
+      jti: randomUUID(),
+    }),
+  ).toString('base64url');
+  const signingInput = `${header}.${payload}`;
+  const signature = cryptoSign('sha256', Buffer.from(signingInput), {
+    dsaEncoding: 'ieee-p1363',
+    key: privateKey,
+  }).toString('base64url');
+  return `${signingInput}.${signature}`;
 }

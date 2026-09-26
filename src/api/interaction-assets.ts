@@ -77,7 +77,9 @@ export const interactionScript = `
         const result = await response.json();
         if (result.status === 'verified') {
           show(verifiedMessage, 'verified');
-          if (continueForm instanceof HTMLFormElement) { continueForm.hidden = false; continueForm.requestSubmit(); }
+          // The server re-renders this page as the shared confirm/not-you
+          // screen; completing the sign-in requires an explicit click.
+          window.location.reload();
           return;
         }
         if (result.status === 'expired') { show(expiredMessage, 'expired'); return; }
@@ -108,17 +110,29 @@ export const interactionScript = `
     const input = form.querySelector('[data-skin-username]');
     const button = form.querySelector('[data-skin-start]');
     const status = form.querySelector('[data-skin-lookup-status]');
+    const avatar = form.querySelector('[data-skin-avatar]');
     const lookupUrl = form.dataset.lookupUrl;
+    const avatarUrlTemplate = form.dataset.avatarUrlTemplate;
     if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement) || !(status instanceof HTMLElement) || lookupUrl === undefined) return;
     let timer;
     let controller;
     let ready = false;
     const setStatus = (text) => { status.textContent = text; };
+    const setAvatar = (uuid) => {
+      if (!(avatar instanceof HTMLImageElement) || avatarUrlTemplate === undefined) return;
+      if (uuid === undefined) {
+        avatar.hidden = true;
+        avatar.removeAttribute('src');
+        return;
+      }
+      avatar.src = avatarUrlTemplate.replace('{uuid}', encodeURIComponent(uuid));
+      avatar.hidden = false;
+    };
     const lookup = async () => {
       const username = input.value.trim();
       ready = false;
       button.disabled = true;
-      if (!/^[A-Za-z0-9_]{3,16}$/.test(username)) { setStatus(''); return; }
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(username)) { setStatus(''); setAvatar(); return; }
       controller?.abort();
       controller = new AbortController();
       try {
@@ -130,8 +144,9 @@ export const interactionScript = `
           ready = true;
           button.disabled = false;
           setStatus(result.hasSkin === true ? (form.dataset.lookupSkinMessage ?? '') : (form.dataset.lookupFoundMessage ?? ''));
-        } else setStatus(form.dataset.lookupNotFoundMessage ?? '');
-      } catch (error) { if (error?.name !== 'AbortError') setStatus(form.dataset.lookupUnavailableMessage ?? ''); }
+          setAvatar(typeof result.uuid === 'string' ? result.uuid : undefined);
+        } else { setStatus(form.dataset.lookupNotFoundMessage ?? ''); setAvatar(); }
+      } catch (error) { if (error?.name !== 'AbortError') { setStatus(form.dataset.lookupUnavailableMessage ?? ''); setAvatar(); } }
     };
     button.disabled = true;
     input.addEventListener('input', () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void lookup(); }, 450); });

@@ -8,6 +8,7 @@ import { loadMicrosoftOAuthCredentials } from '../config/microsoft-oauth.js';
 import { loadOAuthCredentials } from '../config/oauth-credentials.js';
 import { PrismaAppIconStore } from '../developers/app-icon-store.js';
 import { PrismaAppManager } from '../developers/app-management.js';
+import { resolveOwnerProfile } from '../developers/developer-identifier.js';
 import { PrismaDeveloperAccessRepository } from '../developers/developer-repository.js';
 import { ensureConsoleClient } from '../developers/console-client.js';
 import { DeveloperSessionService } from '../developers/session-service.js';
@@ -63,7 +64,20 @@ async function main(): Promise<void> {
     if (developerSessionKey === undefined) {
       throw new TypeError('A cookie key is required for developer sessions');
     }
-    const developers = new PrismaDeveloperAccessRepository(database);
+    const mojangCache = new RedisMinecraftCache(redis);
+    const players = new HttpMojangClient({ cache: mojangCache });
+    const owner = await resolveOwnerProfile(environment.developerOwner, players);
+    if (environment.developerOwner !== undefined && owner === undefined) {
+      logger.warn('The configured DEVELOPER_OWNER could not be resolved to a Minecraft profile');
+    }
+    const developers = new PrismaDeveloperAccessRepository(database, owner?.uuid);
+    if (owner !== undefined) {
+      // The owner is re-granted on every boot so the account stays admin even
+      // after data resets; demotion and revocation are refused in the repo.
+      await developers.grant(owner.uuid, 'admin');
+      await developers.setVerified(owner.uuid, true);
+      logger.info({ ownerUuid: owner.uuid }, 'Developer owner ensured');
+    }
     const verification = new RedisVerificationStore(redis);
     const developerSessions = new DeveloperSessionService(
       new RedisDeveloperSessionStore(redis),
@@ -73,8 +87,6 @@ async function main(): Promise<void> {
     );
     const developerAuthentication = new DeveloperRequestAuthenticator(developerSessions);
     const clients = new PrismaClientDirectory(database);
-    const mojangCache = new RedisMinecraftCache(redis);
-    const players = new HttpMojangClient({ cache: mojangCache });
     const skins = new HttpSkinStore({ cache: mojangCache, logger });
     const verifiedUsers = new PrismaVerifiedUserRepository(database);
     const skinVerification = new SkinVerificationService(
@@ -95,7 +107,7 @@ async function main(): Promise<void> {
       }),
       new VerificationResolver(verification, verifiedUsers, players),
     );
-    const consoleClient = await ensureConsoleClient(database, environment.oidcIssuer);
+    const consoleClient = await ensureConsoleClient(database, environment.oidcIssuer, owner?.uuid);
     const oauth = createOAuthRuntime(
       {
         cookieKeys: credentials.cookieKeys,
@@ -129,6 +141,7 @@ async function main(): Promise<void> {
       developerAuthentication,
       consoleClient,
       developerSessions,
+      ...(owner === undefined ? {} : { demoPlayer: { name: owner.name, uuid: owner.uuid } }),
       httpPort: environment.httpPort,
       developers,
       interactions: oauth.interactions,
@@ -142,6 +155,7 @@ async function main(): Promise<void> {
       microsoftVerification,
       nodeEnvironment: environment.nodeEnvironment,
       oidcHandler: oauth.provider.callback(),
+      ...(owner === undefined ? {} : { ownerUuid: owner.uuid }),
       rateLimitRedis: redis,
       readiness: new InfrastructureReadinessCheck(database, redis),
       trustProxy: environment.httpTrustProxy,

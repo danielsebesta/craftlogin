@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      # Scripts off: the only install-time script is `prisma generate`, which
+      # runs explicitly below. This keeps install-script execution out of CI.
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run db:validate
+      - run: npm run openapi:check
+      - run: npm test
+      - run: npm run build
+
+  dependencies:
+    name: Dependencies and supply chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+      - name: Generate SBOM
+        run: npm sbom --sbom-format=cyclonedx --omit=dev > sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 30
+
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_SUMMARY: 'true'
+
+  image:
+    name: Container build and scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          load: true
+          tags: craftlogin:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: craftlogin:ci
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy.sarif

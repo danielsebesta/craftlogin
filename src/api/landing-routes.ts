@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
+import type { DemoPlayer } from './demo-players.js';
 import { landingStyles } from './landing-assets.js';
 import { renderLandingPage } from './landing-page.js';
 import { landingAssetRouteSchema, landingPageRouteSchema } from './schemas.js';
@@ -17,6 +18,7 @@ const LANDING_CSP = [
 ].join('; ');
 
 export interface LandingRoutesOptions {
+  readonly demoPlayer?: DemoPlayer;
   readonly showDocumentation: boolean;
 }
 
@@ -26,9 +28,12 @@ export function registerLandingRoutes(
 ): void {
   server.get('/', { schema: landingPageRouteSchema }, async (_request, reply): Promise<void> => {
     setLandingHeaders(reply);
-    await reply
-      .type('text/html; charset=utf-8')
-      .send(renderLandingPage({ showDocumentation: options.showDocumentation }));
+    await reply.type('text/html; charset=utf-8').send(
+      renderLandingPage({
+        showDocumentation: options.showDocumentation,
+        ...(options.demoPlayer === undefined ? {} : { demoPlayer: options.demoPlayer }),
+      }),
+    );
   });
 
   server.get(

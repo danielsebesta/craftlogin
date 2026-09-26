@@ -109,13 +109,17 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
       },
     },
     features: {
-      dPoP: { enabled: false },
+      // Optional DPoP: clients that send a proof get sender-constrained tokens,
+      // clients that do not keep plain bearer tokens (RFC 9449 is opt-in).
+      dPoP: { enabled: true },
       devInteractions: { enabled: false },
       introspection: {
         allowedPolicy: (_context, client, token): boolean => client.clientId === token.clientId,
         enabled: true,
       },
-      pushedAuthorizationRequests: { enabled: false },
+      // PAR moves authorize parameters (state, PKCE challenge) out of browser
+      // URLs into the backchannel; optional so existing clients keep working.
+      pushedAuthorizationRequests: { enabled: true },
       registration: { enabled: false },
       revocation: { enabled: true },
       rpInitiatedLogout: {
@@ -144,6 +148,7 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
       end_session: '/oauth2/logout',
       introspection: '/oauth2/introspect',
       jwks: '/oauth2/jwks',
+      pushed_authorization_request: '/oauth2/par',
       revocation: '/oauth2/revoke',
       token: '/oauth2/token',
       userinfo: '/oauth2/userinfo',

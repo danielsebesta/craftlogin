@@ -5,7 +5,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { english } from '../locales/en.js';
 import { getErrorKind } from '../logging/error-kind.js';
 import { ApiError } from './errors.js';
-import { authorizeRateLimit, tokenEndpointGlobalRateLimit, tokenRateLimit } from './rate-limit.js';
+import {
+  authorizeRateLimit,
+  publicOidcRateLimit,
+  tokenEndpointGlobalRateLimit,
+  tokenRateLimit,
+} from './rate-limit.js';
+import { applyBaselineSecurityHeaders } from './security-headers.js';
 import {
   oauthAuthorizationRouteSchema,
   oauthDiscoveryRouteSchema,
@@ -14,6 +20,7 @@ import {
   oauthEndSessionSuccessRouteSchema,
   oauthIntrospectionRouteSchema,
   oauthJwksRouteSchema,
+  oauthParRouteSchema,
   oauthResumeRouteSchema,
   oauthRevocationRouteSchema,
   oauthTokenRouteSchema,
@@ -30,6 +37,7 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
   const forward = createOidcForwarder(handler);
   const limitTokenRequests = server.rateLimit(tokenRateLimit);
   const limitAuthorizeRequests = server.rateLimit(authorizeRateLimit);
+  const limitPublicOidcRequests = server.rateLimit(publicOidcRateLimit);
   // Hook limiters skip the chain once one runs, so the shared ceiling uses
   // createRateLimit(), which only inspects the store.
   const checkGlobalTokenBudget = server.createRateLimit(tokenEndpointGlobalRateLimit);
@@ -81,64 +89,73 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
   });
   server.route({
     handler: unreachableOidcHandler,
+    method: 'POST',
+    // PAR authenticates the client (secret compares hit Argon2) and writes a
+    // pushed request record, so it shares the token-endpoint budgets.
+    onRequest: [enforceGlobalTokenBudget, limitTokenRequests, forward],
+    schema: oauthParRouteSchema,
+    url: '/oauth2/par',
+  });
+  server.route({
+    handler: unreachableOidcHandler,
     method: ['GET', 'POST'],
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthEndSessionRouteSchema,
     url: '/oauth2/logout',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthEndSessionConfirmRouteSchema,
     url: '/oauth2/logout/confirm',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthEndSessionSuccessRouteSchema,
     url: '/oauth2/logout/success',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthRevocationRouteSchema,
     url: '/oauth2/revoke',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: ['GET', 'POST'],
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthUserInfoRouteSchema,
     url: '/oauth2/userinfo',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthJwksRouteSchema,
     url: '/oauth2/jwks',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthDiscoveryRouteSchema,
     url: '/.well-known/openid-configuration',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthDiscoveryRouteSchema,
     url: '/.well-known/oauth-authorization-server',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'GET',
-    onRequest: forward,
+    onRequest: [limitPublicOidcRequests, forward],
     schema: oauthWebfingerRouteSchema,
     url: '/.well-known/webfinger',
   });
@@ -149,6 +166,10 @@ function createOidcForwarder(
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request, reply): Promise<void> => {
     reply.hijack();
+    // The provider writes directly to the raw response, so the fallback CSP
+    // and frame policy helmet cannot supply are applied here; headers the
+    // provider sets afterwards still win.
+    applyBaselineSecurityHeaders(reply.raw);
     try {
       await handler(request.raw, reply.raw);
     } catch (error: unknown) {

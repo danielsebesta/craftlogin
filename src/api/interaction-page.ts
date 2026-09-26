@@ -1,5 +1,6 @@
 import { english } from '../locales/en.js';
 import type { SkinInteractionChallenge } from '../oauth/interaction-service.js';
+import type { AuthenticatedMinecraftPlayer } from '../verification/types.js';
 import { renderSignInPage, type ConsentPermission } from './ui/sign-in-page.js';
 
 export interface InteractionOwner {
@@ -23,6 +24,7 @@ export interface InteractionPageInput {
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
   readonly allowsMicrosoftVerification?: boolean;
+  readonly verifiedPlayer?: AuthenticatedMinecraftPlayer;
 }
 
 const KNOWN_SCOPE_DESCRIPTIONS: Readonly<Record<string, string>> = {
@@ -69,15 +71,21 @@ export function renderInteractionPage(input: InteractionPageInput): string {
   const skin = strings.skin;
 
   const isConsent = input.kind === 'consent';
+  // A verified player waits for an explicit continue/not-you decision, so the
+  // method chooser and per-method panels stay hidden on the confirmation page.
+  const isVerified = input.verifiedPlayer !== undefined;
   const allowsOnlineVerification = input.allowsOnlineVerification !== false;
   const skinChallenge = input.skinChallenge;
   // A skin-verification-only client never sees the join address, so its status is the skin status.
   const verification =
-    isConsent || !allowsOnlineVerification
+    isConsent || isVerified || !allowsOnlineVerification
       ? undefined
       : {
-          address: `${input.code ?? ''}.${input.minecraftBaseDomain}`,
-          addressLabel: strings.addressLabel,
+          // During the in-flight 'processing' window no code is rendered; the
+          // status poller keeps running and reloads once verification resolves.
+          ...(input.code === undefined
+            ? {}
+            : { address: `${input.code}.${input.minecraftBaseDomain}` }),
           initialStatus: strings.status.pending,
           initialStatusState: 'pending',
           statusUrl: `${interactionPath}/status`,
@@ -121,7 +129,7 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     ...(input.appVerified === true ? { appVerified: true } : {}),
     brand: strings.brand,
     cancel: { action: `${interactionPath}/abort`, label: strings.cancelButton },
-    continueLabel: strings.continueButton,
+    continueLabel: isVerified ? strings.confirmation.continueButton : strings.continueButton,
     copiedLabel: strings.copied,
     copyLabel: strings.copyAddress,
     disallowed: strings.disallowed,
@@ -129,17 +137,29 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     documentTitle: `${input.appName} · ${strings.title}`,
     heading: strings.heading,
     lead: isConsent ? strings.consentLead : strings.lead,
-    messages:
-      skinChallenge === undefined
-        ? strings.status
-        : { ...strings.status, pending: skin.statusPending },
+    messages: strings.status,
     noJavaScript: strings.noJavaScript,
     ownerBy: strings.ownerBy,
     ownerLabel: strings.ownerLabel,
-    ...(methodChoices.length < 2 ? {} : { methodChoices }),
+    ...(isConsent || isVerified || methodChoices.length < 2 ? {} : { methodChoices }),
     methodHeading: strings.methodHeading,
     ...(skinChallenge === undefined ? {} : { selectedMethod: 'skin' }),
-    ...(isConsent || input.allowsMicrosoftVerification !== true
+    ...(input.verifiedPlayer === undefined
+      ? {}
+      : {
+          verifiedIdentity: {
+            avatarUrl: `/api/avatars/${encodeURIComponent(input.verifiedPlayer.uuid)}/face?size=64&layers=all`,
+            heading: strings.confirmation.heading,
+            lead: strings.confirmation.lead,
+            name: input.verifiedPlayer.username,
+            notYou: {
+              action: `${interactionPath}/not-you`,
+              label: strings.confirmation.notYou,
+            },
+            signedInAsLabel: strings.signedInAs,
+          },
+        }),
+    ...(isConsent || isVerified || input.allowsMicrosoftVerification !== true
       ? {}
       : {
           microsoftVerification: {
@@ -154,20 +174,24 @@ export function renderInteractionPage(input: InteractionPageInput): string {
       ? { switchAccount: { action: `${interactionPath}/switch`, label: strings.changeAccount } }
       : {}),
     ...(verification === undefined ? {} : { verification }),
-    ...(isConsent || input.allowsSkinVerification !== true
+    ...(isConsent || isVerified || input.allowsSkinVerification !== true
       ? {}
       : {
           skinVerification: {
             accountLabel: skin.accountLabel,
             accountPlaceholder: skin.accountPlaceholder,
-            heading: allowsOnlineVerification ? skin.heading : skin.headingAlternative,
+            avatarUrlTemplate: '/api/avatars/{uuid}/face?size=64&layers=all',
+            heading: skin.heading,
             hint: skin.startHint,
             lookupFoundMessage: skin.lookupFound,
             lookupNotFoundMessage: skin.lookupNotFound,
             lookupSkinMessage: skin.lookupSkin,
             lookupUnavailableMessage: skin.lookupUnavailable,
             lookupUrl: `${interactionPath}/skin/lookup`,
-            statusMessages: strings.status,
+            statusMessages:
+              skinChallenge === undefined
+                ? strings.status
+                : { ...strings.status, pending: skin.statusPending },
             ...(skinChallenge === undefined
               ? {}
               : {

@@ -39,6 +39,7 @@ interface SkinChallengeStore {
     challenge: Omit<SkinVerificationChallenge, 'status'>,
   ): Promise<SkinVerificationChallenge>;
   deleteClaimed(claim: SkinVerificationCheckClaim): Promise<boolean>;
+  discard(interactionId: string): Promise<void>;
   get(interactionId: string): Promise<SkinVerificationChallenge | undefined>;
   releaseCheck(claim: SkinVerificationCheckClaim): Promise<boolean>;
 }
@@ -67,7 +68,7 @@ export class SkinVerificationService {
     private readonly challenges:
       | Pick<
           RedisSkinVerificationStore,
-          'claimCheck' | 'create' | 'deleteClaimed' | 'get' | 'releaseCheck'
+          'claimCheck' | 'create' | 'deleteClaimed' | 'discard' | 'get' | 'releaseCheck'
         >
       | SkinChallengeStore,
     private readonly verification:
@@ -140,6 +141,10 @@ export class SkinVerificationService {
 
   public async getChallenge(interactionId: string): Promise<SkinVerificationChallenge | undefined> {
     return await this.challenges.get(interactionId);
+  }
+
+  public async discard(interactionId: string): Promise<void> {
+    await this.challenges.discard(interactionId);
   }
 
   public async check(interactionId: string): Promise<VerificationStatus> {

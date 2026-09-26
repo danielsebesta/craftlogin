@@ -3,10 +3,10 @@
 ## Purpose
 
 CraftLogin is an MIT-licensed OAuth 2.0 and OpenID Connect provider for Minecraft Java Edition
-identities. A user proves account ownership by joining a short-lived subdomain on an online-mode
-Minecraft ghost server, publishing a short-lived signed skin marker, or completing one-shot
-Microsoft OAuth verification. The resulting UUID and username become the user's OIDC identity.
-CraftLogin stores no email address or password.
+identities. A user proves account ownership by joining a temporary subdomain on an online-mode
+Minecraft ghost server, publishing a temporary signed skin marker, or completing one-shot Microsoft
+OAuth verification. The resulting UUID and username become the user's OIDC identity. CraftLogin
+stores no email address or password.
 
 This file is authoritative for agents and contributors working in this repository. Preserve the
 security properties below even when a change appears simpler without them.
@@ -51,7 +51,7 @@ Keep modules small and organized by responsibility:
 - `src/generated/` contains generated artifacts and is never edited or committed.
 
 PostgreSQL is durable storage for users, registered applications, refresh-token records, and any
-durable `oidc-provider` adapter state. Redis owns short-lived verification records and ephemeral
+durable `oidc-provider` adapter state. Redis owns temporary verification records and ephemeral
 provider state where atomic expiry and consumption are required. Do not duplicate provider-managed
 authorization codes or access tokens in ad hoc application tables.
 
@@ -106,13 +106,22 @@ The verification flow is fixed:
    connection cap.
 8. The accessible interaction page progressively enhances its initial server-rendered content with
    bounded polling, a short starting interval, and exponential backoff.
-9. A resolved interaction resumes `oidc-provider`, which completes the standard authorization code,
-   token, and `/api/users/@me` flow.
+9. A resolved verification never completes silently: every method (online-mode join, skin marker,
+   Microsoft OAuth) converges on the same server-rendered confirmation screen that shows the
+   verified Minecraft username and avatar. The user must explicitly continue, which triggers the
+   atomic `verified` → `finalizing` claim, or reject the identity ("not you"), which atomically
+   discards the record, drops any pending skin challenge, and re-issues a fresh code. The decision
+   is a server-side state transition, never client-side JavaScript alone; a finalization claim must
+   always win over a concurrent reset.
+10. A resolved interaction resumes `oidc-provider`, which completes the standard authorization code,
+    token, and `/api/users/@me` flow.
 
 Microsoft OAuth verification is a third convenience path with these fixed constraints:
 
-- Request exactly `XboxLive.signin` from the personal-accounts endpoint with S256 PKCE. Never
-  request `offline_access`, Graph, profile, or email scopes, and never implement token renewal.
+- Request exactly `XboxLive.signin` from the personal-accounts endpoint with S256 PKCE and
+  `prompt=select_account` so players with multiple Microsoft accounts always choose the account.
+  Never request `offline_access`, Graph, profile, or email scopes, and never implement token
+  renewal.
 - Exchange the authorization code through Xbox Live and XSTS using relying party
   `rp://api.minecraftservices.com/`, then obtain a Minecraft access token.
 - Require a `game_minecraft` or `product_minecraft` entitlement before requesting the Minecraft
@@ -121,7 +130,7 @@ Microsoft OAuth verification is a third convenience path with these fixed constr
   hashes, and Microsoft account identifiers may exist only in request memory. Never write them to
   Redis, PostgreSQL, logs, files, caches, cookies, or error details.
 - The Microsoft module passes `{ uuid, username, verifiedVia: "microsoft-oauth" }` to shared
-  resolution. Storage receives only the canonical UUID and username; the short-lived interaction may
+  resolution. Storage receives only the canonical UUID and username; the temporary interaction may
   additionally carry `microsoft_oauth` solely to produce OIDC `acr=urn:craftlogin:microsoft-oauth`
   and `amr=microsoft_oauth`; never persist a provider linkage, edition field, method-specific
   timestamp, or verification history on `User`.
@@ -155,6 +164,11 @@ values, or password-equivalent material.
   and decisions have exactly one winner.
 - The final administrator cannot be removed or demoted. Preserve this invariant with a serializable
   database transaction; a read followed by a separate write is insufficient.
+- The optional `DEVELOPER_OWNER` environment variable (Minecraft name or UUID) designates the
+  operator account: it is re-granted as a verified administrator on every boot, cannot be demoted or
+  revoked while configured, owns the seeded Developer Console client, and drives the landing-page
+  avatar showcase. Removing the variable stops protection but does not strip a previously granted
+  role.
 - Session cookies are signed, `HttpOnly`, `Secure`, and `SameSite=Lax`. Rotate session identifiers
   after authentication or another privilege change. Enforce sliding expiry and a separate absolute
   lifetime.
@@ -162,6 +176,11 @@ values, or password-equivalent material.
   invalidates a session.
 - Production deployments require TLS at the public edge and trusted-proxy configuration that matches
   the actual proxy topology.
+- Accepted risk: third-party cape lookups fetch bounded, PNG-validated images, but the OptiFine
+  provider is cleartext HTTP because `s.optifine.net` serves no TLS. Image-content substitution is
+  the only exposure; cleartext fetching must never extend to credential-bearing traffic.
+- Cape and texture PNGs are additionally IHDR-dimension bounded (2048 px per side) at the provider
+  boundary and before canvas decode, so a crafted small file cannot force a huge allocation.
 
 ## Data and validation
 

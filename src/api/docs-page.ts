@@ -194,7 +194,7 @@ ${strings.avatars.views
   .filter((view): boolean => demoPlayer.hasCape !== false || !CAPE_TEXTURE_VIEWS.has(view.name))
   .map(
     (view): string => `            <li class="card card-compact avatar-card">
-              <img src="/api/avatars/${demoPlayer.uuid}/${view.name}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(view.name)}" width="128" height="128" loading="lazy" decoding="async">
+              <img src="/api/avatars/${encodeURIComponent(demoPlayer.uuid)}/${view.name}" alt="${escapeHtml(strings.avatars.exampleAlt)}: ${escapeHtml(view.name)}" width="128" height="128" loading="lazy" decoding="async">
               <h3><code>${escapeHtml(view.name)}</code></h3>
               <p>${escapeHtml(view.detail)}</p>
             </li>`,

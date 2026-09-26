@@ -22,6 +22,7 @@ import {
   developerUuidSchema,
   developerVerificationDecisionSchema,
   LastAdministratorError,
+  OwnerAccessError,
 } from '../developers/developer-repository.js';
 import type { DeveloperSessionService } from '../developers/session-service.js';
 import { ApiError } from './errors.js';
@@ -85,6 +86,7 @@ import {
   developerLogoutRouteSchema,
   developerRevokeConfirmRouteSchema,
   developerRevokeRouteSchema,
+  developerSessionRevokeRouteSchema,
   developerVerificationDecisionRouteSchema,
 } from './schemas.js';
 
@@ -97,6 +99,10 @@ interface DeveloperAppBody {
 
 interface CsrfBody {
   readonly csrfToken: string;
+}
+
+interface SessionRevokeBody extends CsrfBody {
+  readonly sessionKey: string;
 }
 
 interface AppParams {
@@ -157,8 +163,9 @@ export interface DeveloperRoutesOptions {
   readonly httpPort: number;
   readonly issuer: string;
   readonly logger: FastifyBaseLogger;
+  readonly ownerUuid?: string;
   readonly players?: MinecraftPlayerLookup;
-  readonly sessions: Pick<DeveloperSessionService, 'create'>;
+  readonly sessions: Pick<DeveloperSessionService, 'create' | 'list' | 'revokeByKeyId'>;
   readonly showDocumentation: boolean;
   readonly users: CurrentUserLookup;
 }
@@ -256,10 +263,11 @@ export function registerDeveloperRoutes(
       if (session === undefined) {
         return;
       }
-      const [apps, developers, user] = await Promise.all([
+      const [apps, developers, user, sessions] = await Promise.all([
         options.appManager.list(session.userUuid, session.role),
         session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
         options.users.findCurrentUser(session.userUuid),
+        options.sessions.list(session.userUuid, session.sessionId),
       ]);
       const ownerUuids = apps
         .map((app): string | undefined => app.ownerUuid)
@@ -273,8 +281,10 @@ export function registerDeveloperRoutes(
       const dashboard: DeveloperDashboardInput = {
         apps,
         csrfToken: session.csrfToken,
+        ...(options.ownerUuid === undefined ? {} : { ownerUuid: options.ownerUuid }),
         playerNames,
         role: session.role,
+        sessions,
         showDocumentation: options.showDocumentation,
         username: requireDashboardUser(user, session.userUuid).username,
         userUuid: session.userUuid,
@@ -357,7 +367,12 @@ export function registerDeveloperRoutes(
         return;
       }
       options.logger.info(
-        { actorUuid: session.userUuid, appId: request.params.id },
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          event: 'developer_app_deleted',
+        },
         'Developer deleted an OAuth application',
       );
       await reply.redirect('/developers', 303);
@@ -438,7 +453,12 @@ export function registerDeveloperRoutes(
         return;
       }
       options.logger.info(
-        { actorUuid: session.userUuid, appId: request.params.id },
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          event: 'developer_app_icon_updated',
+        },
         'Developer updated an application icon',
       );
       await reply.redirect(
@@ -464,7 +484,12 @@ export function registerDeveloperRoutes(
         return;
       }
       options.logger.info(
-        { actorUuid: session.userUuid, appId: request.params.id },
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          event: 'developer_app_icon_removed',
+        },
         'Developer removed an application icon',
       );
       await reply.redirect(
@@ -529,7 +554,12 @@ export function registerDeveloperRoutes(
         return;
       }
       options.logger.info(
-        { actorUuid: session.userUuid, appId: request.params.id },
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          event: 'developer_app_verification_requested',
+        },
         'Developer requested application verification',
       );
       await reply.redirect('/developers?notice=verification-requested', 303);
@@ -559,7 +589,13 @@ export function registerDeveloperRoutes(
         return;
       }
       options.logger.info(
-        { actorUuid: session.userUuid, appId: request.params.id, decision: decision.data },
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          decision: decision.data,
+          event: 'admin_app_verification_decided',
+        },
         'Administrator changed application verification',
       );
       await reply.redirect(`/developers?notice=${APP_VERIFICATION_NOTICES[decision.data]}`, 303);
@@ -593,13 +629,51 @@ export function registerDeveloperRoutes(
         return;
       }
       options.logger.info(
-        { actorUuid: session.userUuid, decision: decision.data, developerUuid },
+        {
+          actorUuid: session.userUuid,
+          audit: true,
+          decision: decision.data,
+          developerUuid,
+          event: 'admin_developer_verification_decided',
+        },
         'Administrator changed developer verification',
       );
       await reply.redirect(
         `/developers?notice=${decision.data === 'verify' ? 'developer-verified' : 'developer-unverified'}`,
         303,
       );
+    },
+  );
+
+  server.post<{ Body: SessionRevokeBody }>(
+    '/developers/sessions/revoke',
+    { schema: developerSessionRevokeRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, request.body.csrfToken);
+      // The service scopes revocation to sessions in the caller's own index,
+      // so a foreign key ID is a no-op rather than an information leak.
+      const revoked = await options.sessions.revokeByKeyId(
+        session.userUuid,
+        request.body.sessionKey,
+      );
+      if (!revoked) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      options.logger.info(
+        {
+          actorUuid: session.userUuid,
+          audit: true,
+          event: 'developer_session_revoked',
+          sessionKeyId: request.body.sessionKey,
+        },
+        'Developer revoked a console session',
+      );
+      await reply.redirect('/developers?notice=session-revoked', 303);
     },
   );
 
@@ -639,13 +713,23 @@ export function registerDeveloperRoutes(
       try {
         const access = await options.developers.grant(uuid, request.body.role);
         options.logger.info(
-          { actorUuid: session.userUuid, developerRole: access.role, developerUuid: access.uuid },
+          {
+            actorUuid: session.userUuid,
+            audit: true,
+            developerRole: access.role,
+            developerUuid: access.uuid,
+            event: 'admin_developer_access_changed',
+          },
           'Administrator changed developer access',
         );
         await reply.redirect('/developers', 303);
       } catch (error: unknown) {
         if (error instanceof LastAdministratorError) {
           await reply.redirect('/developers?notice=last-admin', 303);
+          return;
+        }
+        if (error instanceof OwnerAccessError) {
+          await reply.redirect('/developers?notice=owner-protected', 303);
           return;
         }
         throw error;
@@ -693,13 +777,22 @@ export function registerDeveloperRoutes(
           return;
         }
         options.logger.info(
-          { actorUuid: session.userUuid, developerUuid: request.params.uuid.toLowerCase() },
+          {
+            actorUuid: session.userUuid,
+            audit: true,
+            developerUuid: request.params.uuid.toLowerCase(),
+            event: 'admin_developer_access_revoked',
+          },
           'Administrator revoked developer access',
         );
         await reply.redirect('/developers', 303);
       } catch (error: unknown) {
         if (error instanceof LastAdministratorError) {
           await reply.redirect('/developers?notice=last-admin', 303);
+          return;
+        }
+        if (error instanceof OwnerAccessError) {
+          await reply.redirect('/developers?notice=owner-protected', 303);
           return;
         }
         throw error;
@@ -735,10 +828,11 @@ async function renderDashboardError(
   session: NonNullable<Awaited<ReturnType<DeveloperAuthentication['authenticate']>>>,
   values: NonNullable<DeveloperDashboardInput['formValues']>,
 ): Promise<void> {
-  const [apps, developers, user] = await Promise.all([
+  const [apps, developers, user, sessions] = await Promise.all([
     options.appManager.list(session.userUuid, session.role),
     session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
     options.users.findCurrentUser(session.userUuid),
+    options.sessions.list(session.userUuid, session.sessionId),
   ]);
   const ownerUuids = apps
     .map((app): string | undefined => app.ownerUuid)
@@ -756,6 +850,7 @@ async function renderDashboardError(
     formValues: values,
     playerNames,
     role: session.role,
+    sessions,
     showDocumentation: options.showDocumentation,
     username: requireDashboardUser(user, session.userUuid).username,
     userUuid: session.userUuid,

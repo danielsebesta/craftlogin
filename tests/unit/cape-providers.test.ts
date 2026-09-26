@@ -125,6 +125,32 @@ describe('cape providers', (): void => {
     await expect(fetchSkinmcCape(canonicalUuid, customFetch)).resolves.toBeUndefined();
   });
 
+  it('rejects a cape PNG whose declared dimensions exceed the safety bound', async (): Promise<void> => {
+    // A small body can declare a giant canvas; providers must drop it before
+    // it is cached, served, or decoded.
+    const bomb = Buffer.alloc(64);
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bomb, 0);
+    bomb.writeUInt32BE(13, 8);
+    bomb.write('IHDR', 12, 'ascii');
+    bomb.writeUInt32BE(0x7fffffff, 16);
+    bomb.writeUInt32BE(0x7fffffff, 20);
+    bomb[24] = 8;
+    bomb[25] = 6;
+
+    const customFetch: typeof fetch = () => Promise.resolve(new Response(bomb, { status: 200 }));
+
+    await expect(fetchOptifineCape(username, customFetch)).resolves.toBeUndefined();
+    await expect(fetchLabymodCape(canonicalUuid, customFetch)).resolves.toBeUndefined();
+    await expect(fetchMinecraftcapesCape(undashedUuid, customFetch)).resolves.toBeUndefined();
+    await expect(fetchSkinmcCape(canonicalUuid, customFetch)).resolves.toBeUndefined();
+
+    const zigFetch: typeof fetch = () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ d: bomb.toString('base64') }), { status: 200 }),
+      );
+    await expect(fetch5zigCape(canonicalUuid, zigFetch)).resolves.toBeUndefined();
+  });
+
   it('cuts off a streamed cape body that grows past the bound', async (): Promise<void> => {
     const chunk = Buffer.alloc(64 * 1_024);
     const stream = new ReadableStream<Uint8Array>({

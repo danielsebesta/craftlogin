@@ -19,7 +19,7 @@ import {
   encodeProcessedSkin,
   inspectSkinPng,
   InvalidSkinImageError,
-  isPngImage,
+  isBoundedTexturePng,
   type TexturePixels,
 } from './skin-texture.js';
 import { parseAvatarSubject } from './subject.js';
@@ -281,7 +281,7 @@ export class CachedAvatarService implements AvatarService {
       try {
         const body = await this.cachedTexture(cacheKey, async (): Promise<Buffer> => {
           const image = await this.options.skins.fetchSkin(cape.hash);
-          if (image === undefined || !isPngImage(image.body)) {
+          if (image === undefined || !isBoundedTexturePng(image.body)) {
             throw new CapeTextureMissingError('Minecraft cape texture is not available');
           }
           return image.body;
@@ -610,7 +610,8 @@ export class CachedAvatarService implements AvatarService {
       }
       const cached = await this.options.cache.read(cacheKey);
       const cachedBody = cachedImageBody(cached?.value);
-      if (cachedBody !== undefined) {
+      // Cached entries predate the dimension bound; an oversized texture is a miss.
+      if (cachedBody !== undefined && isBoundedTexturePng(cachedBody)) {
         return { body: cachedBody, status: 'found' };
       }
     } catch (error: unknown) {
@@ -686,7 +687,7 @@ export class CachedAvatarService implements AvatarService {
       try {
         body = await this.cachedTexture(`avatar-cape:${capeHash}`, async (): Promise<Buffer> => {
           const image = await this.options.skins.fetchSkin(capeHash);
-          if (image === undefined || !isPngImage(image.body)) {
+          if (image === undefined || !isBoundedTexturePng(image.body)) {
             throw new CapeTextureMissingError('Minecraft cape texture is not available');
           }
           return image.body;

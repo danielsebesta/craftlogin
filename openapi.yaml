@@ -1494,6 +1494,89 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/craftlogin.error-response"
+  /oauth2/par:
+    post:
+      summary: Push an authorization request
+      tags:
+        - OAuth
+      description: Push authorization parameters through the backchannel and receive a
+        request_uri for the authorize endpoint.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              additionalProperties: true
+              properties:
+                client_id:
+                  type: string
+                code_challenge:
+                  type: string
+                code_challenge_method:
+                  enum:
+                    - S256
+                  type: string
+                redirect_uri:
+                  type: string
+                response_type:
+                  enum:
+                    - code
+                  type: string
+                scope:
+                  type: string
+                state:
+                  type: string
+              type: object
+      responses:
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  expires_in:
+                    type: integer
+                  request_uri:
+                    type: string
+                required:
+                  - request_uri
+                  - expires_in
+                type: object
+        "400":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "401":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                properties:
+                  error:
+                    type: string
+                  error_description:
+                    type: string
+                required:
+                  - error
+                type: object
+        "429":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/craftlogin.error-response"
   /oauth2/logout:
     get: &a1
       summary: End the provider session
@@ -1860,7 +1943,7 @@ paths:
           name: v
           required: false
         - schema:
-            pattern: ^cl_[A-Za-z0-9_-]{32}$
+            pattern: ^(?:cl_developer_console|cl_[A-Za-z0-9_-]{32})$
             type: string
           in: path
           name: clientId

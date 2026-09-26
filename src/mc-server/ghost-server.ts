@@ -43,6 +43,18 @@ const MAX_PLAYERS = 10_000;
 // bound pre-login socket floods.
 const MAX_CONNECTIONS = 10_000;
 const MAX_CONNECTIONS_PER_ADDRESS = 64;
+// New-connection pacing bound per address, independent of the concurrent cap:
+// churning sockets would otherwise keep every slot below 64 while still
+// forcing handshake parsing and Mojang session-auth lookups at full speed.
+// Sized well above legitimate churn (players reconnect a handful of times)
+// so a released slot always admits its replacement.
+const CONNECTION_PACING_WINDOW_MS = 10_000;
+const CONNECTION_PACING_MAX_PER_ADDRESS = 128;
+const CONNECTION_PACING_MAP_MAX_ENTRIES = 100_000;
+// Concurrent pending verifications per address — each one costs a Mojang
+// session check plus a Redis code lookup, so they need a tighter bound than
+// raw connections.
+const MAX_PENDING_VERIFICATIONS_PER_ADDRESS = 8;
 const CONNECTION_LIMIT_LOG_INTERVAL_MS = 10_000;
 const LOBBY_MAX_PLAYERS = 64;
 const LOBBY_LIFETIME_MS = 40 * 1000;
@@ -198,22 +210,47 @@ export async function startGhostServer(
 
   let activeConnections = 0;
   const connectionsByAddress = new Map<string, number>();
+  const connectionPacing = new Map<string, { attempts: number; resetAt: number }>();
+  const pendingVerificationsByAddress = new Map<string, number>();
   let lastConnectionLimitLogAt = 0;
+
+  const rejectConnection = (client: ServerClient): void => {
+    client.socket.destroy();
+    // Rejection floods must not become log floods; one line per interval is enough signal.
+    const now = Date.now();
+    if (now - lastConnectionLimitLogAt >= CONNECTION_LIMIT_LOG_INTERVAL_MS) {
+      lastConnectionLimitLogAt = now;
+      dependencies.logger.warn(
+        { activeConnections },
+        'Minecraft connection limit rejected a client',
+      );
+    }
+  };
 
   server.on('connection', (client): void => {
     const address = client.socket.remoteAddress ?? '';
     const addressConnections = connectionsByAddress.get(address) ?? 0;
-    if (activeConnections >= MAX_CONNECTIONS || addressConnections >= MAX_CONNECTIONS_PER_ADDRESS) {
-      client.socket.destroy();
-      // Rejection floods must not become log floods; one line per interval is enough signal.
-      const now = Date.now();
-      if (now - lastConnectionLimitLogAt >= CONNECTION_LIMIT_LOG_INTERVAL_MS) {
-        lastConnectionLimitLogAt = now;
-        dependencies.logger.warn(
-          { activeConnections },
-          'Minecraft connection limit rejected a client',
-        );
+    const now = Date.now();
+    let pacing = connectionPacing.get(address);
+    if (pacing === undefined || now >= pacing.resetAt) {
+      pacing = { attempts: 0, resetAt: now + CONNECTION_PACING_WINDOW_MS };
+      if (connectionPacing.size >= CONNECTION_PACING_MAP_MAX_ENTRIES) {
+        // Bound the map under a rotating-source flood: expired buckets are dead weight.
+        for (const [key, entry] of connectionPacing) {
+          if (now >= entry.resetAt) {
+            connectionPacing.delete(key);
+          }
+        }
       }
+      connectionPacing.set(address, pacing);
+    }
+    pacing.attempts += 1;
+    if (
+      pacing.attempts > CONNECTION_PACING_MAX_PER_ADDRESS ||
+      activeConnections >= MAX_CONNECTIONS ||
+      addressConnections >= MAX_CONNECTIONS_PER_ADDRESS
+    ) {
+      rejectConnection(client);
       return;
     }
     activeConnections += 1;
@@ -257,6 +294,20 @@ export async function startGhostServer(
 
       const code = extractVerificationCode(serverHost, config.baseDomain);
       if (code !== null) {
+        const pendingForAddress = pendingVerificationsByAddress.get(address) ?? 0;
+        if (pendingForAddress >= MAX_PENDING_VERIFICATIONS_PER_ADDRESS) {
+          client.socket.destroy();
+          return;
+        }
+        pendingVerificationsByAddress.set(address, pendingForAddress + 1);
+        client.once('end', (): void => {
+          const remaining = (pendingVerificationsByAddress.get(address) ?? 1) - 1;
+          if (remaining <= 0) {
+            pendingVerificationsByAddress.delete(address);
+          } else {
+            pendingVerificationsByAddress.set(address, remaining);
+          }
+        });
         const availability = lookupCodeAvailability(code, dependencies);
         pendingClients.set(client, {
           kind: 'verification',

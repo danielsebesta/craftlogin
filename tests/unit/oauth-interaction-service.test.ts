@@ -96,6 +96,8 @@ class SkinVerificationStub {
     });
   }
 
+  public discards: string[] = [];
+
   public async start(
     interactionId: string,
     username: string,
@@ -103,12 +105,20 @@ class SkinVerificationStub {
     this.starts.push({ interactionId, username });
     return await this.getChallenge();
   }
+
+  public discard(interactionId: string): Promise<void> {
+    this.discards.push(interactionId);
+    return Promise.resolve();
+  }
 }
 
 class FinalizationStore {
   public allocations: string[] = [];
   public completed = 0;
   public released = 0;
+  public resets: string[] = [];
+  public resetResult = true;
+  public processing = false;
   public verified = false;
   public completeError: Error | undefined;
   public completeResult = true;
@@ -141,20 +151,31 @@ class FinalizationStore {
   }
 
   public getStatus(): Promise<
-    | { status: 'pending'; code: string }
+    | { status: 'pending'; code: string | null }
     | { status: 'verified'; player: AuthenticatedMinecraftPlayer; resolvedAt: string }
   > {
-    return Promise.resolve(
-      this.verified
-        ? { status: 'verified', player, resolvedAt }
-        : { status: 'pending', code: 'ABCDEFGH' },
-    );
+    if (this.verified) {
+      return Promise.resolve({ status: 'verified', player, resolvedAt });
+    }
+    if (this.processing) {
+      return Promise.resolve({ status: 'pending', code: null });
+    }
+    return Promise.resolve({ status: 'pending', code: 'ABCDEFGH' });
   }
 
   public releaseFinalization(): Promise<boolean> {
     this.released += 1;
     this.claimed = false;
     return Promise.resolve(true);
+  }
+
+  public reset(interactionId: string): Promise<boolean> {
+    this.resets.push(interactionId);
+    if (this.resetResult) {
+      this.verified = false;
+      this.processing = false;
+    }
+    return Promise.resolve(this.resetResult);
   }
 }
 
@@ -185,6 +206,36 @@ describe('OAuthInteractionService', (): void => {
     expect(store.allocations).toEqual(['interaction-id']);
   });
 
+  it('shows the verified identity for confirmation instead of allocating a code', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    store.verified = true;
+    const service = new OAuthInteractionService(gateway, store, new RecordingLogger());
+    const { request, response } = createTransport();
+
+    await expect(service.start(request, response)).resolves.toEqual({
+      clientId: 'test-client',
+      interactionId: 'interaction-id',
+      kind: 'login',
+      scope: 'openid profile',
+      verifiedPlayer: player,
+    });
+    expect(store.allocations).toEqual([]);
+  });
+
+  it('does not allocate a code while a verification claim is in flight', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    store.processing = true;
+    const service = new OAuthInteractionService(gateway, store, new RecordingLogger());
+    const { request, response } = createTransport();
+
+    const interaction = await service.start(request, response);
+    expect(interaction.kind).toBe('login');
+    expect(interaction).not.toHaveProperty('code');
+    expect(store.allocations).toEqual([]);
+  });
+
   it('rejects an interaction URL that is not bound to the active signed session', async (): Promise<void> => {
     const service = new OAuthInteractionService(
       new RecordingGateway(),
@@ -196,6 +247,43 @@ describe('OAuthInteractionService', (): void => {
     await expect(service.start(request, response, 'different-interaction')).rejects.toThrow(
       'does not match the active session',
     );
+  });
+
+  it('discards the verified identity and re-allocates on explicit rejection', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    store.verified = true;
+    const service = new OAuthInteractionService(gateway, store, new RecordingLogger());
+    const { request, response } = createTransport();
+
+    await expect(service.resetVerification(request, response)).resolves.toBeUndefined();
+    expect(store.resets).toEqual(['interaction-id']);
+    expect(store.allocations).toEqual(['interaction-id']);
+  });
+
+  it('keeps the current state when the rejection races a completed finalization', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    store.resetResult = false;
+    const service = new OAuthInteractionService(gateway, store, new RecordingLogger());
+    const { request, response } = createTransport();
+
+    await expect(service.resetVerification(request, response)).resolves.toBeUndefined();
+    expect(store.resets).toEqual(['interaction-id']);
+    expect(store.allocations).toEqual([]);
+  });
+
+  it('rejects a not-you URL that is not bound to the active signed session', async (): Promise<void> => {
+    const service = new OAuthInteractionService(
+      new RecordingGateway(),
+      new FinalizationStore(),
+      new RecordingLogger(),
+    );
+    const { request, response } = createTransport();
+
+    await expect(
+      service.resetVerification(request, response, 'different-interaction'),
+    ).rejects.toThrow('does not match the active session');
   });
 
   it('offers skin verification unless acr_values requires online mode only', async (): Promise<void> => {

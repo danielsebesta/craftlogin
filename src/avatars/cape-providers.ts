@@ -1,5 +1,5 @@
 import { readBoundedResponseBody } from '../mojang/bounded-body.js';
-import { isPngImage } from './skin-texture.js';
+import { isBoundedTexturePng } from './skin-texture.js';
 import type { SpecificCapeProvider } from './types.js';
 
 const CRAFTLOGIN_USER_AGENT = 'CraftLogin/0.1 (+https://github.com/danielsebesta/craftlogin)';
@@ -28,7 +28,7 @@ export async function fetchOptifineCape(
       return undefined;
     }
     const buffer = await readBoundedResponseBody(response, MAX_CAPE_BYTES, 'Cape');
-    return isPngImage(buffer) ? buffer : undefined;
+    return isBoundedTexturePng(buffer) ? buffer : undefined;
   } catch {
     return undefined;
   }
@@ -50,7 +50,7 @@ export async function fetchLabymodCape(
       return undefined;
     }
     const buffer = await readBoundedResponseBody(response, MAX_CAPE_BYTES, 'Cape');
-    return isPngImage(buffer) ? buffer : undefined;
+    return isBoundedTexturePng(buffer) ? buffer : undefined;
   } catch {
     return undefined;
   }
@@ -72,7 +72,7 @@ export async function fetchMinecraftcapesCape(
       return undefined;
     }
     const buffer = await readBoundedResponseBody(response, MAX_CAPE_BYTES, 'Cape');
-    return isPngImage(buffer) ? buffer : undefined;
+    return isBoundedTexturePng(buffer) ? buffer : undefined;
   } catch {
     return undefined;
   }
@@ -99,7 +99,7 @@ export async function fetch5zigCape(
       const rawData = json['d'];
       if (typeof rawData === 'string') {
         const buffer = Buffer.from(rawData, 'base64');
-        return buffer.length <= MAX_CAPE_BYTES && isPngImage(buffer) ? buffer : undefined;
+        return buffer.length <= MAX_CAPE_BYTES && isBoundedTexturePng(buffer) ? buffer : undefined;
       }
     }
     return undefined;
@@ -124,7 +124,7 @@ export async function fetchSkinmcCape(
       return undefined;
     }
     const buffer = await readBoundedResponseBody(response, MAX_CAPE_BYTES, 'Cape');
-    return isPngImage(buffer) ? buffer : undefined;
+    return isBoundedTexturePng(buffer) ? buffer : undefined;
   } catch {
     return undefined;
   }

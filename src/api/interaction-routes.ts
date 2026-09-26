@@ -33,6 +33,7 @@ import {
   interactionAbortRouteSchema,
   interactionAssetRouteSchema,
   interactionCompleteRouteSchema,
+  interactionNotYouRouteSchema,
   interactionPageRouteSchema,
   interactionStatusRouteSchema,
   skinVerificationDownloadRouteSchema,
@@ -69,6 +70,11 @@ export interface ApiInteractionService {
     response: ServerResponse,
     expectedInteractionId?: string,
   ): Promise<PendingOAuthInteraction>;
+  resetVerification(
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<void>;
   status(
     request: IncomingMessage,
     response: ServerResponse,
@@ -188,6 +194,9 @@ export function registerInteractionRoutes(
               }),
           ...(owner === undefined ? {} : { owner }),
           scope: interaction.scope,
+          ...(interaction.verifiedPlayer === undefined
+            ? {}
+            : { verifiedPlayer: interaction.verifiedPlayer }),
           ...(interaction.skinChallenge === undefined
             ? {}
             : { skinChallenge: interaction.skinChallenge }),
@@ -434,6 +443,26 @@ export function registerInteractionRoutes(
       }
       void reply.header('cache-control', 'no-store');
       await reply.send({ status: verification.status });
+    },
+  );
+
+  server.post<{ Params: InteractionParams }>(
+    '/interaction/:uid/not-you',
+    {
+      config: { rateLimit: interactionPageRateLimit },
+      schema: interactionNotYouRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      try {
+        await options.interactions.resetVerification(request.raw, reply.raw, request.params.uid);
+      } catch (error: unknown) {
+        // A moved-on interaction (completed, expired, or consent prompt) still
+        // lands back on the friendly page rather than a JSON error.
+        if (!isInteractionClientError(error)) {
+          throw error;
+        }
+      }
+      await reply.redirect(interactionPageUrl(request.params.uid), 303);
     },
   );
 

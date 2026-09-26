@@ -173,6 +173,61 @@ describe('RedisVerificationStore', (): void => {
     });
   });
 
+  it('discards a verified identity on reset and re-issues a fresh code', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    const code = await verificationStore.allocate(interactionId);
+    const claim = await verificationStore.claim(code);
+    if (claim === null) {
+      throw new Error('Expected the verification code to be claimable');
+    }
+    const player = {
+      uuid: '123e4567-e89b-42d3-a456-426614174000',
+      username: 'VerifiedPlayer',
+    };
+    const resolvedAt = new Date('2026-09-06T12:00:00.000Z');
+    expect(await verificationStore.complete(claim, player, resolvedAt)).toBe(true);
+
+    // The claim already consumed the code key, so a reset cannot resurrect it.
+    expect(await verificationStore.reset(interactionId)).toBe(true);
+    expect(await verificationStore.hasPendingCode(code)).toBe(false);
+
+    const freshCode = await verificationStore.allocate(interactionId);
+    expect(freshCode).not.toBe(code);
+    expect(await verificationStore.getStatus(interactionId)).toEqual({
+      status: 'pending',
+      code: freshCode,
+    });
+
+    // A second rejection with no verified identity is a no-op.
+    expect(await verificationStore.reset(interactionId)).toBe(false);
+  });
+
+  it('lets the finalization claim win over a concurrent reset', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    const code = await verificationStore.allocate(interactionId);
+    const claim = await verificationStore.claim(code);
+    if (claim === null) {
+      throw new Error('Expected the verification code to be claimable');
+    }
+    expect(
+      await verificationStore.complete(
+        claim,
+        { uuid: '123e4567-e89b-42d3-a456-426614174000', username: 'VerifiedPlayer' },
+        new Date('2026-09-06T12:00:00.000Z'),
+      ),
+    ).toBe(true);
+
+    const finalization = await verificationStore.claimVerified(interactionId);
+    if (finalization === null) {
+      throw new Error('Expected a finalization claim');
+    }
+    expect(await verificationStore.reset(interactionId)).toBe(false);
+    expect(await verificationStore.completeFinalization(finalization)).toBe(true);
+    expect(await verificationStore.getStatus(interactionId)).toEqual({ status: 'expired' });
+  });
+
   it('atomically deletes an authorization code after one consumption and stores no plaintext code', async (): Promise<void> => {
     const redisClient = requireRedis(redis);
     const adapter = new RedisOidcAdapter('AuthorizationCode', redisClient, keyPrefix);

@@ -39,7 +39,7 @@ Use Authorization Code Flow with all of the following:
 
 CraftLogin requires PKCE S256 for public **and** confidential clients. Validate and consume the
 stored state exactly once on callback. Keep state, nonce, and the PKCE verifier server-side or in
-appropriately protected, short-lived cookies.
+appropriately protected, temporary cookies.
 
 Request `offline_access` only when the application genuinely needs a refresh token. Refresh tokens
 are sensitive credentials and require protected storage and rotation handling.

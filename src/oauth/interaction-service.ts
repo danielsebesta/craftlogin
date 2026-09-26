@@ -4,7 +4,7 @@ import type {
   RedisVerificationStore,
   VerificationFinalizationClaim,
 } from '../verification/redis-verification-store.js';
-import type { VerificationStatus } from '../verification/types.js';
+import type { AuthenticatedMinecraftPlayer, VerificationStatus } from '../verification/types.js';
 import type { SkinVerificationChallenge } from '../verification/redis-skin-verification-store.js';
 import type { SkinVerificationLookup } from '../verification/skin-verification-service.js';
 import { getErrorKind } from '../logging/error-kind.js';
@@ -22,10 +22,12 @@ interface VerificationInteractionStore {
   completeFinalization(claim: VerificationFinalizationClaim): Promise<boolean>;
   getStatus(interactionId: string): Promise<VerificationStatus>;
   releaseFinalization(claim: VerificationFinalizationClaim): Promise<boolean>;
+  reset(interactionId: string): Promise<boolean>;
 }
 
 interface SkinInteractionVerification {
   check(interactionId: string): Promise<VerificationStatus>;
+  discard(interactionId: string): Promise<void>;
   getChallenge(interactionId: string): Promise<SkinVerificationChallenge | undefined>;
   lookup?(username: string): Promise<SkinVerificationLookup | undefined>;
   start(interactionId: string, username: string): Promise<SkinVerificationChallenge>;
@@ -52,6 +54,8 @@ export interface PendingOAuthInteraction {
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
   readonly allowsMicrosoftVerification?: boolean;
+  /** Server-side verified identity awaiting the user's explicit confirmation. */
+  readonly verifiedPlayer?: AuthenticatedMinecraftPlayer;
 }
 
 export type OAuthInteractionCompletion =
@@ -72,6 +76,7 @@ export class OAuthInteractionService {
           | 'completeFinalization'
           | 'getStatus'
           | 'releaseFinalization'
+          | 'reset'
         >
       | VerificationInteractionStore,
     private readonly logger: OAuthInteractionLogger,
@@ -106,7 +111,24 @@ export class OAuthInteractionService {
     if (interaction.promptName !== 'login') {
       throw new OAuthInteractionStateError('The OIDC interaction prompt is not supported');
     }
-    const code = await this.verification.allocate(interaction.interactionId);
+    // A resolved verification waits for an explicit confirm/not-you decision
+    // instead of completing automatically.
+    const status = await this.verification.getStatus(interaction.interactionId);
+    if (status.status === 'verified') {
+      return {
+        clientId: interaction.clientId,
+        interactionId: interaction.interactionId,
+        kind: 'login',
+        scope: interaction.scope,
+        verifiedPlayer: status.player,
+      };
+    }
+    // 'processing' reports pending without a code; allocating here would collide
+    // with the in-flight claim, so the join address stays unset for that window.
+    const code =
+      status.status === 'pending' && status.code === null
+        ? undefined
+        : await this.verification.allocate(interaction.interactionId);
     const skinChallenge = await this.readSkinChallenge(interaction.interactionId);
     const allowsSkinVerification = this.allowsSkinVerification(interaction);
     const allowsOnlineVerification = permitsAuthenticationMethod(
@@ -118,7 +140,7 @@ export class OAuthInteractionService {
       permitsAuthenticationMethod(interaction, MICROSOFT_OAUTH_ACR);
     return {
       clientId: interaction.clientId,
-      ...(allowsOnlineVerification ? { code } : {}),
+      ...(allowsOnlineVerification && code !== undefined ? { code } : {}),
       interactionId: interaction.interactionId,
       kind: 'login',
       scope: interaction.scope,
@@ -270,6 +292,26 @@ export class OAuthInteractionService {
       );
     }
     return { redirectTo: await this.gateway.switchAccount(request, response) };
+  }
+
+  // Rejecting the verified identity discards the resolved record and
+  // re-allocates a fresh code so every method becomes selectable again.
+  public async resetVerification(
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectedInteractionId?: string,
+  ): Promise<void> {
+    const { context: interaction } = await this.requireLoginInteraction(
+      request,
+      response,
+      expectedInteractionId,
+    );
+    // Drop any pending skin challenge first so it cannot re-resolve the fresh
+    // record or block a different account's challenge.
+    await this.skinVerification?.discard(interaction.interactionId);
+    if (await this.verification.reset(interaction.interactionId)) {
+      await this.verification.allocate(interaction.interactionId);
+    }
   }
 
   public async status(

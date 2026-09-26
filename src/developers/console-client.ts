@@ -16,7 +16,7 @@ export interface ConsoleClientStore {
         clientId: string;
         clientSecretHash: null;
         name: string;
-        ownerUuid: null;
+        ownerUuid: string | null;
         redirectUris: string[];
         verifiedAt: Date;
       };
@@ -25,8 +25,8 @@ export interface ConsoleClientStore {
       where: { clientId: string };
     }): Promise<{ clientId: string; id: string }>;
     updateMany(options: {
-      data: { verifiedAt: Date };
-      where: { id: string; verifiedAt: null };
+      data: { ownerUuid?: string; verifiedAt?: Date };
+      where: { id: string; ownerUuid?: null; verifiedAt?: null };
     }): Promise<{ count: number }>;
   };
 }
@@ -41,6 +41,7 @@ export function consoleCallbackUrl(issuer: string): string {
 export async function ensureConsoleClient(
   database: ConsoleClientStore,
   issuer: string,
+  ownerUuid?: string,
 ): Promise<ConsoleOAuthClient> {
   const redirectUri = consoleCallbackUrl(issuer);
   const app = await database.app.upsert({
@@ -48,7 +49,7 @@ export async function ensureConsoleClient(
       clientId: CONSOLE_CLIENT_ID,
       clientSecretHash: null,
       name: CONSOLE_CLIENT_NAME,
-      ownerUuid: null,
+      ownerUuid: ownerUuid ?? null,
       redirectUris: [redirectUri],
       verifiedAt: new Date(),
     },
@@ -62,5 +63,13 @@ export async function ensureConsoleClient(
     data: { verifiedAt: new Date() },
     where: { id: app.id, verifiedAt: null },
   });
+  // The configured owner adopts an unowned console client; an existing owner is
+  // a deliberate operator choice and is not overwritten.
+  if (ownerUuid !== undefined) {
+    await database.app.updateMany({
+      data: { ownerUuid },
+      where: { id: app.id, ownerUuid: null },
+    });
+  }
   return { clientId: app.clientId, redirectUri };
 }

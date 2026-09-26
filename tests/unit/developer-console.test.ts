@@ -10,7 +10,10 @@ import { createApiServer } from '../../src/api/server.js';
 import { APP_ICON_MAX_BYTES } from '../../src/developers/app-icon.js';
 import type { ManagedApp } from '../../src/developers/app-management.js';
 import type { DeveloperRole } from '../../src/developers/developer-repository.js';
-import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
+import type {
+  AuthenticatedDeveloperSession,
+  DeveloperSessionView,
+} from '../../src/developers/session-service.js';
 import { english } from '../../src/locales/en.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
 
@@ -168,6 +171,61 @@ describe('Developer Console', (): void => {
 
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/developers/login');
+  });
+
+  it('lists console sessions with a current badge and revokes a chosen one', async (): Promise<void> => {
+    const sessionList: DeveloperSessionView[] = [
+      {
+        current: true,
+        expiresInSeconds: 3_600,
+        ipAddress: '192.0.2.10',
+        issuedAtMilliseconds: 1_775_000_000_000,
+        role: 'admin',
+        sessionKeyId: 'a'.repeat(64),
+        userAgent: 'Current <browser>',
+      },
+      {
+        current: false,
+        expiresInSeconds: 1_800,
+        ipAddress: '198.51.100.23',
+        issuedAtMilliseconds: 1_774_000_000_000,
+        role: 'admin',
+        sessionKeyId: 'b'.repeat(64),
+        userAgent: 'Other device',
+      },
+    ];
+    const revokeCalls: { sessionKey: string; userUuid: string }[] = [];
+    const server = await buildServer({ authenticated: true, revokeCalls, sessionList });
+
+    const dashboard = await server.inject({ method: 'GET', url: '/developers' });
+    expect(dashboard.statusCode).toBe(200);
+    expect(dashboard.body).toContain('Console sessions');
+    expect(dashboard.body).toContain('This device');
+    expect(dashboard.body).toContain('Current &lt;browser&gt;');
+    expect(dashboard.body).toContain('198.51.100.23');
+    expect(dashboard.body).toContain(`name="sessionKey" value="${'b'.repeat(64)}"`);
+    expect(dashboard.body).not.toContain(`name="sessionKey" value="${'a'.repeat(64)}"`);
+
+    const revoked = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: `csrfToken=${developerSession.csrfToken}&sessionKey=${'b'.repeat(64)}`,
+      url: '/developers/sessions/revoke',
+    });
+    expect(revoked.statusCode).toBe(303);
+    expect(revoked.headers.location).toBe('/developers?notice=session-revoked');
+    expect(revokeCalls).toEqual([
+      { sessionKey: 'b'.repeat(64), userUuid: developerSession.userUuid },
+    ]);
+
+    const missing = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: `csrfToken=${developerSession.csrfToken}&sessionKey=${'c'.repeat(64)}`,
+      url: '/developers/sessions/revoke',
+    });
+    expect(missing.statusCode).toBe(303);
+    expect(missing.headers.location).toBe('/developers?notice=not-found');
   });
 
   it('lists an unverified application with a request link for its owner', async (): Promise<void> => {
@@ -522,7 +580,10 @@ describe('Developer Console', (): void => {
     readonly removeIconOutcome?: boolean;
     readonly requestOutcome?: 'applied' | 'unavailable';
     readonly requests?: { actorUuid: string; id: string; note?: string }[];
+    readonly revokeCalls?: { sessionKey: string; userUuid: string }[];
+    readonly revokeOutcome?: boolean;
     readonly role?: DeveloperRole;
+    readonly sessionList?: DeveloperSessionView[];
     readonly setIconCalls?: { appId: string; bytes: number; hash: string }[];
     readonly setIconOutcome?: boolean;
     readonly setVerifiedOutcome?: boolean;
@@ -608,6 +669,15 @@ describe('Developer Console', (): void => {
       developerAuthentication: authentication,
       developerSessions: {
         create: (): Promise<AuthenticatedDeveloperSession> => Promise.resolve(session),
+        list: (): Promise<DeveloperSessionView[]> => Promise.resolve(options.sessionList ?? []),
+        revokeByKeyId: (userUuid: string, sessionKey: string): Promise<boolean> => {
+          options.revokeCalls?.push({ sessionKey, userUuid });
+          return Promise.resolve(
+            options.revokeOutcome ??
+              options.sessionList?.some((s) => s.sessionKeyId === sessionKey) ??
+              false,
+          );
+        },
       },
       developers: {
         find: (uuid) =>
@@ -650,6 +720,7 @@ describe('Developer Console', (): void => {
       interactions: {
         abort: unavailable,
         complete: unavailable,
+        resetVerification: unavailable,
         start: unavailable,
         status: unavailable,
       },

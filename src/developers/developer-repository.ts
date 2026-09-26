@@ -35,8 +35,20 @@ export class LastAdministratorError extends Error {
   public override readonly name = 'LastAdministratorError';
 }
 
+export class OwnerAccessError extends Error {
+  public override readonly name = 'OwnerAccessError';
+}
+
 export class PrismaDeveloperAccessRepository implements DeveloperAccessRepository {
-  public constructor(private readonly database: PrismaClient) {}
+  private readonly protectedUuid: string | undefined;
+
+  public constructor(
+    private readonly database: PrismaClient,
+    protectedUuid?: string,
+  ) {
+    // Stored comparisons are lowercase canonical UUIDs.
+    this.protectedUuid = protectedUuid?.toLowerCase();
+  }
 
   public async find(uuidInput: string): Promise<DeveloperAccess | undefined> {
     const uuid = developerUuidSchema.parse(uuidInput);
@@ -48,6 +60,9 @@ export class PrismaDeveloperAccessRepository implements DeveloperAccessRepositor
     const uuid = developerUuidSchema.parse(uuidInput);
     const role = developerRoleSchema.parse(roleInput);
 
+    if (role !== 'admin' && uuid === this.protectedUuid) {
+      throw new OwnerAccessError('The configured owner cannot be demoted');
+    }
     return await this.withSerializableRetry(async (transaction): Promise<DeveloperAccess> => {
       const current = await transaction.developer.findUnique({ where: { uuid } });
       if (
@@ -89,6 +104,9 @@ export class PrismaDeveloperAccessRepository implements DeveloperAccessRepositor
 
   public async revoke(uuidInput: string): Promise<boolean> {
     const uuid = developerUuidSchema.parse(uuidInput);
+    if (uuid === this.protectedUuid) {
+      throw new OwnerAccessError('The configured owner cannot be revoked');
+    }
     return await this.withSerializableRetry(async (transaction): Promise<boolean> => {
       const current = await transaction.developer.findUnique({ where: { uuid } });
       if (current === null) {
@@ -149,5 +167,19 @@ function toPrismaRole(
 }
 
 function isRetryableTransactionConflict(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2034';
+  }
+  // Driver adapters report serialization failures without the P2034 wrapper;
+  // the Postgres SQLSTATE for a serialization failure is 40001.
+  if (error instanceof Error && error.name === 'DriverAdapterError') {
+    const cause: unknown = error.cause;
+    return (
+      typeof cause === 'object' &&
+      cause !== null &&
+      'originalCode' in cause &&
+      cause.originalCode === '40001'
+    );
+  }
+  return false;
 }

@@ -82,6 +82,9 @@ export class HttpMicrosoftOAuthClient {
     url.searchParams.set('response_mode', 'query');
     url.searchParams.set('scope', MICROSOFT_OAUTH_SCOPE);
     url.searchParams.set('state', state);
+    // Always show the Microsoft account picker: silent SSO would reuse the signed-in
+    // account, which traps multi-account players and "not you" retries on the wrong identity.
+    url.searchParams.set('prompt', 'select_account');
     url.searchParams.set('code_challenge', codeChallenge);
     url.searchParams.set('code_challenge_method', 'S256');
     return url.toString();
