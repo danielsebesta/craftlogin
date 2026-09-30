@@ -26,6 +26,11 @@ export interface SignInCancel {
   readonly label: string;
 }
 
+export interface SignInAccountLink {
+  readonly href: string;
+  readonly label: string;
+}
+
 export interface SignInVerification {
   readonly address?: string;
   readonly initialStatus: string;
@@ -96,6 +101,7 @@ export interface SignInVerifiedIdentity {
 export interface SignInPageInput {
   readonly accountAvatarUrl?: string;
   readonly accountLabel: string;
+  readonly accountLink?: SignInAccountLink;
   readonly accountName?: string;
   readonly action: string;
   readonly allowsHeading: string;
@@ -171,8 +177,12 @@ function renderAccountChip(input: SignInPageInput): string {
     input.accountAvatarUrl === undefined
       ? ''
       : `<img class="account-chip-avatar" src="${escapeHtml(input.accountAvatarUrl)}" alt="" width="32" height="32" decoding="async">`;
+  const link =
+    input.accountLink === undefined
+      ? ''
+      : `<a class="account-chip-link" href="${escapeHtml(input.accountLink.href)}">${escapeHtml(input.accountLink.label)}</a>`;
   return `
-          <p class="account-chip">${avatar}<span><span class="visually-hidden">${escapeHtml(input.accountLabel)} </span><span class="account-chip-name">${escapeHtml(input.accountName)}</span></span></p>`;
+          <p class="account-chip">${avatar}<span><span class="visually-hidden">${escapeHtml(input.accountLabel)} </span><span class="account-chip-name">${escapeHtml(input.accountName)}</span></span>${link}</p>`;
 }
 
 function renderVerifiedIdentity(identity: SignInVerifiedIdentity | undefined): string {

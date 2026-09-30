@@ -15,6 +15,7 @@ import type { DeveloperSessionService } from '../developers/session-service.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { SkinStore } from '../mojang/skin-store.js';
 import type { AccessTokenAuthenticator } from './access-token-authenticator.js';
+import { registerAccountRoutes, type AccountTokenStore } from './account-routes.js';
 import { registerAgentGuidanceRoutes } from './agent-guidance-routes.js';
 import { registerAppIconRoutes } from './app-icon-routes.js';
 import type { AppRegistrar } from './app-registration.js';
@@ -62,6 +63,7 @@ export interface ApiServerOptions {
   readonly clients: ClientDirectoryLookup & RegisteredOriginLookup;
   readonly consoleClient: { readonly clientId: string };
   readonly cookieKeys: readonly string[];
+  readonly database: AccountTokenStore;
   readonly demoPlayer?: DemoPlayer;
   readonly fetchImplementation?: typeof fetch;
   readonly developerAuthentication: DeveloperAuthentication;
@@ -87,6 +89,7 @@ export interface ApiServerOptions {
   readonly ownerUuid?: string;
   readonly rateLimitNamespace?: string;
   readonly rateLimitRedis?: Redis;
+  readonly redis: Pick<Redis, 'eval' | 'get'>;
   readonly readiness: ReadinessCheck;
   readonly trustProxy?: boolean;
   readonly users: CurrentUserLookup;
@@ -181,6 +184,14 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
     interactions: options.interactions,
     minecraftBaseDomain: options.minecraftBaseDomain,
     ...(options.minecraft === undefined ? {} : { players: options.minecraft.players }),
+  });
+  registerAccountRoutes(server, {
+    cookieKeys: options.cookieKeys,
+    database: options.database,
+    developers: options.developers,
+    logger: server.log,
+    redis: options.redis,
+    users: options.users,
   });
   if (
     options.microsoftVerification !== undefined &&

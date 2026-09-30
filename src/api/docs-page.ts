@@ -4,20 +4,11 @@ import { highlightCode } from './ui/code-highlight.js';
 import { renderPageDocument } from './ui/document.js';
 import { renderIcon } from './ui/icons.js';
 import { DEMO_PLAYER, formatShowcaseCaption, type DemoPlayer } from './demo-players.js';
-import { siteFooter, siteHeader } from './ui/site-chrome.js';
+import { siteHeader } from './ui/site-chrome.js';
 
 export interface DocsPageInput {
   readonly demoPlayer?: DemoPlayer;
 }
-const DOCS_NAVIGATION_ICONS = [
-  'code',
-  'login',
-  'user',
-  'key',
-  'server',
-  'gamepad',
-  'shield',
-] as const;
 const QUICKSTART_ICONS = ['briefcase', 'link', 'user'] as const;
 
 // Capeless players would render an empty image, so the gallery skips cape views.
@@ -67,8 +58,8 @@ export function renderDocsPage(input: DocsPageInput = {}): string {
           <ol>
 ${strings.tableOfContents.items
   .map(
-    (item, index): string =>
-      `            <li><a href="${escapeHtml(item.href)}">${renderIcon(DOCS_NAVIGATION_ICONS[index] ?? 'bookOpen', 'nav-icon')}${escapeHtml(item.label)}</a></li>`,
+    (item): string =>
+      `            <li><a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a></li>`,
   )
   .join('\n')}
           </ol>
@@ -156,7 +147,7 @@ ${strings.claims.claims
 ${strings.sessions.items
   .map(
     (item): string =>
-      `            <div class="card card-compact"><dt>${escapeHtml(item.title)}</dt><dd>${escapeHtml(item.detail)}</dd></div>`,
+      `            <div><dt>${escapeHtml(item.title)}</dt><dd>${escapeHtml(item.detail)}</dd></div>`,
   )
   .join('\n')}
           </dl>
@@ -218,9 +209,9 @@ ${strings.security.items
         </section>
       </article>`,
     description: strings.description,
-    footer: siteFooter(),
     header: siteHeader('/docs/'),
     mainClass: 'container docs-shell',
+    script: ['/assets/docs-scrollspy.js'],
     stylesheet: '/assets/docs.css',
     title: strings.title,
   });

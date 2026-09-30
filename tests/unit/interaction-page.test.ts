@@ -126,6 +126,29 @@ describe('consent page method picker', (): void => {
   });
 });
 
+describe('signed-in account chip', (): void => {
+  it('links to the account page for connected-app management', (): void => {
+    const page = renderInteractionPage({
+      ...baseInput,
+      accountName: 'VerifiedPlayer',
+      kind: 'consent',
+    });
+
+    expect(page).toContain('account-chip');
+    expect(page).toContain('VerifiedPlayer');
+    expect(page).toContain(
+      `<a class="account-chip-link" href="/account">${english.interaction.manageAccount}</a>`,
+    );
+  });
+
+  it('hides the account chip when the visitor is not signed in', (): void => {
+    const page = renderInteractionPage({ ...baseInput, kind: 'consent' });
+
+    expect(page).not.toContain('account-chip');
+    expect(page).not.toContain('account-chip-link');
+  });
+});
+
 describe('consent page application icon', (): void => {
   it('shows an uploaded icon above the application name', (): void => {
     const page = renderInteractionPage({

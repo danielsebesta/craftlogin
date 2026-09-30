@@ -27,6 +27,7 @@ import type {
 } from '../../src/developers/session-store.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
 import type { SessionSignal } from '../../src/oauth/session-security.js';
+import { createSessionSignal } from '../../src/oauth/session-security.js';
 
 const uuid = '069a79f4-44e9-4726-a5be-fca90e38aaf5';
 
@@ -267,7 +268,7 @@ const sessionId = `ds_${'a'.repeat(43)}`;
 class SessionStoreStub {
   public record: DeveloperSessionRecord | undefined = {
     expiresInSeconds: 3_600,
-    ipAddress: '203.0.113.9',
+    ipReference: createSessionSignal('seed', '203.0.113.9', 'seed', 'k'.repeat(32)).ipReference,
     issuedAtMilliseconds: Date.now(),
     role: 'developer',
     sessionId,
@@ -308,7 +309,7 @@ class SessionStoreStub {
         : [
             {
               expiresInSeconds: this.record.expiresInSeconds,
-              ipAddress: this.record.ipAddress,
+              ipReference: this.record.ipReference,
               issuedAtMilliseconds: this.record.issuedAtMilliseconds,
               role: this.record.role,
               sessionKeyId: `key:${this.record.sessionId}`,
@@ -400,7 +401,8 @@ describe('DeveloperSessionService', (): void => {
       }),
     ).resolves.toBeDefined();
     expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.ipAddress).toBe('198.51.100.22');
+    expect(anomalies[0]?.ipReference).toMatch(/^ip_[A-Za-z0-9_-]{22}$/u);
+    expect(JSON.stringify(anomalies[0])).not.toContain('198.51.100');
   });
 
   it('revokes access immediately when the UUID leaves the registry', async (): Promise<void> => {

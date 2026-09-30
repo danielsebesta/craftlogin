@@ -59,6 +59,26 @@ export const interactionPageRateLimit = {
   timeWindow: 60 * 1_000,
 };
 
+// Same profile as the interaction page: a Redis session read plus a Postgres
+// token listing on every render.
+export const accountPageRateLimit = {
+  groupId: 'account-page',
+  max: interactionPageRateLimit.max,
+  timeWindow: interactionPageRateLimit.timeWindow,
+};
+
+export const accountRevokeRateLimit = {
+  groupId: 'account-revoke',
+  max: 30,
+  timeWindow: 60 * 1_000,
+};
+
+export const accountDeleteRateLimit = {
+  groupId: 'account-delete',
+  max: 30,
+  timeWindow: 60 * 1_000,
+};
+
 export const developerLoginPageRateLimit = {
   groupId: 'developer-login-page',
   max: 120,

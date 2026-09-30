@@ -26,8 +26,8 @@ export interface DeveloperSessionLogger {
 export interface DeveloperSessionView {
   readonly current: boolean;
   readonly expiresInSeconds: number;
-  readonly ipAddress: string;
   readonly issuedAtMilliseconds: number;
+  readonly networkMatch: boolean;
   readonly role: DeveloperRole;
   readonly sessionKeyId: string;
   readonly userAgent: string;
@@ -60,7 +60,7 @@ export class DeveloperSessionService {
       this.referenceKey,
     );
     const session = await this.sessions.create({
-      ipAddress: signal.ipAddress,
+      ipReference: signal.ipReference,
       role,
       userAgent: signal.userAgent,
       userUuid,
@@ -98,9 +98,11 @@ export class DeveloperSessionService {
       );
     }
 
+    // Records written before network fingerprinting carry 'unknown' as their
+    // reference; they never match a live fingerprint and expire on their own.
     const currentSignal = this.signalFor(session, requestSignal);
     if (
-      currentSignal.ipAddress !== session.ipAddress ||
+      currentSignal.ipReference !== session.ipReference ||
       currentSignal.userAgent !== session.userAgent
     ) {
       this.logger.warn(
@@ -116,14 +118,24 @@ export class DeveloperSessionService {
     await this.sessions.revoke(sessionId);
   }
 
-  public async list(userUuid: string, currentSessionId: string): Promise<DeveloperSessionView[]> {
+  public async list(
+    userUuid: string,
+    currentSessionId: string,
+    requestSignal: DeveloperRequestSignal,
+  ): Promise<DeveloperSessionView[]> {
     const sessions = await this.sessions.listForUser(userUuid);
     const currentKeyId = this.sessions.keyIdFor(currentSessionId);
+    const currentReference = createSessionSignal(
+      currentSessionId,
+      requestSignal.ipAddress,
+      requestSignal.userAgent,
+      this.referenceKey,
+    ).ipReference;
     return sessions.map((session): DeveloperSessionView => ({
       current: session.sessionKeyId === currentKeyId,
       expiresInSeconds: session.expiresInSeconds,
-      ipAddress: session.ipAddress,
       issuedAtMilliseconds: session.issuedAtMilliseconds,
+      networkMatch: session.ipReference === currentReference,
       role: session.role,
       sessionKeyId: session.sessionKeyId,
       userAgent: session.userAgent,

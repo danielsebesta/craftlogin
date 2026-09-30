@@ -1,4 +1,34 @@
 export const english = {
+  account: {
+    connectedHeading: 'Connected services',
+    deleteAction: 'Delete my account',
+    deleteHeading: 'Delete account',
+    deleteLead:
+      'Permanently deletes your CraftLogin identity record, disconnects every application, and signs this browser out. You can come back any time by verifying your Minecraft account again.',
+    durableNote:
+      'Only apps that asked to stay signed in appear here. Sign-ins without that permission end on their own and never reach this list.',
+    emptyConnected: 'Applications you allow to stay signed in will appear here.',
+    heading: 'Your account',
+    identityHeading: 'Minecraft identity',
+    lead: 'See which applications can keep working with your Minecraft account and disconnect them.',
+    notSignedIn: {
+      heading: 'Sign in to view your account',
+      homeAction: 'Back to CraftLogin',
+      lead: 'This page lists the applications that keep working with your Minecraft account between visits. You are signed in automatically while you approve an app.',
+      title: 'CraftLogin account',
+    },
+    revokeAction: 'Disconnect',
+    revokedNotice: 'The app was disconnected and its saved sessions were revoked.',
+    scopesLabel: 'Permissions',
+    sessionsLabel: 'Active sessions',
+    signedInLabel: 'Signed in',
+    signedInSinceLabel: 'Signed in since',
+    title: 'Your account',
+    usernameLabel: 'Minecraft username',
+    uuidLabel: 'Minecraft UUID',
+    validUntilLabel: 'Sessions valid until',
+    verifiedBadge: 'Verified by CraftLogin',
+  },
   authorizationError: {
     codeLabel: 'Protocol error',
     footer: 'No account information was shared.',
@@ -11,12 +41,13 @@ export const english = {
       'NOT AN OFFICIAL MINECRAFT SERVICE.',
       'NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
     ],
-    legalLinks: [
+    footerLinks: [
       { href: '/privacy', label: 'Privacy' },
       { href: '/terms', label: 'Terms' },
+      { href: 'https://github.com/danielsebesta/craftlogin', label: 'GitHub' },
     ],
-    legalLinksLabel: 'Legal',
-    operator: 'Operated independently by Daniel Šebesta. Contact: contact@craftlogin.com.',
+    footerLinksLabel: 'Footer',
+    menuLabel: 'Menu',
     skipToContent: 'Skip to main content',
   },
   api: {
@@ -178,7 +209,7 @@ export const english = {
       scopes: {
         offlineAccess: 'Maintain delegated access with refresh-token rotation.',
         openid: 'Authenticate the Minecraft account.',
-        profile: 'Read the current Minecraft username and avatar.',
+        profile: 'Read the public Minecraft username and avatar.',
       },
       tags: {
         applications:
@@ -286,7 +317,7 @@ export const english = {
       purposeHeading: 'Purpose',
       scopes: [
         { name: 'openid', detail: 'Authenticate the Minecraft identity and receive an ID token.' },
-        { name: 'profile', detail: 'Receive the current username and avatar URL.' },
+        { name: 'profile', detail: 'Receive the public username and avatar URL.' },
         {
           name: 'offline_access',
           detail: 'Receive a refresh token for justified persistent access.',
@@ -580,11 +611,13 @@ export const english = {
       empty: 'Only this session is active.',
       expiresLabel: 'Expires in',
       heading: 'Console sessions',
-      ipLabel: 'IP address',
+      differentNetwork: 'Different network',
       minutesSuffix: 'min',
       revokedNotice: 'Session signed out.',
       revokeAction: 'Sign out',
       signedInLabel: 'Signed in',
+      sameNetwork: 'This network',
+      unknownAgent: 'Unrecognized device',
     },
     footer: 'Developer access is restricted to administrator-approved Minecraft UUIDs.',
     navigation: {
@@ -609,7 +642,6 @@ export const english = {
       copied: 'Copied',
       copy: 'Copy prompt',
       heading: 'Let your agent do it',
-      preview: 'Show the prompt',
       prompt:
         'Implement "Sign in with CraftLogin" in this project.\n\nFirst inspect the existing framework, routing, authentication, session, environment, and test conventions. Then read https://craftlogin.com/llms-full.txt and treat it as the integration contract.\n\nAsk me only for the client ID, whether the client is public or confidential, and the exact redirect and post-logout URIs if they are not already configured. Never ask me to paste a client secret; use the server-side CRAFTLOGIN_CLIENT_SECRET environment variable when a confidential client requires one.\n\nUse a maintained OpenID Connect library and discovery from https://craftlogin.com/.well-known/openid-configuration. Implement the login action, callback, stable account mapping by sub (the Minecraft UUID), local session, logout, configuration validation, accessible UI, documentation, and tests while preserving the project\'s existing architecture. Do not implement OAuth or token validation manually.\n\nBefore editing, summarize the plan. After editing, run the project\'s formatter, type checker, linter, and tests, then report changed files, required environment variables, the exact URI to register in CraftLogin, and any remaining manual steps. Do not claim completion while checks fail.',
       text: 'Paste a ready-made prompt into Claude Code, Codex, Cursor, or Copilot and let it wire up the standard flow for you.',
@@ -620,55 +652,71 @@ export const english = {
         {
           claim: 'sub',
           detail: 'Their Minecraft UUID. It stays the same even if they rename.',
+          scope: 'openid',
         },
         {
           claim: 'preferred_username',
           detail: 'The name they play under right now.',
+          scope: 'profile',
         },
         {
           claim: 'picture',
           detail: 'A live render of their skin, ready to show on your site.',
+          scope: 'profile',
         },
       ],
-      scopes: [
-        { detail: 'Sign the player in.', name: 'openid' },
-        { detail: 'Show their name and face.', name: 'profile' },
-      ],
-      scopesHeading: 'Permissions',
+      scopeLabel: 'Scope',
       text: 'Three simple facts on every login. The UUID never changes, so roles and purchases stay attached to the right player.',
       verifiedLabel: 'Verified Minecraft account',
     },
     avatars: {
       heading: 'Free avatars included',
       text: "Every login can also show the player's face, rendered live from their actual current skin. Use them in comments, member lists, or leaderboards. No keys, no extra calls, ready to hotlink.",
-      bust: 'Bust',
+      back: 'Back',
       body: 'Body',
+      bust: 'Bust',
       face: 'Face',
+      side: 'Side',
+      wings: 'Wings',
       exampleAlt: 'Example Minecraft avatar render',
       showcaseCaption: 'Showcase skin by {player}.',
       lookupAction: 'Render',
       lookupEmpty: 'No avatar could be rendered for that name.',
       lookupLabel: 'Try any player name or UUID',
     },
+    demo: {
+      addressLabel: 'Server Address',
+      gameTitle: 'Direct Connection',
+      joinButton: 'Join Server',
+      microsoftBar: 'craftlogin.com',
+      microsoftButton: 'Sign in with Microsoft',
+      microsoftHint: 'No Microsoft data is stored.',
+      microsoftLabel: 'Confirm Java Edition ownership',
+      signedIn: 'Signed in',
+      signInButton: 'Sign in with Minecraft',
+      siteAddress: 'your-site.com',
+      skinBar: 'minecraft.net',
+      skinHint: 'CraftLogin spots the hidden mark.',
+      skinLabel: 'Marked skin',
+      skinUpload: 'Upload skin',
+    },
     flow: {
       heading: 'From click to known player in seconds',
-      items: [
-        {
-          detail:
-            'Add a login button that sends the player to CraftLogin. No passwords or forms on your side.',
-          title: 'You send the player our way',
-        },
-        {
-          detail:
-            'They join a one-time server address, verify with their skin, or sign in with Microsoft. It takes seconds and works once.',
-          title: 'They prove it in Minecraft',
-        },
-        {
-          detail:
-            'Your site gets back their Minecraft UUID and current username. Now you reliably know who they are.',
-          title: 'You know exactly who they are',
-        },
-      ],
+      prove: {
+        detail:
+          'They join a one-time server address, verify with their skin, or sign in with Microsoft. It takes seconds and works once.',
+        title: 'They prove it in Minecraft',
+      },
+      receive: {
+        detail:
+          'Your site gets back their Minecraft UUID and current username. Now you reliably know who they are.',
+        title: 'You know exactly who they are',
+      },
+      send: {
+        detail:
+          'Add a login button that sends the player to CraftLogin. No passwords or forms on your side.',
+        title: 'You send the player our way',
+      },
     },
     getStarted: {
       console: {
@@ -686,26 +734,26 @@ export const english = {
     },
     useCases: {
       heading: 'Made for community sites',
-      items: [
-        {
-          detail:
-            'Give members forum or game roles tied to a real Minecraft account, not a nickname anyone can claim.',
-          title: 'Hand out roles',
-        },
-        {
-          detail:
-            'Deliver ranks and perks to the right player automatically after checkout. No manual whitelisting.',
-          title: 'Sell VIP',
-        },
-        {
-          detail:
-            'Let players comment and build a profile with their name and face, without yet another password.',
-          title: 'Comments and profiles',
-        },
-      ],
-    },
-    footer: {
-      license: 'MIT licensed',
+      roles: {
+        detail:
+          'Give members forum or game roles tied to a real Minecraft account, not a nickname anyone can claim.',
+        tags: ['Builder', 'Event team'],
+        title: 'Hand out roles',
+      },
+      vip: {
+        delivered: 'Delivered to {player}',
+        detail:
+          'Deliver ranks and perks to the right player automatically after checkout. No manual whitelisting.',
+        product: 'VIP rank, 30 days',
+        title: 'Sell VIP',
+      },
+      comments: {
+        detail:
+          'Let players comment and build a profile with their name and face, without yet another password.',
+        message: 'See you at the build contest tonight!',
+        time: '2 min ago',
+        title: 'Comments and profiles',
+      },
     },
     hero: {
       consoleAction: 'Set up login',
@@ -715,6 +763,7 @@ export const english = {
       lead: 'No one wants to register for another server forum. Let your players log in with the game they already have open. CraftLogin handles the rest through standard OAuth 2.0: open source, secure, and free.',
     },
     navigation: {
+      account: 'Account',
       ariaLabel: 'Primary navigation',
       brand: 'CraftLogin',
       developers: 'Console',
@@ -723,11 +772,20 @@ export const english = {
     },
     security: {
       heading: 'Safe by design',
-      text: 'There are no CraftLogin passwords to steal. Players never type a password on our pages, and we store no emails. Logins are temporary and single-use, return addresses must match exactly, and everything is open source, so anyone can check our work.',
+      neverStored: {
+        heading: 'CraftLogin never stores',
+        items: ['Passwords', 'Email addresses', 'Microsoft or Xbox tokens', 'Servers you play on'],
+      },
+      privacyAction: 'Read the privacy policy',
+      stored: {
+        heading: 'CraftLogin stores',
+        items: ['Minecraft UUID', 'Current username', 'First and last sign-in time'],
+      },
+      text: 'Players never type a password on our pages. Sign-in codes work once and expire within minutes, return addresses must match exactly, and CraftLogin is open source, so anyone can check our work.',
     },
   },
   legal: {
-    lastUpdated: 'Last updated: September 24, 2026',
+    lastUpdated: 'Last updated: September 27, 2026',
     privacy: {
       description:
         'What CraftLogin stores, what it never stores, and how to have your data removed.',
@@ -748,6 +806,7 @@ export const english = {
             'For every registered application: its client ID, display name, exact redirect URIs, owner, and manual verification labels.',
             'Refresh tokens only as one-way hashes, together with the client ID, your Minecraft UUID, and an expiry time.',
             'Temporary verification records in Redis, which expire after about five minutes.',
+            'With each session, a keyed fingerprint of your network derived from your IP address plus your user agent. The fingerprint cannot be reversed back to the address and serves only as a session anomaly signal.',
           ],
           paragraphs: [
             'Confidential client secrets are hashed with Argon2 before they are stored. CraftLogin cannot recover the original secret from that hash.',
@@ -762,30 +821,52 @@ export const english = {
           ],
         },
         {
-          heading: 'Cookies and sessions',
+          heading: 'Legal basis',
           paragraphs: [
-            'CraftLogin sets signed cookies that are HttpOnly, Secure, and SameSite=Lax. The sign-in flow uses a temporary interaction cookie and a five-minute Microsoft PKCE transaction cookie. The Developer Console uses an opaque server-side session with sliding expiry and an absolute lifetime.',
+            'CraftLogin processes your Minecraft identity to provide the sign-in service you request and to pass it to applications you approve on the consent screen (performance of a service, GDPR Article 6(1)(b)). Network fingerprints, rate limits, and audit logs exist to protect the service and its users (legitimate interest, Article 6(1)(f)). CraftLogin makes no automated decisions with legal or similarly significant effects and does not profile you.',
+          ],
+        },
+        {
+          heading: 'Cookies and sessions',
+          items: [
+            '__Host-craftlogin_session keeps you signed in between application sign-ins. It has a sliding expiry of about twelve hours and ends no later than seven days.',
+            '__Secure-craftlogin_interaction and __Secure-craftlogin_resume carry an in-progress sign-in between verification steps and are cleared when it finishes.',
+            '__Secure-craftlogin_ms_* is a five-minute transaction cookie for the Microsoft verification path.',
+            '__Secure-craftlogin_console_oauth carries the developer console sign-in transaction for a few minutes.',
+            '__Host-craftlogin_developer_session is the developer console session, with the same twelve-hour sliding and seven-day absolute expiry.',
+          ],
+          paragraphs: [
+            'Every cookie is signed, HttpOnly, Secure, and SameSite=Lax. All of them are strictly necessary for the service to work, which is why CraftLogin shows no consent banner.',
             'CraftLogin runs no analytics, no advertising, and no third-party tracking scripts.',
+          ],
+        },
+        {
+          heading: 'Who receives your data',
+          paragraphs: [
+            'Applications you approve on the consent screen receive your Minecraft UUID, current username, and avatar URL. Disconnecting an application on the account page stops future sharing and revokes its saved sessions.',
+            'Requests pass through Cloudflare, which provides the TLS edge and abuse protection and may process traffic in its global network, including the United States under the EU-US Data Privacy Framework. The service itself runs on infrastructure operated by its hosting provider.',
+            'CraftLogin sells or shares data with no one else.',
           ],
         },
         {
           heading: 'Logs and security signals',
           paragraphs: [
-            'The service writes structured operational logs without verification codes, tokens, secrets, or cookie values. IP address and user agent are recorded only as session anomaly signals, and an IP change alone never invalidates a session.',
+            'The service writes structured operational logs without verification codes, tokens, secrets, or cookie values. Instead of your IP address, logs and session records carry a keyed fingerprint of your network together with your user agent; a network change alone never invalidates a session.',
           ],
         },
         {
           heading: 'Retention',
           paragraphs: [
             'Verification records disappear automatically after about five minutes. Refresh tokens stop working when they expire, when you sign out, or when the application you signed in to revokes them.',
-            'Your account record is kept while you use CraftLogin. You can ask for it to be deleted at any time.',
+            'Your account record is kept while you use CraftLogin. You can delete it yourself on the account page, or ask for it to be deleted at any time by writing to contact@craftlogin.com.',
           ],
         },
         {
           heading: 'Your rights',
           paragraphs: [
-            'You can request access to, correction of, or deletion of the personal data CraftLogin holds about you, and you can object to its processing. Write to contact@craftlogin.com and include your Minecraft username or UUID.',
+            'You can request access to, correction of, deletion of, or a portable copy of the personal data CraftLogin holds about you, and you can restrict or object to its processing. Write to contact@craftlogin.com and include your Minecraft username or UUID. The account page already lists the applications connected to your identity, lets you disconnect them, and can delete the whole account record.',
             'If you signed in with Microsoft, the permission you granted lives in your Microsoft account. CraftLogin stores no Microsoft tokens and cannot revoke it for you; you can withdraw it at any time in your Microsoft account privacy settings under Apps and services that can access your data.',
+            'If you believe the processing breaks the law, you can lodge a complaint with the Office for Personal Data Protection (Úřad pro ochranu osobních údajů, uoou.cz) or another EU supervisory authority.',
           ],
         },
         {
@@ -806,6 +887,7 @@ export const english = {
           heading: 'The service',
           paragraphs: [
             'CraftLogin verifies that you control a Minecraft: Java Edition account and returns the resulting Minecraft UUID and current username to applications you approve. Verification confirms account control only. It does not transfer any Mojang or Microsoft rights, and it is not a license, entitlement, or ownership check beyond what it reports.',
+            'You must meet the age requirements of your Minecraft account and of the digital-consent rules in your country (15 in the Czech Republic). If you are younger, a parent or guardian has to agree to your use.',
           ],
         },
         {
@@ -890,12 +972,12 @@ export const english = {
     expiredHeading: 'This sign-in request expired',
     goBack: 'Go back',
     heading: 'Sign in to',
-    scopeIdentity: 'Your Minecraft identity (username, skin, cape, UUID)',
-    scopeIdentityCombined: 'Your Minecraft identity (username, skin, cape, UUID)',
+    scopeIdentity:
+      'Your Minecraft identity: UUID, username, skin, cape, and avatar (all public data)',
     scopeOffline: 'Stay signed in between visits',
-    scopeProfile: 'Your current username, skin, and cape',
     interactionRequired: 'Minecraft account verification is required',
     lead: 'Confirm your Minecraft account below to continue.',
+    manageAccount: 'Manage connected apps',
     methodHeading: 'Choose how to verify',
     methods: {
       microsoft: {

@@ -56,10 +56,15 @@ export function renderPageDocument(page: PageDocument): string {
     page.header.brandHref === undefined
       ? `<span class="brand">${brandText}</span>`
       : `<a class="brand" href="${escapeHtml(page.header.brandHref)}">${brandText}</a>`;
+  const navigationToggle =
+    page.header.navigation === undefined || page.header.navigation.items.length === 0
+      ? ''
+      : `<input class="site-nav-toggle visually-hidden" id="site-nav-toggle" type="checkbox" aria-label="${escapeHtml(english.common.menuLabel)}">
+      <label class="site-nav-button" for="site-nav-toggle">${renderIcon('menu', 'nav-icon site-nav-icon-open')}${renderIcon('close', 'nav-icon site-nav-icon-close')}</label>`;
   const navigation =
     page.header.navigation === undefined
       ? ''
-      : `
+      : `${navigationToggle}
       <nav class="page-nav" aria-label="${escapeHtml(page.header.navigation.label)}">
 ${page.header.navigation.items
   .map(
@@ -71,17 +76,22 @@ ${page.header.navigation.trailing ?? ''}
       </nav>`;
   const pageFooter = page.footer ?? [];
   const legalDisclaimer = english.common.legalDisclaimer.map(escapeHtml).join('<br>');
-  const legalLinks = `<nav class="footer-links" aria-label="${escapeHtml(english.common.legalLinksLabel)}">${english.common.legalLinks
+  const footerLinks = english.common.footerLinks
     .map((link): string => `<a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`)
-    .join('')}</nav>`;
-  const footer = [
-    ...pageFooter
-      .filter((line): boolean => line.trim().length > 0)
-      .map((line): string => `<p class="footer-note">${escapeHtml(line)}</p>`),
-    legalLinks,
-    `<p class="footer-legal">${legalDisclaimer}</p>`,
-    `<p class="footer-operator">${escapeHtml(english.common.operator)}</p>`,
-  ].join('\n        ');
+    .join('');
+  const footerMeta = [
+    ...pageFooter.filter((line): boolean => line.trim().length > 0).map(escapeHtml),
+    legalDisclaimer,
+  ]
+    .map((line): string => `<p>${line}</p>`)
+    .join('\n        ');
+  const footer = `        <div class="footer-top">
+          <a class="footer-brand" href="/"><img class="footer-brand-image" src="/assets/brand-wordmark.png" srcset="/assets/brand-wordmark.png 210w, /assets/brand-wordmark-2x.png 420w" alt="${escapeHtml(page.header.brand)}" width="132" height="20" decoding="async"></a>
+          <nav class="footer-links" aria-label="${escapeHtml(english.common.footerLinksLabel)}">${footerLinks}</nav>
+        </div>
+        <div class="footer-meta">
+        ${footerMeta}
+        </div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -112,7 +122,7 @@ ${page.content}
     </main>
     <footer class="page-footer">
       <div class="page-footer-inner">
-        ${footer}
+${footer}
       </div>
     </footer>
   </body>

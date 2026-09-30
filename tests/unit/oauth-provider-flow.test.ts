@@ -276,6 +276,10 @@ describe('CraftLogin OIDC provider', (): void => {
         isAllowedOrigin: (): Promise<boolean> => Promise.resolve(false),
       },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      database: {
+        refreshToken: { deleteMany: unavailable, findMany: unavailable },
+        user: { deleteMany: unavailable },
+      },
       developerAuthentication: {
         authenticate: unavailable,
         logout: unavailable,
@@ -303,6 +307,7 @@ describe('CraftLogin OIDC provider', (): void => {
       nodeEnvironment: 'test',
       oidcHandler: provider.callback(),
       readiness: { check: (): Promise<void> => Promise.resolve() },
+      redis: { eval: unavailable, get: unavailable },
       trustProxy: true,
       users: {
         findCurrentUser: (uuid) =>
@@ -546,9 +551,10 @@ describe('CraftLogin OIDC provider', (): void => {
 
     expect(sessionSignals).toHaveLength(2);
     expect(sessionSignals[0]).toMatchObject({
-      ipAddress: '198.51.100.42',
       userAgent: 'CraftLogin flow test',
     });
+    expect(sessionSignals[0]?.ipReference).toMatch(/^ip_[A-Za-z0-9_-]{22}$/u);
+    expect(JSON.stringify(sessionSignals[0])).not.toContain('198.51.100');
     expect(sessionSignals[1]?.sessionReference).toBe(sessionSignals[0]?.sessionReference);
 
     const discoveryResponse = await fetch(new URL('/.well-known/openid-configuration', issuer));
@@ -634,6 +640,10 @@ describe('CraftLogin OIDC provider', (): void => {
         isAllowedOrigin: (): Promise<boolean> => Promise.resolve(false),
       },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      database: {
+        refreshToken: { deleteMany: unavailable, findMany: unavailable },
+        user: { deleteMany: unavailable },
+      },
       developerAuthentication: {
         authenticate: unavailable,
         logout: unavailable,
@@ -661,6 +671,7 @@ describe('CraftLogin OIDC provider', (): void => {
       nodeEnvironment: 'test',
       oidcHandler: provider.callback(),
       readiness: { check: (): Promise<void> => Promise.resolve() },
+      redis: { eval: unavailable, get: unavailable },
       trustProxy: true,
       users: {
         findCurrentUser: (uuid) =>

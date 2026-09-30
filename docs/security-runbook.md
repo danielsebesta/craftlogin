@@ -64,6 +64,24 @@ Structured log events worth alerting on (all emitted via pino):
 | `developer_app_deleted`, `admin_*`, `developer_app_*` | Audited console mutations (`audit: true`)              | Correlate with expected admin activity                              |
 | 429 spikes                                            | Rate-limit pressure                                    | Check source IPs; consider edge rules before raising limits         |
 
+## Incident response
+
+Classification guides severity; timelines below are the regulatory ceilings, not targets.
+
+| Class                | Examples                                                                   | Deadline                                                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Significant          | Confirmed credential/session compromise, durable-data loss, service outage | NIS2: early warning to the competent CSIRT/authority within **24 h**, full incident notification within **72 h**, final report within **1 month** |
+| Personal-data breach | Exposure of Minecraft UUID/username pairs, token rows, or session records  | GDPR Art. 33: supervisory-authority notification within **72 h** of becoming aware; document the breach even when notification is not required    |
+| Minor                | Anomaly signals that resolve as false positives                            | Log and close; no external deadline                                                                                                               |
+
+Operational notes:
+
+- Record the timeline of every significant incident: detection time drives both deadlines.
+- A GDPR breach that likely risks individual rights also requires informing affected users (Art.
+  34); the operator contact address handles both directions.
+- Restore tests: verify a `pg_dump`/WAL restore into staging at least quarterly so recovery time is
+  measured, not assumed.
+
 ## Data recovery
 
 - PostgreSQL is the only durable store (users, apps, refresh-token records, provider adapter state).

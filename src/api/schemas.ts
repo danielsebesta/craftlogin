@@ -545,6 +545,67 @@ export const landingAssetRouteSchema: FastifySchema = {
   },
 };
 
+export const accountPageRouteSchema: FastifySchema = {
+  hide: true,
+  querystring: {
+    additionalProperties: false,
+    properties: {
+      revoked: { enum: ['1'], type: 'string' },
+    },
+    type: 'object',
+  },
+  response: {
+    200: htmlResponseSchema,
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const accountDeleteRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      token: { pattern: '^[0-9a-f]{64}$', type: 'string' },
+    },
+    required: ['token'],
+    type: 'object',
+  },
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const accountRevokeRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      client: {
+        pattern: `^(?:${CONSOLE_CLIENT_ID}|cl_[A-Za-z0-9_-]{32})$`,
+        type: 'string',
+      },
+      token: { pattern: '^[0-9a-f]{64}$', type: 'string' },
+    },
+    required: ['client', 'token'],
+    type: 'object',
+  },
+  hide: true,
+  response: {
+    303: { type: 'null' },
+    400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
 export const cspReportRouteSchema: FastifySchema = {
   hide: true,
   response: {

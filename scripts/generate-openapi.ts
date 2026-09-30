@@ -29,6 +29,10 @@ async function generate(): Promise<void> {
       'documentation-cookie-key-a'.padEnd(48, 'a'),
       'documentation-cookie-key-b'.padEnd(48, 'b'),
     ],
+    database: {
+      refreshToken: { deleteMany: unavailable, findMany: unavailable },
+      user: { deleteMany: unavailable },
+    },
     developerAuthentication: {
       authenticate: unavailable,
       logout: unavailable,
@@ -78,6 +82,7 @@ async function generate(): Promise<void> {
     nodeEnvironment: 'production',
     oidcHandler: unavailable,
     readiness: { check: unavailable },
+    redis: { eval: unavailable, get: unavailable },
     users: { findCurrentUser: unavailable },
   });
 

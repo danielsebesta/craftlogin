@@ -178,7 +178,7 @@ describe('Developer Console', (): void => {
       {
         current: true,
         expiresInSeconds: 3_600,
-        ipAddress: '192.0.2.10',
+        networkMatch: true,
         issuedAtMilliseconds: 1_775_000_000_000,
         role: 'admin',
         sessionKeyId: 'a'.repeat(64),
@@ -187,7 +187,7 @@ describe('Developer Console', (): void => {
       {
         current: false,
         expiresInSeconds: 1_800,
-        ipAddress: '198.51.100.23',
+        networkMatch: false,
         issuedAtMilliseconds: 1_774_000_000_000,
         role: 'admin',
         sessionKeyId: 'b'.repeat(64),
@@ -202,7 +202,8 @@ describe('Developer Console', (): void => {
     expect(dashboard.body).toContain('Console sessions');
     expect(dashboard.body).toContain('This device');
     expect(dashboard.body).toContain('Current &lt;browser&gt;');
-    expect(dashboard.body).toContain('198.51.100.23');
+    expect(dashboard.body).toContain('This network');
+    expect(dashboard.body).toContain('Different network');
     expect(dashboard.body).toContain(`name="sessionKey" value="${'b'.repeat(64)}"`);
     expect(dashboard.body).not.toContain(`name="sessionKey" value="${'a'.repeat(64)}"`);
 
@@ -666,6 +667,13 @@ describe('Developer Console', (): void => {
       },
       consoleClient: { clientId: consoleClientId },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      database: {
+        refreshToken: {
+          deleteMany: unavailable,
+          findMany: unavailable,
+        },
+        user: { deleteMany: unavailable },
+      },
       developerAuthentication: authentication,
       developerSessions: {
         create: (): Promise<AuthenticatedDeveloperSession> => Promise.resolve(session),
@@ -732,6 +740,7 @@ describe('Developer Console', (): void => {
         response.end();
       },
       readiness: { check: unavailable },
+      redis: { eval: unavailable, get: () => Promise.resolve(null) },
       users: {
         findCurrentUser: (uuid) => Promise.resolve({ username: 'VerifiedPlayer', uuid }),
       },

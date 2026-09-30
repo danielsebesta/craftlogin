@@ -18,7 +18,7 @@ components:
           scopes:
             offline_access: Maintain delegated access with refresh-token rotation.
             openid: Authenticate the Minecraft account.
-            profile: Read the current Minecraft username and avatar.
+            profile: Read the public Minecraft username and avatar.
           tokenUrl: https://craftlogin.com/oauth2/token
       type: oauth2
   schemas:

@@ -248,6 +248,49 @@ const consoleStyles = `
   border: 1px dashed var(--line-strong);
 }
 
+.account-sections {
+  display: grid;
+  gap: var(--s5);
+  align-items: start;
+}
+
+.account-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: flex-start;
+}
+
+.account-identity .summary-list {
+  flex: 1;
+  min-width: min(100%, 24rem);
+}
+
+.account-identity-avatar {
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  image-rendering: pixelated;
+}
+
+.scope-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.scope-tags li {
+  padding: var(--s1) var(--s2);
+  font-size: var(--t-xs);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
 .verification-queue {
   display: grid;
   gap: var(--s4);

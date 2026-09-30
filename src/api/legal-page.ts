@@ -1,7 +1,7 @@
 import { english } from '../locales/en.js';
 import { escapeHtml } from './html.js';
 import { renderPageDocument } from './ui/document.js';
-import { siteFooter, siteHeader } from './ui/site-chrome.js';
+import { siteHeader } from './ui/site-chrome.js';
 
 export type LegalPageKind = 'privacy' | 'terms';
 
@@ -53,7 +53,6 @@ export function renderLegalPage(kind: LegalPageKind): string {
 ${strings.sections.map((section, index): string => renderSection(kind, index, section)).join('\n')}
       </article>`,
     description: strings.description,
-    footer: siteFooter(),
     header: siteHeader('/'),
     mainClass: 'container section',
     stylesheet: '/assets/legal.css',

@@ -11,6 +11,7 @@ import {
   type ExpiredRefreshTokenStore,
 } from '../../src/oauth/refresh-token-sweeper.js';
 import {
+  anonymizeIpAddress,
   calculateSessionTtl,
   createSessionSignal,
   SESSION_ABSOLUTE_TTL_SECONDS,
@@ -127,10 +128,26 @@ describe('OIDC session security', (): void => {
       'a'.repeat(32),
     );
 
-    expect(signal.ipAddress).toBe('203.0.113.7\ufffd');
+    expect(signal.ipReference).toMatch(/^ip_[A-Za-z0-9_-]{22}$/u);
     expect(signal.sessionReference).toMatch(/^session_[A-Za-z0-9_-]{22}$/u);
     expect(signal.userAgent).toMatch(/^CraftLogin\ufffdBrowser\//u);
     expect(signal.userAgent).toHaveLength(512);
     expect(JSON.stringify(signal)).not.toContain(sessionUid);
+    expect(JSON.stringify(signal)).not.toContain('203.0.113');
+  });
+
+  it('fingerprints networks instead of storing client IPs', (): void => {
+    const key = 'a'.repeat(32);
+    const signal = (ip: string): string => createSessionSignal('uid', ip, 'agent', key).ipReference;
+
+    // The same /24 network fingerprints identically across host changes.
+    expect(signal('203.0.113.7')).toBe(signal('203.0.113.200'));
+    expect(signal('203.0.113.7')).not.toBe(signal('198.51.100.7'));
+    expect(signal('2001:DB8:85a3::8a2e:370:7334')).toBe(signal('2001:db8:85a3:ffff::1'));
+    expect(signal('::ffff:192.0.2.1')).toBe(signal('::ffff:192.0.2.99'));
+    expect(signal('unknown')).toMatch(/^ip_[A-Za-z0-9_-]{22}$/u);
+    expect(anonymizeIpAddress('203.0.113.7')).toBe('203.0.113.0/24');
+    expect(anonymizeIpAddress('203.0.113.0/24')).toBe('203.0.113.0/24');
+    expect(anonymizeIpAddress('not-an-ip')).toBe('not-an-ip');
   });
 });

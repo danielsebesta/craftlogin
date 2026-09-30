@@ -246,7 +246,7 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain(
       '<h1 id="hero-heading">Let your players log in with Minecraft</h1>',
     );
-    expect(response.body).toContain('landing-steps');
+    expect(response.body).toContain('<ol class="handoff">');
     expect(response.body).toContain('href="/docs/"');
     expect(response.body).toContain('/assets/landing.css');
     expect(response.body).toContain('class="skip-link"');
@@ -260,7 +260,6 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain(
       'NOT AN OFFICIAL MINECRAFT SERVICE.<br>NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.',
     );
-    expect(response.body).toContain('Contact: contact@craftlogin.com.');
     expect(response.body).toContain('<link rel="shortcut icon" href="/favicon.ico" />');
     expect(response.body).toContain(
       '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />',
@@ -273,18 +272,27 @@ describe('CraftLogin API server', (): void => {
     expect(response.body).toContain('data-copy-target="#craftlogin-agent-prompt"');
     expect(response.body).toContain('https://craftlogin.com/llms-full.txt');
     expect(response.body).toContain('Never ask me to paste a client secret');
-    expect(response.body).toContain('class="avatar-showcase"');
+    expect(response.body).toContain('class="bench-stage"');
     expect(response.body).toContain('/api/avatars/');
     expect(response.body).not.toContain('/processed-skin');
     expect(response.body).not.toContain('/cape');
     expect(response.body).not.toContain('integration-form');
     expect(response.body).not.toContain('integration-stack');
     expect(response.body).toContain('<script src="/assets/prompt-copy.js" defer></script>');
+    expect(response.body).toContain('<script src="/assets/method-switch.js" defer></script>');
 
     const script = await server.inject({ method: 'GET', url: '/assets/prompt-copy.js' });
     expect(script.statusCode).toBe(200);
     expect(script.headers['content-type']).toContain('text/javascript');
     expect(script.body).toContain('navigator.clipboard.writeText');
+
+    const methodSwitch = await server.inject({
+      method: 'GET',
+      url: '/assets/method-switch.js',
+    });
+    expect(methodSwitch.statusCode).toBe(200);
+    expect(methodSwitch.headers['content-type']).toContain('text/javascript');
+    expect(methodSwitch.body).toContain('data-method-panel');
 
     const stylesheet = await server.inject({ method: 'GET', url: '/assets/landing.css' });
     expect(stylesheet.statusCode).toBe(200);
@@ -541,7 +549,9 @@ describe('CraftLogin API server', (): void => {
       '/api/avatars/123e4567-e89b-42d3-a456-426614174000/face?size=64&amp;layers=all',
     );
     expect(response.body).toContain('This app will receive:');
-    expect(response.body).toContain('Your Minecraft identity (username, skin, cape, UUID)');
+    expect(response.body).toContain(
+      'Your Minecraft identity: UUID, username, skin, cape, and avatar (all public data)',
+    );
     expect(response.body).toContain('This app will never receive:');
     expect(response.body).toContain('Your Microsoft or Minecraft password');
     expect(response.body).toContain('action="/interaction/interaction-id/abort"');
@@ -1515,6 +1525,17 @@ describe('CraftLogin API server', (): void => {
           Promise.resolve(origin === 'https://maps.example'),
       },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+      database: {
+        refreshToken: {
+          deleteMany: (): Promise<never> =>
+            Promise.reject(new Error('Unexpected refresh-token delete')),
+          findMany: (): Promise<never> =>
+            Promise.reject(new Error('Unexpected refresh-token list')),
+        },
+        user: {
+          deleteMany: (): Promise<never> => Promise.reject(new Error('Unexpected user delete')),
+        },
+      },
       developerAuthentication: {
         authenticate: (): Promise<undefined> => Promise.resolve(undefined),
         logout: (): Promise<void> => Promise.resolve(),
@@ -1597,6 +1618,10 @@ describe('CraftLogin API server', (): void => {
       nodeEnvironment,
       oidcHandler,
       readiness: { check: readinessCheck },
+      redis: {
+        eval: (): Promise<never> => Promise.reject(new Error('Unexpected Redis eval')),
+        get: (): Promise<null> => Promise.resolve(null),
+      },
       users: {
         findCurrentUser: (): Promise<CurrentUser> =>
           Promise.resolve({

@@ -29,32 +29,29 @@ export interface InteractionPageInput {
 
 const KNOWN_SCOPE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   offline_access: english.interaction.scopeOffline,
-  openid: english.interaction.scopeIdentity,
-  profile: english.interaction.scopeProfile,
 };
 
 export function permissionsForScope(scope: string): readonly ConsentPermission[] {
   const tokens = scope.split(/\s+/u).filter((token): boolean => token.length > 0);
-  const tokenSet = new Set(tokens);
-  const hasOpenId = tokenSet.has('openid');
-  const hasProfile = tokenSet.has('profile');
 
   const permissions: ConsentPermission[] = [];
   const processed = new Set<string>();
+  let identityListed = false;
 
   for (const name of tokens) {
     if (processed.has(name)) {
       continue;
     }
-    if ((name === 'openid' || name === 'profile') && hasOpenId && hasProfile) {
-      if (!processed.has('openid') && !processed.has('profile')) {
-        permissions.push({ kind: 'text', text: english.interaction.scopeIdentityCombined });
+    processed.add(name);
+    // openid and profile together disclose the same thing: the public Minecraft
+    // identity. They collapse into one permission line.
+    if (name === 'openid' || name === 'profile') {
+      if (!identityListed) {
+        identityListed = true;
+        permissions.push({ kind: 'text', text: english.interaction.scopeIdentity });
       }
-      processed.add('openid');
-      processed.add('profile');
       continue;
     }
-    processed.add(name);
     const description = KNOWN_SCOPE_DESCRIPTIONS[name];
     permissions.push(
       description === undefined
@@ -121,6 +118,7 @@ export function renderInteractionPage(input: InteractionPageInput): string {
     ...(input.accountAvatarUrl === undefined ? {} : { accountAvatarUrl: input.accountAvatarUrl }),
     ...(input.owner === undefined ? {} : { owner: input.owner }),
     accountLabel: strings.signedInAs,
+    accountLink: { href: '/account', label: strings.manageAccount },
     ...(input.accountName === undefined ? {} : { accountName: input.accountName }),
     action: `${interactionPath}/complete`,
     allowsHeading: strings.allowsHeading,

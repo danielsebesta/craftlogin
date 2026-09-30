@@ -7,6 +7,7 @@ import { escapeHtml } from './html.js';
 import { renderConsoleShell } from './ui/console-shell.js';
 import { renderIcon } from './ui/icons.js';
 import { renderOAuthErrorPage } from './ui/oauth-error-page.js';
+import { describeUserAgent } from './ui/user-agent.js';
 import { renderVerificationBadge } from './ui/verification-badge.js';
 
 export type DashboardNotice =
@@ -292,8 +293,8 @@ function renderSessionList(sessions: readonly DeveloperSessionView[], csrfToken:
             <header class="app-card-header">
               <div class="app-card-identity">
                 <div>
-                  <h3 class="app-name">${escapeHtml(session.userAgent)}</h3>
-                  <p class="app-meta">${escapeHtml(session.ipAddress)}</p>
+                  <h3 class="app-name" title="${escapeHtml(session.userAgent)}">${escapeHtml(describeUserAgent(session.userAgent))}</h3>
+                  <p class="app-meta">${escapeHtml(session.networkMatch ? strings.sameNetwork : strings.differentNetwork)}</p>
                 </div>
               </div>
               ${action}

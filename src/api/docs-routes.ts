@@ -12,6 +12,7 @@ const DOCS_CSP = [
   "frame-ancestors 'none'",
   "img-src 'self'",
   "manifest-src 'self'",
+  "script-src 'self'",
   "style-src 'self'",
 ].join('; ');
 

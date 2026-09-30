@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { isIPv4, isIPv6 } from 'node:net';
 
 import type { KoaContextWithOIDC, Session } from 'oidc-provider';
 
@@ -10,7 +11,7 @@ const MAX_USER_AGENT_LENGTH = 512;
 const SESSION_REFERENCE_LENGTH = 22;
 
 export interface SessionSignal {
-  readonly ipAddress: string;
+  readonly ipReference: string;
   readonly sessionReference: string;
   readonly userAgent: string;
 }
@@ -30,6 +31,32 @@ export function oidcSessionTtl(_context: KoaContextWithOIDC, session: Session): 
   return calculateSessionTtl(session.iat, Math.floor(Date.now() / 1_000));
 }
 
+// Signals fingerprint the network, never the address: the IP is first
+// truncated to network granularity (IPv4 /24, IPv6 /48) so a host change on
+// the same network is not a signal change, then keyed-hashed so stored
+// records and logs carry nothing enumerable back to a client IP.
+export function anonymizeIpAddress(ipAddress: string): string {
+  if (isIPv4(ipAddress)) {
+    const octets = ipAddress.split('.');
+    octets[3] = '0';
+    return `${octets.join('.')}/24`;
+  }
+  if (!isIPv6(ipAddress)) {
+    return ipAddress;
+  }
+  const [left = '', right] = ipAddress.toLowerCase().split('::');
+  const toGroups = (half: string): string[] =>
+    half
+      .split(':')
+      .filter((group) => group.length > 0)
+      .flatMap((group) => (group.includes('.') ? ['0', '0'] : [group]));
+  const leftGroups = toGroups(left);
+  const rightGroups = right === undefined ? [] : toGroups(right);
+  const fill = Math.max(0, 8 - leftGroups.length - rightGroups.length);
+  const groups = [...leftGroups, ...new Array<string>(fill).fill('0'), ...rightGroups];
+  return `${groups.slice(0, 3).join(':')}::/48`;
+}
+
 export function createSessionSignal(
   sessionUid: string,
   ipAddress: string,
@@ -37,7 +64,11 @@ export function createSessionSignal(
   referenceKey: string,
 ): SessionSignal {
   return {
-    ipAddress: normalizeSignal(ipAddress, MAX_IP_ADDRESS_LENGTH),
+    ipReference: `ip_${createHmac('sha256', referenceKey)
+      .update('craftlogin-ip\0', 'utf8')
+      .update(anonymizeIpAddress(normalizeSignal(ipAddress, MAX_IP_ADDRESS_LENGTH)), 'utf8')
+      .digest('base64url')
+      .slice(0, SESSION_REFERENCE_LENGTH)}`,
     sessionReference: `session_${createHmac('sha256', referenceKey)
       .update(sessionUid, 'utf8')
       .digest('base64url')

@@ -9,6 +9,26 @@ export const uiBaseStyles = `${fontFaceStyles}${uiTokenStyles}
 html {
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
+  scrollbar-color: var(--line-strong) var(--bg);
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-strong);
 }
 
 body {
@@ -204,6 +224,62 @@ main {
   border-color: var(--line-strong);
 }
 
+/* Collapsible navigation: the checkbox toggles without JavaScript. On wide
+   screens the button stays hidden and the links render inline. */
+.site-nav-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+  padding: var(--s1) var(--s3);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.site-nav-button:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.site-nav-button .site-nav-icon-close {
+  display: none;
+}
+
+.site-nav-toggle:focus-visible + .site-nav-button {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 48rem) {
+  .site-nav-button {
+    display: inline-flex;
+  }
+
+  .page-nav {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .site-nav-toggle:checked ~ .page-nav {
+    display: flex;
+  }
+
+  .site-nav-toggle:checked ~ .site-nav-button .site-nav-icon-open {
+    display: none;
+  }
+
+  .site-nav-toggle:checked ~ .site-nav-button .site-nav-icon-close {
+    display: block;
+  }
+
+  .page-nav a {
+    justify-content: center;
+  }
+}
+
 .brand {
   display: inline-flex;
   gap: var(--s2);
@@ -253,32 +329,50 @@ main {
 }
 
 .page-narrow .page-footer-inner {
-  align-items: center;
+  justify-items: center;
   text-align: center;
   max-width: 36rem;
 }
 
+.page-narrow .footer-top {
+  justify-content: center;
+}
+
 .page-footer {
-  padding-block: var(--s5);
+  padding-block: var(--s5) var(--s6);
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--t-xs);
 }
 
-.page-footer p {
-  margin: 0;
-  line-height: var(--leading-normal);
+.page-footer-inner {
+  display: grid;
+  gap: var(--s4);
 }
 
-.page-footer-inner {
+.footer-top {
   display: flex;
-  flex-direction: column;
-  gap: var(--s2);
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footer-brand {
+  display: inline-flex;
+}
+
+.footer-brand-image {
+  display: block;
+  width: auto;
+  height: 1.25rem;
+  image-rendering: pixelated;
 }
 
 .footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s3);
+  gap: var(--s3) var(--s4);
 }
 
 .footer-links a {
@@ -287,11 +381,21 @@ main {
   min-height: var(--control-height);
   color: var(--muted);
   text-decoration: none;
-  border-bottom: 1px solid var(--line);
 }
 
 .footer-links a:hover {
   color: var(--text);
+  text-decoration: underline;
+}
+
+.footer-meta {
+  display: grid;
+  gap: var(--s1);
+}
+
+.footer-meta p {
+  margin: 0;
+  line-height: var(--leading-normal);
 }
 
 .skip-link {

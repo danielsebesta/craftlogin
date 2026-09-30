@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 
 import { avatarLookupScript } from './avatar-lookup-asset.js';
+import { docsScrollspyScript } from './docs-scrollspy-asset.js';
+import { methodSwitchScript } from './method-switch-asset.js';
 import { promptCopyScript } from './prompt-copy-asset.js';
 import { agentGuidanceTextRouteSchema, landingAssetRouteSchema } from './schemas.js';
 
@@ -11,6 +13,8 @@ export function registerAgentGuidanceRoutes(server: FastifyInstance): void {
   for (const [route, script] of [
     ['/assets/prompt-copy.js', promptCopyScript],
     ['/assets/avatar-lookup.js', avatarLookupScript],
+    ['/assets/docs-scrollspy.js', docsScrollspyScript],
+    ['/assets/method-switch.js', methodSwitchScript],
   ] as const) {
     server.get(
       route,

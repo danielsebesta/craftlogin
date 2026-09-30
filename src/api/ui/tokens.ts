@@ -32,6 +32,8 @@ export const uiTokenStyles = `
   --t-xl: 1.45rem;
   --t-2xl: 1.75rem;
   --t-3xl: 2.1rem;
+  --t-4xl: 2.8125rem;
+  --t-5xl: 3.375rem;
   --measure: 68ch;
   --container: 72rem;
   --page-width: var(--container);

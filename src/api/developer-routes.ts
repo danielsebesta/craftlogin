@@ -24,7 +24,10 @@ import {
   LastAdministratorError,
   OwnerAccessError,
 } from '../developers/developer-repository.js';
-import type { DeveloperSessionService } from '../developers/session-service.js';
+import type {
+  DeveloperRequestSignal,
+  DeveloperSessionService,
+} from '../developers/session-service.js';
 import { ApiError } from './errors.js';
 import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
@@ -267,7 +270,7 @@ export function registerDeveloperRoutes(
         options.appManager.list(session.userUuid, session.role),
         session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
         options.users.findCurrentUser(session.userUuid),
-        options.sessions.list(session.userUuid, session.sessionId),
+        options.sessions.list(session.userUuid, session.sessionId, requestSignal(request)),
       ]);
       const ownerUuids = apps
         .map((app): string | undefined => app.ownerUuid)
@@ -331,7 +334,13 @@ export function registerDeveloperRoutes(
       }
       options.authentication.requireCsrf(session, readStringField(request.body, 'csrfToken'));
       if (request.validationError !== undefined) {
-        await renderDashboardError(options, reply, session, readAppFormValues(request.body));
+        await renderDashboardError(
+          options,
+          reply,
+          session,
+          readAppFormValues(request.body),
+          requestSignal(request),
+        );
         return;
       }
 
@@ -348,7 +357,13 @@ export function registerDeveloperRoutes(
         if (!(error instanceof ZodError)) {
           throw error;
         }
-        await renderDashboardError(options, reply, session, readAppFormValues(request.body));
+        await renderDashboardError(
+          options,
+          reply,
+          session,
+          readAppFormValues(request.body),
+          requestSignal(request),
+        );
       }
     },
   );
@@ -827,12 +842,13 @@ async function renderDashboardError(
   reply: FastifyReply,
   session: NonNullable<Awaited<ReturnType<DeveloperAuthentication['authenticate']>>>,
   values: NonNullable<DeveloperDashboardInput['formValues']>,
+  signal: DeveloperRequestSignal,
 ): Promise<void> {
   const [apps, developers, user, sessions] = await Promise.all([
     options.appManager.list(session.userUuid, session.role),
     session.role === 'admin' ? options.developers.list() : Promise.resolve(undefined),
     options.users.findCurrentUser(session.userUuid),
-    options.sessions.list(session.userUuid, session.sessionId),
+    options.sessions.list(session.userUuid, session.sessionId, signal),
   ]);
   const ownerUuids = apps
     .map((app): string | undefined => app.ownerUuid)

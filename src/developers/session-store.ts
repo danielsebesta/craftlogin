@@ -20,8 +20,10 @@ const READ_RESULT_SCHEMA = z.union([
 const ROTATE_RESULT_SCHEMA = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const LIST_RESULT_SCHEMA = z.array(z.string());
 
+// Records written before network fingerprinting carry an ipAddress key but no
+// ipReference; the default marks them incomparable until they expire.
 const storedSessionSchema = z.object({
-  ipAddress: z.string().min(1).max(128),
+  ipReference: z.string().min(1).max(128).default('unknown'),
   issuedAtMilliseconds: z.number().int().nonnegative(),
   role: developerRoleSchema,
   userAgent: z.string().min(1).max(512),
@@ -126,7 +128,7 @@ return out
 
 export interface DeveloperSessionRecord {
   readonly expiresInSeconds: number;
-  readonly ipAddress: string;
+  readonly ipReference: string;
   readonly issuedAtMilliseconds: number;
   readonly role: z.infer<typeof developerRoleSchema>;
   readonly sessionId: string;
@@ -138,7 +140,7 @@ export interface DeveloperSessionRecord {
 // neither the UI nor logs ever see a usable session identifier.
 export interface DeveloperSessionSummary {
   readonly expiresInSeconds: number;
-  readonly ipAddress: string;
+  readonly ipReference: string;
   readonly issuedAtMilliseconds: number;
   readonly role: z.infer<typeof developerRoleSchema>;
   readonly sessionKeyId: string;
@@ -147,7 +149,7 @@ export interface DeveloperSessionSummary {
 }
 
 interface NewDeveloperSession {
-  readonly ipAddress: string;
+  readonly ipReference: string;
   readonly role: z.infer<typeof developerRoleSchema>;
   readonly userAgent: string;
   readonly userUuid: string;
@@ -232,7 +234,7 @@ export class RedisDeveloperSessionStore {
       const session = parseListedSession(raw);
       summaries.push({
         expiresInSeconds: Math.max(1, Math.ceil(session.ttlMilliseconds / 1_000)),
-        ipAddress: session.ipAddress,
+        ipReference: session.ipReference,
         issuedAtMilliseconds: session.issuedAtMilliseconds,
         role: session.role,
         sessionKeyId: session.sessionKeyId,

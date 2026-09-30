@@ -204,6 +204,15 @@ export const signInSurfaceStyles = `
   font-weight: 700;
 }
 
+.account-chip-link {
+  color: var(--muted);
+  font-size: var(--t-xs);
+}
+
+.account-chip-link:hover {
+  color: var(--accent-strong);
+}
+
 .skin-lookup-result {
   display: flex;
   gap: var(--s3);

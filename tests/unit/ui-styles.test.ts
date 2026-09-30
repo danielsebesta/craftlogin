@@ -30,6 +30,10 @@ import { uiTokenStyles } from '../../src/api/ui/tokens.js';
 import type { ManagedApp } from '../../src/developers/app-management.js';
 import type { DeveloperAccess } from '../../src/developers/developer-repository.js';
 import { english } from '../../src/locales/en.js';
+import {
+  VERIFICATION_CODE_ALPHABET,
+  VERIFICATION_CODE_LENGTH,
+} from '../../src/verification/code.js';
 
 const pageStyles = [landingStyles, docsStyles, interactionStyles, developerStyles, legalStyles];
 
@@ -342,13 +346,13 @@ describe('shared UI styles', (): void => {
 
   it('builds panels from the shared card classes', (): void => {
     const landing = renderLandingPage({ showDocumentation: true });
-    expect(landing).toContain('class="card landing-card"');
-    expect(landing).toContain('class="card landing-card start-card"');
-    expect(landing).toContain('card-compact');
-    expect(landing).toContain('class="card player-card"');
+    expect(landing).toContain('class="card card-compact use-example"');
+    expect(landing).toContain('class="card card-flush identity"');
+    expect(landing).toContain('class="card card-flush bench"');
+    expect(landing).toContain('class="card start-band"');
 
     const docs = renderDocsPage();
-    expect(docs).toContain('class="card card-compact"');
+    expect(docs).toContain('class="card card-compact avatar-card"');
 
     const dashboard = renderDeveloperDashboard({
       apps: [managedApp, pendingApp],
@@ -383,7 +387,10 @@ describe('shared UI styles', (): void => {
     expect(landing).toContain('/api/avatars/4a11ca60-63b6-451f-82eb-50119d8e5052/face');
     expect(landing).toContain('/api/avatars/4a11ca60-63b6-451f-82eb-50119d8e5052/bust');
     expect(landing).toContain('/api/avatars/4a11ca60-63b6-451f-82eb-50119d8e5052/body');
-    expect(landing).not.toContain('/back');
+    expect(landing).toContain('/api/avatars/4a11ca60-63b6-451f-82eb-50119d8e5052/side');
+    expect(landing).toContain('/api/avatars/4a11ca60-63b6-451f-82eb-50119d8e5052/back');
+    expect(landing).toContain('/api/avatars/4a11ca60-63b6-451f-82eb-50119d8e5052/wings');
+    expect(landing).not.toContain('/duo');
     expect(landing).not.toContain('/processed-skin');
 
     const docs = renderDocsPage();
@@ -391,6 +398,35 @@ describe('shared UI styles', (): void => {
       expect(docs).toContain(`/api/avatars/4a11ca60-63b6-451f-82eb-50119d8e5052/${view.name}`);
       expect(docs).toContain(view.detail);
     }
+  });
+
+  it('demonstrates the join flow and auto-cycles the three verification methods', (): void => {
+    const landing = renderLandingPage({ showDocumentation: true });
+    expect(landing).toContain('<ol class="handoff">');
+    expect(landing.match(/<div class="demo-window[^"]*" aria-hidden="true">/gu)).toHaveLength(3);
+
+    // The middle window is a decorative auto-cycling demo with no controls.
+    expect(landing).toContain('data-method-demo');
+    expect(landing.match(/data-method-panel="[^"]+"/gu)).toHaveLength(3);
+    expect(landing).toContain('data-method-panel="server" data-active');
+    expect(landing).not.toContain('role="tablist"');
+    expect(landing).not.toContain('role="tab"');
+    expect(landing).not.toContain('role="tabpanel"');
+    expect(landing).toContain('/assets/method-switch.js');
+
+    const code = /([A-Z0-9]+)\.craftlogin\.com/u.exec(landing)?.[1] ?? '';
+    expect(code).toHaveLength(VERIFICATION_CODE_LENGTH);
+    expect(code).toMatch(new RegExp(`^[${VERIFICATION_CODE_ALPHABET}]+$`, 'u'));
+
+    const h1Index = landing.indexOf('<h1');
+    const flowIndex = landing.indexOf('id="flow-heading"');
+    const h3Index = landing.indexOf('<h3');
+    expect(h1Index).toBeGreaterThanOrEqual(0);
+    expect(h1Index).toBeLessThan(flowIndex);
+    expect(flowIndex).toBeLessThan(h3Index);
+
+    expect(landingStyles).toContain('@media (prefers-reduced-motion: no-preference)');
+    expect(landingStyles).toContain('forced-colors: active');
   });
 });
 
@@ -530,14 +566,14 @@ describe('page accessibility contract', (): void => {
 describe('interaction consent permissions', (): void => {
   it('describes known scopes and falls back to code for unknown scopes', (): void => {
     expect(permissionsForScope('openid profile')).toEqual([
-      { kind: 'text', text: english.interaction.scopeIdentityCombined },
+      { kind: 'text', text: english.interaction.scopeIdentity },
     ]);
     expect(permissionsForScope('openid custom')).toEqual([
       { kind: 'text', text: english.interaction.scopeIdentity },
       { code: 'custom', kind: 'code' },
     ]);
     expect(permissionsForScope('profile custom')).toEqual([
-      { kind: 'text', text: english.interaction.scopeProfile },
+      { kind: 'text', text: english.interaction.scopeIdentity },
       { code: 'custom', kind: 'code' },
     ]);
   });

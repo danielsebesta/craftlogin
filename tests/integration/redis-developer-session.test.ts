@@ -34,7 +34,7 @@ describe('RedisDeveloperSessionStore', (): void => {
       `${keyPrefix}-index`,
     );
     const created = await store.create({
-      ipAddress: '203.0.113.12',
+      ipReference: 'ip_integrationreference',
       role: 'developer',
       userAgent: 'Integration Browser',
       userUuid: '123e4567-e89b-42d3-a456-426614174000',

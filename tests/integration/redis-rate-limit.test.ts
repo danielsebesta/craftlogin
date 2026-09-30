@@ -111,6 +111,10 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
       isAllowedOrigin: unavailable,
     },
     cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
+    database: {
+      refreshToken: { deleteMany: unavailable, findMany: unavailable },
+      user: { deleteMany: unavailable },
+    },
     developerAuthentication: {
       authenticate: (): Promise<undefined> => Promise.resolve(undefined),
       logout: unavailable,
@@ -146,6 +150,7 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
     rateLimitNamespace: namespace,
     rateLimitRedis: redis,
     readiness: { check: (): Promise<void> => Promise.resolve() },
+    redis,
     users: { findCurrentUser: unavailable },
   });
   await server.ready();
