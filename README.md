@@ -1,165 +1,85 @@
 # CraftLogin
 
-> [!WARNING]
->
-> **Work in progress.** CraftLogin is under active development and is not ready for production use.
-> APIs, configuration, database migrations, and security behavior may change without notice.
+> [!WARNING] Work in progress — not ready for production use. APIs, configuration, database
+> migrations, and security behavior may change without notice.
 
 CraftLogin is an open-source OAuth 2.0 and OpenID Connect provider for Minecraft Java Edition
-identities. A player proves ownership by joining a short-lived online-mode ghost server, publishing
-a short-lived marker in their current Java skin, or completing one-shot Microsoft OAuth and
-Minecraft Services verification. Relying applications receive the authenticated Minecraft UUID and
-current username through standard OIDC endpoints. CraftLogin stores no email address or password.
+accounts. A player proves ownership by joining a short-lived online-mode ghost server, publishing a
+temporary marker in their Java skin, or completing one-shot Microsoft OAuth verification. Relying
+applications receive the authenticated Minecraft UUID and current username through standard OIDC
+endpoints. CraftLogin stores no email address or password.
 
 > **NOT AN OFFICIAL MINECRAFT SERVICE. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
 >
 > CraftLogin is independently developed and operated by Daniel Šebesta. Contact:
 > [contact@craftlogin.com](mailto:contact@craftlogin.com).
 
-## How verification works
+## Verification methods
 
-1. An application starts an authorization-code request with `state` and S256 PKCE.
-2. CraftLogin displays an unambiguous, five-minute connection address such as
-   `ABCDEFGH.craftlogin.com`.
-3. The player joins that address with Minecraft Java Edition. The online-mode login sequence asks
-   the Mojang/Microsoft session service to authenticate the client.
-4. The ghost server records the authenticated UUID and username, presents an empty void world, and
-   then disconnects the player with a play-state kick that shows a success message.
-5. The browser interaction resumes and `oidc-provider` issues the standard authorization response.
+All three methods converge on the same confirmation screen and resume the standard authorization
+flow. Each maps to a distinct `acr`/`amr` in the resulting tokens:
 
-As an alternative to joining the ghost server, the interaction can generate a marked copy of the
-player's current skin. The player uploads that PNG through the Minecraft Launcher or Minecraft.net.
-CraftLogin then fetches a fresh session-server profile, verifies Mojang's signature, and compares
-the marker in the current texture. The marker occupies only the unused top-left 8×8 pixels and
-therefore preserves the visible base and overlay layers. Both Java layouts are supported: historical
-64×32 and modern 64×64; modern classic (four-pixel) and slim (three-pixel) arm selection is retained
-in the UI. Other Minecraft-branded image sizes, including Bedrock/HD textures, are deliberately
-rejected because they are not Java skin upload formats.
+- **Ghost server** (`urn:craftlogin:minecraft-online-mode`) — the interaction shows a code like
+  `ABCDEFGH.craftlogin.com`; the player joins it with Minecraft Java Edition and the online-mode
+  login authenticates the account. Connecting to the bare base domain opens a public void lobby that
+  also accepts codes typed in chat or via `/verify`.
+- **Skin marker** (`urn:craftlogin:minecraft-profile-skin`) — the player uploads a generated marked
+  copy of their current skin; CraftLogin verifies Mojang's signed texture and the embedded marker.
+- **Microsoft OAuth** (`urn:craftlogin:microsoft-oauth`) — one-shot sign-in through the
+  personal-accounts endpoint with `XboxLive.signin` only, exchanged via Xbox Live, XSTS, and
+  Minecraft Services after confirming a Java Edition entitlement. Provider tokens stay request-local
+  and are never persisted.
 
-The third option signs the player in through Microsoft's personal-account endpoint with S256 PKCE
-and exactly the `XboxLive.signin` scope. CraftLogin exchanges the resulting request-local tokens
-through Xbox Live, XSTS, and Minecraft Services, confirms a `game_minecraft` or `product_minecraft`
-entitlement, and reads the Java profile. It does not request `offline_access`, Microsoft Graph,
-profile, or email scopes. Microsoft access tokens, Xbox Live tokens, XSTS tokens, Minecraft access
-tokens, Xbox user hashes, and Microsoft account identifiers exist only in memory for that request.
-They are never written to Redis, PostgreSQL, logs, or a cache, and no Microsoft account linkage or
-method-specific user history is created.
-
-The server address only ever accepts the exact code shown in the browser. Connecting to the bare
-base domain instead opens a public void lobby where a player can chat; the lobby never reads or
-changes verification state.
-
-Verification, authorization-code consumption, and refresh-token rotation use atomic Redis or
-PostgreSQL operations so concurrent redemption has one winner. Raw secrets, codes, and tokens are
-not written to application logs.
-
-The resulting OIDC authentication context identifies the method. Online-mode verification uses
-`urn:craftlogin:minecraft-online-mode` with `amr=minecraft_online_mode`; skin verification uses
-`urn:craftlogin:minecraft-profile-skin` with `amr=minecraft_profile_skin`; Microsoft verification
-uses `urn:craftlogin:microsoft-oauth` with `amr=microsoft_oauth`. A relying party can select one
-through `acr_values`; without that parameter, all available methods are offered.
+Every method requires S256 PKCE and `state`, consumes codes atomically (one winner on concurrent
+redemption), and never completes silently — the user must explicitly confirm or reject the verified
+identity.
 
 ## Identity and client integration
 
-Developers can use the public [OIDC integration guide](docs/integrations/oidc.md) to add CraftLogin
-to an existing website. The landing page provides one copyable implementation prompt for Claude
-Code, Codex, Cursor, Copilot, and similar coding agents. The deployed service exposes the complete
-machine-readable integration contract at `/llms.txt` and `/llms-full.txt`. Never paste a
-confidential client secret into an AI tool.
+See the [OIDC integration guide](docs/integrations/oidc.md), the generated
+[OpenAPI 3.1 reference](openapi.yaml), or the machine-readable contract at `/llms.txt` and
+`/llms-full.txt` on a running instance.
 
-The `profile` scope returns the current Minecraft username as `preferred_username` and a `picture`
-URL that serves a face rendered from the account's current Mojang skin. CraftLogin resolves the skin
-through the Mojang session profile endpoint, verifies the signed texture property against Mojang's
-published keys, and caches the result in Redis for an hour. When Mojang is unavailable, the last
-known profile is served instead of failing.
+- Issuer discovery: `/.well-known/openid-configuration`
+- Scopes: `openid profile` (+ `offline_access` for refresh tokens)
+- Claims: `sub` = canonical Minecraft UUID (stable account key), `preferred_username` = current
+  username (display only — it can change), `picture` = current avatar URL
+- Opaque access tokens introspect at `POST /oauth2/introspect`; RP-initiated logout at
+  `/oauth2/logout`
 
-Opaque access tokens are validated for resource servers at `POST /oauth2/introspect`, and clients
-can end a session at `/oauth2/logout`. A client may only introspect its own tokens. The committed
-[`openapi.yaml`](openapi.yaml) documents the introspection endpoint; the logout pages stay out of
-the API reference.
-
-### Public player and avatar APIs
-
-Minecraft Java identities can be resolved anonymously in either direction through one endpoint. The
-identifier may be a current username, canonical UUID, or dashless UUID; the response always contains
-the canonical UUID and current username:
-
-```text
-GET /api/users/Notch
-GET /api/users/069a79f4-44e9-4726-a5be-fca90e38aaf5
-```
-
-Profile lookups allow cross-origin reads, use the shared Mojang profile cache, and return `404` for
-an unknown player or `503` when no current or stale profile is available.
-
-Avatar images can be requested anonymously by canonical or dashless Minecraft UUID. CraftLogin uses
-only the signed Mojang skin descriptor and returns transparent PNGs:
-
-```text
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/skin
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/face?size=32&layers=all
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/bust?size=128&layers=all
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/body?size=256&layers=all
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/back?size=128&layers=all
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/side?size=128&layers=all
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/duo?size=256&layers=all
-GET /api/avatars/853c80ef-3c37-49fd-aa49-938b674adae6/wings?size=128&layers=all
-```
-
-Rendered views accept only `size=32|64|128|256` and `layers=base|all`; omitted values default to
-`128` and `all`. The `face` view composites the exact front 8×8 face and transparent head overlay
-without interpolation, perspective, shading, or blur. For the full-figure views, `all` renders the
-hat, jacket, sleeves, and trousers as independently inflated Minecraft cuboids, including their
-transparent pixels, rather than flattening them onto the base texture. `back` and `duo` drape the
-worn cape over the body and `wings` draws elytra wings from that same cape texture. Cape-bearing
-views resolve the cape across supported providers
-(`provider=mojang|optifine|labymod|minecraftcapes|5zig|skinmc|any`), defaulting to `any` so the
-official Mojang cape wins when present and third-party capes are tried otherwise; cape textures that
-match no known atlas layout degrade to a plain render. These routes allow cross-origin image reads
-and publish cache validators; unknown skins and temporary Minecraft service failures return the
-shared JSON error envelope.
+Anonymous public APIs resolve players (`GET /api/users/{name|uuid}`) and render avatar PNGs
+(`/api/avatars/{uuid}/skin|face|bust|body|back|side|duo|wings`) from signed Mojang textures; see
+`openapi.yaml` for the full contract.
 
 ## Requirements
 
-- Node.js 24 (the active LTS line selected by `.nvmrc`)
+- Node.js 24 (see `.nvmrc`)
 - PostgreSQL 18 and Redis 8, or Docker with the Compose plugin
-- A public HTTPS origin for production
-- Wildcard DNS for the configured `MC_BASE_DOMAIN` pointing to the Minecraft listener
-- TCP port 25565 reachable by Minecraft clients
-- A Microsoft Entra application approved for the Minecraft: Java Edition Game Service APIs
+- A public HTTPS origin, wildcard DNS for `MC_BASE_DOMAIN`, and TCP port 25565 reachable by
+  Minecraft clients
+- A Microsoft Entra application approved for the Minecraft: Java Edition Game Service APIs (required
+  only for the `microsoft-oauth` method; the other two work without it)
 
 ## Local development
-
-Install dependencies with the repository's Node.js version:
 
 ```sh
 nvm use
 npm install
-```
-
-Start PostgreSQL and Redis, then export the matching local connection strings:
-
-```sh
 POSTGRES_PASSWORD='craftlogin-dev-only' docker compose up -d postgres redis
 export DATABASE_URL='postgresql://craftlogin:craftlogin-dev-only@localhost:5432/craftlogin?schema=public'
 export REDIS_URL='redis://localhost:6379'
 export MICROSOFT_OAUTH_CLIENT_ID='your-personal-accounts-application-id'
-# Optional for an app registration configured as a confidential web client:
-export MICROSOFT_OAUTH_CLIENT_SECRET='server-only-secret'
 npm run db:migrate:deploy
 npm start
 ```
 
-`npm start` runs the HTTP/OIDC service and the Minecraft ghost server in one process. During focused
-development they can instead be run separately with `npm run start:api` and `npm run start:mc`. The
-developer landing page is available at <http://localhost:3000/>. The public integration guide is at
-<http://localhost:3000/docs/>. Interactive Swagger UI is available at
-<http://localhost:3000/docs/swagger/> outside production. The generated public OpenAPI 3.1 reference
-is committed as [`openapi.yaml`](openapi.yaml).
+`npm start` runs the HTTP/OIDC service and the Minecraft ghost server in one process
+(`npm run start:api` / `npm run start:mc` run them separately). The landing page is at
+<http://localhost:3000/>, the integration guide at `/docs/`, Swagger UI at `/docs/swagger/` outside
+production.
 
-OAuth interactions and the Developer Console use `Secure` cookies and therefore require HTTPS even
-in local development. A local reverse proxy such as Caddy can terminate a trusted development
-certificate while CraftLogin remains bound to loopback:
+Interactions and the Developer Console use `Secure` cookies and need HTTPS even locally. Terminate a
+trusted certificate at a loopback proxy and use a wildcard-friendly dev domain:
 
 ```sh
 export OIDC_ISSUER='https://localhost:3443'
@@ -168,165 +88,75 @@ export HTTP_TRUST_PROXY='true'
 export MC_BASE_DOMAIN='127.0.0.1.nip.io'
 npm start
 
-# Run separately after trusting Caddy's local CA.
+# After trusting Caddy's local CA:
 caddy reverse-proxy --from https://localhost:3443 --to http://127.0.0.1:3000
 ```
 
-The `nip.io` development domain makes addresses such as `ABCDEFGH.127.0.0.1.nip.io` resolve to the
-local machine, so the Minecraft client can use the exact address shown by CraftLogin without editing
-`/etc/hosts`. Use your own wildcard DNS domain outside local, same-machine development.
-
 ### Developer Console
 
-OAuth client registration is never anonymous. Bootstrap the first administrator from a trusted shell
-after applying migrations, using the Minecraft name or canonical UUID of their Java Edition account:
+OAuth client registration is never anonymous. Bootstrap the first administrator by Minecraft name or
+canonical UUID:
 
 ```sh
 npm run admin:grant -- Notch
-npm run admin:grant -- 123e4567-e89b-42d3-a456-426614174000
 ```
 
-Then open <https://localhost:3443/developers>. The Developer Console is a first-party OAuth client:
-the login redirects to the standard authorization endpoint, the administrator verifies with any
-available method on the shared interaction page, and the console callback creates the console
-session. There is no parallel console login flow. Administrators can grant or revoke developer UUIDs
-and roles; the access registry accepts a Minecraft name or a canonical UUID. Registered developers
-can create and remove their own public or confidential OAuth clients. Each application can carry a
-64×64 PNG icon, the same format as a Minecraft server icon, which is uploaded from the console and
-shown beside the application name on the sign-in screen. Confidential secrets are displayed once.
-Role changes are checked on every request and rotate or revoke active console sessions.
-
-#### Application verification
-
-Verification is a manual trust label, not a permission. A developer requests it for one of their
-applications from the console, optionally adding a note for the reviewer. An administrator then
-approves, rejects, or later withdraws it in the console's Administration panel, which lists every
-pending request with its note and the application's owner. The label appears in the console and
-beside the application name on the consent screen.
-
-A verified application gains no access, scopes, or privileges: its credentials, redirect URIs, and
-authorization behavior are unchanged, and nothing is verified automatically. The seeded Developer
-Console client is the only exception, because it is first-party and therefore verified by
-definition. Administrator accounts carry their own independent label, which shows in the access
-registry next to their role; neither label is required for the other.
-
-For a built production image, run the compiled bootstrap command inside the application container:
-
-```sh
-docker compose exec app node dist/admin/grant-admin.js 123e4567-e89b-42d3-a456-426614174000
-```
+Then open `/developers`. The console is a first-party OIDC client on the standard authorization flow
+— there is no parallel login. Administrators manage developer roles and application verification
+labels; developers create public or confidential clients with 64×64 PNG icons. `DEVELOPER_OWNER`
+optionally pins an operator account that cannot be demoted and is re-granted on every boot.
 
 ## Container deployment
 
-Copy the environment template and fill every required blank. `POSTGRES_PASSWORD` and the password
-inside `DATABASE_URL` must match; the database hostname in Compose is `postgres`.
-
 ```sh
-cp .env.example .env
+cp .env.example .env   # fill every required blank; POSTGRES_PASSWORD must match DATABASE_URL
+docker compose up --build -d
 ```
 
-Generate two cookie-signing keys:
+Generate the two required secrets and treat them as production secrets:
 
 ```sh
+# OIDC_COOKIE_KEYS — two distinct keys, comma-separated
 node --input-type=module -e "import { randomBytes } from 'node:crypto'; console.log([randomBytes(32).toString('hex'), randomBytes(32).toString('hex')].join(','))"
-```
 
-Generate a private RSA JSON Web Key Set for `OIDC_JWKS`:
-
-```sh
+# OIDC_JWKS — private RSA key set
 node --input-type=module -e "import { generateKeyPairSync, randomUUID } from 'node:crypto'; const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 }); console.log(JSON.stringify({ keys: [{ ...privateKey.export({ format: 'jwk' }), alg: 'RS256', kid: randomUUID(), use: 'sig' }] }))"
 ```
 
-Treat both outputs as production secrets and store backup copies in a secret manager. Put each value
-on its corresponding single line in `.env`, set a strong PostgreSQL password, set
-`DATABASE_URL=postgresql://craftlogin:<URL-encoded-password>@postgres:5432/craftlogin?schema=public`,
-set the issuer and Minecraft base domain, and configure the personal-accounts-only Microsoft
-application ID. Register `${OIDC_ISSUER}/interaction/microsoft/callback` as its exact redirect URI.
-`MICROSOFT_OAUTH_CLIENT_SECRET` is optional; when present it is sent only by the server during the
-authorization-code exchange.
+Register `${OIDC_ISSUER}/interaction/microsoft/callback` as the Microsoft app's exact redirect URI;
+Minecraft Services returns `403` until the app ID passes Microsoft's AppID review
+(`/.well-known/microsoft-identity-association.json` is served automatically).
 
-New application IDs must pass the Minecraft: Java Edition Game Service
-[AppID review](https://aka.ms/AppRegInfo). Microsoft sign-in can complete through Xbox Live and XSTS
-but Minecraft Services returns `403` until the application ID is allowlisted. CraftLogin serves the
-required `/.well-known/microsoft-identity-association.json` document from the configured client ID.
-
-Build and start the complete topology:
-
-```sh
-docker compose up --build -d
-docker compose ps
-```
-
-The image runs as the non-root `node` user. Its entrypoint runs committed migrations with
-`prisma migrate deploy` before starting one process that owns both public listeners. The application
-healthcheck calls `/health`, which verifies live PostgreSQL and Redis connectivity. PostgreSQL data
-is kept in the named `postgres-data` volume; PostgreSQL and Redis are exposed only on loopback for
-maintenance and integration tests.
-
-Terminate TLS at a trusted reverse proxy and forward the public `OIDC_ISSUER` origin to the HTTP
-port. Set `HTTP_TRUST_PROXY=true` only for the documented single-proxy topology; leave it false when
-the application is directly exposed or when the proxy path is not controlled. Forward Minecraft TCP
-traffic without rewriting its handshake hostname.
+The entrypoint applies committed migrations via `prisma migrate deploy`, the healthcheck calls
+`/health` (live PostgreSQL + Redis), and PostgreSQL/Redis stay loopback-bound. Terminate TLS at a
+trusted reverse proxy, forward `OIDC_ISSUER` to the HTTP port and Minecraft TCP untouched, and set
+`HTTP_TRUST_PROXY=true` only for the documented single-proxy topology.
 
 ## Quality gates
 
-Run the complete deterministic unit and static gate:
-
 ```sh
-npm run check
-```
-
-Run the atomic integration suites against isolated local services. The PostgreSQL URL must point to
-a disposable database with the project migrations applied, not a development or production database:
-
-```sh
+npm run check                  # format, lint, typecheck, schema validation, OpenAPI drift, unit tests
 TEST_REDIS_URL='redis://localhost:6379' npm run test:integration:redis
-TEST_DATABASE_URL='<isolated-test-database-url>' npm run test:integration:postgres
-```
-
-Regenerate the committed API document after changing a route schema:
-
-```sh
-npm run openapi:generate
+TEST_DATABASE_URL='<isolated-test-db-url>' npm run test:integration:postgres
+npm run openapi:generate       # regenerate openapi.yaml after schema changes
 ```
 
 ## Data and privacy
 
-Durable user data is limited to Minecraft UUID, current username, and first/last verification times.
-Registered client metadata and hashed refresh-token identifiers are stored in PostgreSQL. Redis
-holds short-lived verification and ephemeral OIDC state. IP address and user agent are anomaly
-signals only and an IP change does not invalidate a session by itself.
-
-Microsoft verification adds no durable data. Its PKCE transaction is held for at most five minutes
-in a signed, `Secure`, `HttpOnly`, `SameSite=Lax` browser cookie. Provider tokens and Microsoft/Xbox
-account identifiers are request-local only; the existing short-lived interaction receives just the
-Minecraft UUID, username, verification time, and authentication-method label needed for OIDC.
-
-Developer access is an explicit PostgreSQL allowlist keyed only by Minecraft UUID. OAuth clients
-record their owning developer; legacy or deliberately unassigned clients remain visible only to an
-administrator. Developer Console sessions are opaque Redis records with signed `Secure`, `HttpOnly`,
-`SameSite=Lax` cookies, sliding expiration, an absolute lifetime, CSRF protection, and rotation
-after role changes.
+Durable identity data is the Minecraft UUID, current username, and first/last verification times.
+PostgreSQL additionally holds registered clients and hashed refresh-token records; Redis holds only
+short-lived verification and session state. Microsoft verification adds no durable data. Details:
+`/privacy` on a running instance and `docs/security-runbook.md` for rotation and incident handling.
 
 ## Acceptable use
 
 CraftLogin may not be used to impersonate Mojang or Microsoft, imply their approval, bypass
 authentication or license checks, phish users, distribute malware, facilitate gambling, or support
-unlawful, deceptive, harmful, or abusive services. Integrators are responsible for their own user
-disclosures, data protection obligations, and compliance with the Minecraft EULA and
+unlawful or deceptive services. Integrators are responsible for their own disclosures and for
+compliance with the Minecraft EULA and
 [Usage Guidelines](https://www.minecraft.net/usage-guidelines).
-
-Questions about privacy, stored data, security, or acceptable use can be sent to
-[contact@craftlogin.com](mailto:contact@craftlogin.com).
-
-## Typography
-
-The web interface bundles the Pixeloid Sans, Pixeloid Sans Bold, and Pixeloid Mono typefaces by
-GGBotNet. They are self-hosted as WOFF2 assets and distributed under the SIL Open Font License 1.1;
-the required copyright notice and license are available in
-[`public/fonts/OFL.txt`](public/fonts/OFL.txt). The CraftLogin source code remains MIT-licensed.
 
 ## License
 
-CraftLogin is available under the [MIT License](LICENSE). Bundled third-party assets retain their
-respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE). The web interface bundles Pixeloid Sans / Pixeloid Mono typefaces (SIL OFL 1.1); see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
