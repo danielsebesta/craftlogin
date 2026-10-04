@@ -817,6 +817,7 @@ export const developerDashboardRouteSchema: FastifySchema = {
           'last-admin',
           'not-found',
           'owner-protected',
+          'secret-unavailable',
           'session-revoked',
           'verification-approved',
           'verification-rejected',
@@ -966,6 +967,87 @@ export const developerAppIconDeleteRouteSchema: FastifySchema = {
     401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppRedirectsRouteSchema: FastifySchema = {
+  hide: true,
+  params: appIdParamsSchema,
+  querystring: {
+    additionalProperties: false,
+    properties: {
+      notice: {
+        enum: ['redirects-saved'],
+        type: 'string',
+      },
+    },
+    type: 'object',
+  },
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppRedirectsUpdateRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      csrfToken: csrfFormProperty,
+      redirectUris: { maxLength: 41_000, minLength: 1, type: 'string' },
+    },
+    required: ['csrfToken', 'redirectUris'],
+    type: 'object',
+  },
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    400: htmlResponseSchema,
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppSecretRouteSchema: FastifySchema = {
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppSecretResetRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: { csrfToken: csrfFormProperty },
+    required: ['csrfToken'],
+    type: 'object',
+  },
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
   },

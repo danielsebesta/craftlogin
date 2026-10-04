@@ -16,6 +16,7 @@ import type {
 } from '../../src/developers/session-service.js';
 import { english } from '../../src/locales/en.js';
 import type { MinecraftPlayerLookup } from '../../src/mojang/client.js';
+import { redirectUriListSchema } from '../../src/oauth/redirect-uri.js';
 
 const developerSession: AuthenticatedDeveloperSession = {
   csrfToken: 'developer-csrf-token',
@@ -566,10 +567,160 @@ describe('Developer Console', (): void => {
     expect(removeIconCalls).toEqual([appId]);
   });
 
+  it('links to redirect and secret management from the dashboard card', async (): Promise<void> => {
+    const publicServer = await buildServer({ authenticated: true });
+    const publicDashboard = await publicServer.inject({ method: 'GET', url: '/developers' });
+    expect(publicDashboard.body).toContain(`href="/developers/apps/${appId}/redirects"`);
+    expect(publicDashboard.body).not.toContain(`href="/developers/apps/${appId}/secret"`);
+
+    const confidentialServer = await buildServer({
+      authenticated: true,
+      clientType: 'confidential',
+    });
+    const confidentialDashboard = await confidentialServer.inject({
+      method: 'GET',
+      url: '/developers',
+    });
+    expect(confidentialDashboard.body).toContain(`href="/developers/apps/${appId}/redirects"`);
+    expect(confidentialDashboard.body).toContain(`href="/developers/apps/${appId}/secret"`);
+  });
+
+  it('renders the redirect-URI form prefilled with the current list', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true });
+    const response = await server.inject({
+      method: 'GET',
+      url: `/developers/apps/${appId}/redirects`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain(`action="/developers/apps/${appId}/redirects"`);
+    expect(response.body).toContain('https://client.example/callback');
+  });
+
+  it('redirects back to the dashboard for an unmanaged application', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true });
+    const response = await server.inject({
+      method: 'GET',
+      url: `/developers/apps/${'f'.repeat(8)}-1111-4111-8111-111111111111/redirects`,
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers?notice=not-found');
+  });
+
+  it('saves a new exact-match redirect URI list', async (): Promise<void> => {
+    const redirectUpdates: { id: string; redirectUris: readonly string[] }[] = [];
+    const server = await buildServer({ authenticated: true, redirectUpdates });
+    const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: `csrfToken=developer-csrf-token&redirectUris=${encodeURIComponent(
+        'https://client.example/callback\nhttps://client.example/secondary',
+      )}`,
+      url: `/developers/apps/${appId}/redirects`,
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe(
+      `/developers/apps/${appId}/redirects?notice=redirects-saved`,
+    );
+    expect(redirectUpdates).toEqual([
+      {
+        id: appId,
+        redirectUris: ['https://client.example/callback', 'https://client.example/secondary'],
+      },
+    ]);
+  });
+
+  it('re-renders the redirect form with an error for an unsafe or missing URI', async (): Promise<void> => {
+    const redirectUpdates: { id: string; redirectUris: readonly string[] }[] = [];
+    const server = await buildServer({ authenticated: true, redirectUpdates });
+
+    const insecure = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: `csrfToken=developer-csrf-token&redirectUris=${encodeURIComponent('http://app.example/callback')}`,
+      url: `/developers/apps/${appId}/redirects`,
+    });
+    expect(insecure.statusCode).toBe(400);
+    expect(insecure.body).toContain(english.developer.app.redirectsFormError);
+    expect(insecure.body).toContain('http://app.example/callback');
+
+    const missing = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'csrfToken=developer-csrf-token',
+      url: `/developers/apps/${appId}/redirects`,
+    });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.body).toContain(english.developer.app.redirectsFormError);
+    expect(redirectUpdates).toEqual([]);
+  });
+
+  it('offers the secret confirm page only for confidential clients', async (): Promise<void> => {
+    const publicServer = await buildServer({ authenticated: true });
+    const publicResponse = await publicServer.inject({
+      method: 'GET',
+      url: `/developers/apps/${appId}/secret`,
+    });
+    expect(publicResponse.statusCode).toBe(303);
+    expect(publicResponse.headers.location).toBe('/developers?notice=secret-unavailable');
+
+    const server = await buildServer({ authenticated: true, clientType: 'confidential' });
+    const confirm = await server.inject({
+      method: 'GET',
+      url: `/developers/apps/${appId}/secret`,
+    });
+    expect(confirm.statusCode).toBe(200);
+    expect(confirm.body).toContain(english.developer.confirm.secretHeading);
+    expect(confirm.body).toContain(`action="/developers/apps/${appId}/secret/reset"`);
+  });
+
+  it('rotates a confidential client secret and shows the new value once', async (): Promise<void> => {
+    const secretResets: string[] = [];
+    const server = await buildServer({
+      authenticated: true,
+      clientType: 'confidential',
+      secretResets,
+    });
+    const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'csrfToken=developer-csrf-token',
+      url: `/developers/apps/${appId}/secret/reset`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain(english.developer.app.secretResetHeading);
+    expect(response.body).toContain('cls_rotated-secret');
+    expect(secretResets).toEqual([appId]);
+  });
+
+  it('reports when there is no secret to rotate', async (): Promise<void> => {
+    const secretResets: string[] = [];
+    const server = await buildServer({
+      authenticated: true,
+      clientType: 'confidential',
+      secretResetDenied: true,
+      secretResets,
+    });
+    const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'csrfToken=developer-csrf-token',
+      url: `/developers/apps/${appId}/secret/reset`,
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers?notice=secret-unavailable');
+    expect(secretResets).toEqual([appId]);
+  });
+
   async function buildServer(options: {
     readonly allowlisted?: boolean;
     readonly appVerification?: 'none' | 'requested' | 'verified';
     readonly authenticated: boolean;
+    readonly clientType?: 'confidential' | 'public';
     readonly decisionOutcome?: 'applied' | 'unavailable';
     readonly decisions?: { decision: string; id: string }[];
     readonly developerVerified?: boolean;
@@ -577,6 +728,8 @@ describe('Developer Console', (): void => {
     readonly grantCalls?: { role: DeveloperRole; uuid: string }[];
     readonly iconHash?: string;
     readonly players?: MinecraftPlayerLookup;
+    readonly redirectUpdates?: { id: string; redirectUris: readonly string[] }[];
+    readonly redirectUpdateOutcome?: boolean;
     readonly removeIconCalls?: string[];
     readonly removeIconOutcome?: boolean;
     readonly requestOutcome?: 'applied' | 'unavailable';
@@ -584,6 +737,8 @@ describe('Developer Console', (): void => {
     readonly revokeCalls?: { sessionKey: string; userUuid: string }[];
     readonly revokeOutcome?: boolean;
     readonly role?: DeveloperRole;
+    readonly secretResetDenied?: boolean;
+    readonly secretResets?: string[];
     readonly sessionList?: DeveloperSessionView[];
     readonly setIconCalls?: { appId: string; bytes: number; hash: string }[];
     readonly setIconOutcome?: boolean;
@@ -602,7 +757,7 @@ describe('Developer Console', (): void => {
     const authentication = createAuthentication(options.authenticated, session);
     const app: ManagedApp = {
       clientId: 'cl_local-map',
-      clientType: 'public',
+      clientType: options.clientType ?? 'public',
       createdAt: '2026-09-07T12:00:00.000Z',
       ...(options.iconHash === undefined ? {} : { iconHash: options.iconHash }),
       id: appId,
@@ -653,6 +808,19 @@ describe('Developer Console', (): void => {
             hash: icon.hash,
           });
           return Promise.resolve(options.setIconOutcome ?? true);
+        },
+        resetSecret: (candidateAppId) => {
+          options.secretResets?.push(candidateAppId);
+          return Promise.resolve(
+            options.secretResetDenied === true ? undefined : 'cls_rotated-secret',
+          );
+        },
+        updateRedirectUris: (candidateAppId, _actorUuid, _role, redirectUris) => {
+          // The real manager parses first; mirroring it exercises the route's
+          // ZodError branch the same way a rejected write would.
+          const parsed = redirectUriListSchema.parse(redirectUris);
+          options.redirectUpdates?.push({ id: candidateAppId, redirectUris: parsed });
+          return Promise.resolve(options.redirectUpdateOutcome ?? true);
         },
         requestVerification: (id, actorUuid, note) => {
           options.requests?.push({ actorUuid, id, ...(note === undefined ? {} : { note }) });

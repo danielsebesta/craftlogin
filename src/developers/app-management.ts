@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import type { PrismaClient } from '../generated/prisma/client.js';
+import { generateClientSecret, hashClientSecret } from '../oauth/client-secret.js';
+import { redirectUriListSchema } from '../oauth/redirect-uri.js';
 import { APP_ICON_MAX_BYTES } from './app-icon.js';
 import {
   developerRoleSchema,
@@ -59,6 +61,25 @@ export interface AppManager {
   list(actorUuid: string, actorRole: DeveloperRole): Promise<readonly ManagedApp[]>;
   remove(appId: string, actorUuid: string, actorRole: DeveloperRole): Promise<boolean>;
   removeIcon(appId: string, actorUuid: string, actorRole: DeveloperRole): Promise<boolean>;
+  /**
+   * Replaces the exact-match redirect URI list. Returns false when the row is
+   * missing or the actor may not manage it.
+   */
+  updateRedirectUris(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+    redirectUris: readonly string[],
+  ): Promise<boolean>;
+  /**
+   * Rotates the confidential-client secret and returns the new plaintext once.
+   * Undefined means the row was missing, unmanaged, or a public client.
+   */
+  resetSecret(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+  ): Promise<string | undefined>;
   requestVerification(
     appId: string,
     actorUuid: string,
@@ -157,6 +178,46 @@ export class PrismaAppManager implements AppManager {
       },
     });
     return removed.count === 1;
+  }
+
+  public async updateRedirectUris(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+    redirectUris: readonly string[],
+  ): Promise<boolean> {
+    const id = appIdSchema.parse(appId);
+    const uuid = developerUuidSchema.parse(actorUuid);
+    const role = developerRoleSchema.parse(actorRole);
+    const uris = redirectUriListSchema.parse(redirectUris);
+    const updated = await this.database.app.updateMany({
+      data: { redirectUris: uris },
+      where: { id, ...(role === 'admin' ? {} : { ownerUuid: uuid }) },
+    });
+    return updated.count === 1;
+  }
+
+  public async resetSecret(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+  ): Promise<string | undefined> {
+    const id = appIdSchema.parse(appId);
+    const uuid = developerUuidSchema.parse(actorUuid);
+    const role = developerRoleSchema.parse(actorRole);
+    const clientSecret = generateClientSecret();
+    const clientSecretHash = await hashClientSecret(clientSecret);
+    // The secret-hash condition keeps a public client public: it can never
+    // gain a secret through the rotation path.
+    const updated = await this.database.app.updateMany({
+      data: { clientSecretHash },
+      where: {
+        clientSecretHash: { not: null },
+        id,
+        ...(role === 'admin' ? {} : { ownerUuid: uuid }),
+      },
+    });
+    return updated.count === 1 ? clientSecret : undefined;
   }
 
   public async requestVerification(

@@ -271,8 +271,10 @@ describe('CraftLogin OIDC provider', (): void => {
         list: unavailable,
         remove: unavailable,
         removeIcon: unavailable,
+        resetSecret: unavailable,
         setIcon: unavailable,
         requestVerification: unavailable,
+        updateRedirectUris: unavailable,
       },
       apps: { register: unavailable },
       clients: {
@@ -650,8 +652,10 @@ describe('CraftLogin OIDC provider', (): void => {
         list: unavailable,
         remove: unavailable,
         removeIcon: unavailable,
+        resetSecret: unavailable,
         setIcon: unavailable,
         requestVerification: unavailable,
+        updateRedirectUris: unavailable,
       },
       apps: { register: unavailable },
       clients: {

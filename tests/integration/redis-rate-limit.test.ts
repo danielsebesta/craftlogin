@@ -91,8 +91,10 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
       list: unavailable,
       remove: unavailable,
       removeIcon: unavailable,
+      resetSecret: unavailable,
       setIcon: unavailable,
       requestVerification: unavailable,
+      updateRedirectUris: unavailable,
     },
     apps: {
       register: (input) =>

@@ -153,6 +153,14 @@ export const appIconWriteRateLimit = {
   timeWindow: 60 * 60 * 1_000,
 };
 
+// Redirect edits and secret rotations share one write bucket apart from
+// registration, so iterating during development cannot drain either budget.
+export const developerAppUpdateRateLimit = {
+  groupId: 'developer-app-update',
+  max: appIconWriteRateLimit.max,
+  timeWindow: appIconWriteRateLimit.timeWindow,
+};
+
 export async function registerRateLimiting(
   server: FastifyInstance,
   redis?: Redis,

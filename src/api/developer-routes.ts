@@ -53,6 +53,9 @@ import {
 } from './developer-oidc-login.js';
 import {
   renderAppIconPage,
+  renderAppRedirectsPage,
+  renderAppSecretPage,
+  renderAppSecretResetPage,
   renderCreatedAppPage,
   renderDeleteAppPage,
   renderDeveloperAccessDeniedPage,
@@ -61,6 +64,8 @@ import {
   renderRequestVerificationPage,
   type AppIconNotice,
   type AppIconPageInput,
+  type AppRedirectsNotice,
+  type AppRedirectsPageInput,
   type DashboardNotice,
   type DeveloperDashboardInput,
 } from './developer-pages.js';
@@ -68,6 +73,7 @@ import { PAGE_CONTENT_SECURITY_POLICY } from './page-csp.js';
 import {
   appIconWriteRateLimit,
   appRegistrationRateLimit,
+  developerAppUpdateRateLimit,
   developerAppVerificationRateLimit,
   developerLoginPageRateLimit,
 } from './rate-limit.js';
@@ -78,6 +84,10 @@ import {
   developerAppIconDeleteRouteSchema,
   developerAppIconRouteSchema,
   developerAppIconUploadRouteSchema,
+  developerAppRedirectsRouteSchema,
+  developerAppRedirectsUpdateRouteSchema,
+  developerAppSecretResetRouteSchema,
+  developerAppSecretRouteSchema,
   developerAppVerificationDecisionRouteSchema,
   developerAppVerificationRequestRouteSchema,
   developerAppVerificationRouteSchema,
@@ -102,6 +112,10 @@ interface DeveloperAppBody {
 
 interface CsrfBody {
   readonly csrfToken: string;
+}
+
+interface RedirectUrisBody extends CsrfBody {
+  readonly redirectUris: string;
 }
 
 interface SessionRevokeBody extends CsrfBody {
@@ -511,6 +525,157 @@ export function registerDeveloperRoutes(
         `/developers/apps/${encodeURIComponent(request.params.id)}/icon?notice=icon-removed`,
         303,
       );
+    },
+  );
+
+  server.get<{ Params: AppParams; Querystring: { notice?: AppRedirectsNotice } }>(
+    '/developers/apps/:id/redirects',
+    { schema: developerAppRedirectsRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      const app = await findManagedApp(options, session, request.params.id);
+      if (app === undefined) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      await sendAppRedirectsPage(reply, app, session.csrfToken, {
+        ...(request.query.notice === undefined ? {} : { notice: request.query.notice }),
+      });
+    },
+  );
+
+  server.post<{ Body: RedirectUrisBody; Params: AppParams }>(
+    '/developers/apps/:id/redirects',
+    {
+      attachValidation: true,
+      config: { rateLimit: developerAppUpdateRateLimit },
+      schema: developerAppRedirectsUpdateRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, readStringField(request.body, 'csrfToken'));
+      const app = await findManagedApp(options, session, request.params.id);
+      if (app === undefined) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      const submitted = readStringField(request.body, 'redirectUris') ?? '';
+      if (request.validationError !== undefined) {
+        await sendAppRedirectsPage(reply, app, session.csrfToken, {
+          error: english.developer.app.redirectsFormError,
+          statusCode: 400,
+          values: submitted,
+        });
+        return;
+      }
+      try {
+        if (
+          !(await options.appManager.updateRedirectUris(
+            request.params.id,
+            session.userUuid,
+            session.role,
+            parseRedirectUriLines(submitted),
+          ))
+        ) {
+          await reply.redirect('/developers?notice=not-found', 303);
+          return;
+        }
+      } catch (error: unknown) {
+        if (!(error instanceof ZodError)) {
+          throw error;
+        }
+        await sendAppRedirectsPage(reply, app, session.csrfToken, {
+          error: english.developer.app.redirectsFormError,
+          statusCode: 400,
+          values: submitted,
+        });
+        return;
+      }
+      options.logger.info(
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          event: 'developer_app_redirects_updated',
+        },
+        'Developer updated application redirect URIs',
+      );
+      await reply.redirect(
+        `/developers/apps/${encodeURIComponent(request.params.id)}/redirects?notice=redirects-saved`,
+        303,
+      );
+    },
+  );
+
+  server.get<{ Params: AppParams }>(
+    '/developers/apps/:id/secret',
+    { schema: developerAppSecretRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      const app = await findManagedApp(options, session, request.params.id);
+      if (app === undefined) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      if (app.clientType !== 'confidential') {
+        await reply.redirect('/developers?notice=secret-unavailable', 303);
+        return;
+      }
+      setDeveloperPageHeaders(reply);
+      await reply
+        .type('text/html; charset=utf-8')
+        .send(renderAppSecretPage(app, session.csrfToken));
+    },
+  );
+
+  server.post<{ Body: CsrfBody; Params: AppParams }>(
+    '/developers/apps/:id/secret/reset',
+    {
+      config: { rateLimit: developerAppUpdateRateLimit },
+      schema: developerAppSecretResetRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, request.body.csrfToken);
+      const app = await findManagedApp(options, session, request.params.id);
+      if (app === undefined) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      const clientSecret = await options.appManager.resetSecret(
+        request.params.id,
+        session.userUuid,
+        session.role,
+      );
+      if (clientSecret === undefined) {
+        await reply.redirect('/developers?notice=secret-unavailable', 303);
+        return;
+      }
+      options.logger.info(
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          event: 'developer_app_secret_reset',
+        },
+        'Developer rotated an application client secret',
+      );
+      setDeveloperPageHeaders(reply);
+      await reply
+        .type('text/html; charset=utf-8')
+        .send(renderAppSecretResetPage(app, clientSecret));
     },
   );
 
@@ -986,6 +1151,19 @@ async function sendAppIconPage(
     .status(input.statusCode ?? 200)
     .type('text/html; charset=utf-8')
     .send(renderAppIconPage(app, csrfToken, input));
+}
+
+async function sendAppRedirectsPage(
+  reply: FastifyReply,
+  app: ManagedApp,
+  csrfToken: string,
+  input: AppRedirectsPageInput,
+): Promise<void> {
+  setDeveloperPageHeaders(reply);
+  await reply
+    .status(input.statusCode ?? 200)
+    .type('text/html; charset=utf-8')
+    .send(renderAppRedirectsPage(app, csrfToken, input));
 }
 
 interface IconUpload {

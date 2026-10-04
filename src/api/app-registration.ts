@@ -6,8 +6,8 @@ import { CONSOLE_CLIENT_NAME } from '../developers/console-client.js';
 import { developerUuidSchema } from '../developers/developer-repository.js';
 import { containsOnlyDisplayCharacters } from '../developers/display-text.js';
 import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
-import { hashClientSecret } from '../oauth/client-secret.js';
-import { redirectUriSchema } from '../oauth/redirect-uri.js';
+import { generateClientSecret, hashClientSecret } from '../oauth/client-secret.js';
+import { redirectUriListSchema } from '../oauth/redirect-uri.js';
 
 const MAX_CLIENT_ID_ATTEMPTS = 4;
 const appRegistrationInputSchema = z
@@ -24,14 +24,7 @@ const appRegistrationInputSchema = z
         (value): boolean => value.toLowerCase() !== CONSOLE_CLIENT_NAME.toLowerCase(),
         'This app name is reserved',
       ),
-    redirectUris: z
-      .array(redirectUriSchema)
-      .min(1)
-      .max(20)
-      .refine(
-        (values): boolean => new Set(values).size === values.length,
-        'Redirect URIs must be unique',
-      ),
+    redirectUris: redirectUriListSchema,
   })
   .strict();
 
@@ -62,9 +55,7 @@ export class PrismaAppRegistrar implements AppRegistrar {
     const registration = parseAppRegistrationInput(input);
     const owner = developerUuidSchema.parse(ownerUuid);
     const clientSecret =
-      registration.clientType === 'confidential'
-        ? `cls_${randomBytes(32).toString('base64url')}`
-        : undefined;
+      registration.clientType === 'confidential' ? generateClientSecret() : undefined;
     const clientSecretHash =
       clientSecret === undefined ? null : await hashClientSecret(clientSecret);
 

@@ -1587,8 +1587,10 @@ describe('CraftLogin API server', (): void => {
         list: (): Promise<[]> => Promise.resolve([]),
         remove: (): Promise<boolean> => Promise.resolve(true),
         removeIcon: (): Promise<boolean> => Promise.resolve(true),
+        resetSecret: (): Promise<string | undefined> => Promise.resolve(undefined),
         setIcon: (): Promise<boolean> => Promise.resolve(true),
         requestVerification: (): Promise<'applied'> => Promise.resolve('applied'),
+        updateRedirectUris: (): Promise<boolean> => Promise.resolve(true),
       },
       apps: {
         register: (input): Promise<RegisteredApp> => {

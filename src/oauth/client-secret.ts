@@ -1,5 +1,11 @@
+import { randomBytes } from 'node:crypto';
+
 import argon2 from 'argon2';
 import { z } from 'zod';
+
+export function generateClientSecret(): string {
+  return `cls_${randomBytes(32).toString('base64url')}`;
+}
 
 export const clientSecretHashSchema = z
   .string()

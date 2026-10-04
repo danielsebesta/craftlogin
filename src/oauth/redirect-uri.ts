@@ -22,3 +22,13 @@ export const redirectUriSchema = z
       (parsed?.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname))
     );
   }, 'Redirect URIs must use HTTPS, except for HTTP loopback development clients');
+
+/** Registration and post-creation edits share the same exact-match list rules. */
+export const redirectUriListSchema = z
+  .array(redirectUriSchema)
+  .min(1)
+  .max(20)
+  .refine(
+    (values): boolean => new Set(values).size === values.length,
+    'Redirect URIs must be unique',
+  );

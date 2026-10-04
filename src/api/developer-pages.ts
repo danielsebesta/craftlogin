@@ -17,6 +17,7 @@ export type DashboardNotice =
   | 'last-admin'
   | 'not-found'
   | 'owner-protected'
+  | 'secret-unavailable'
   | 'session-revoked'
   | 'verification-approved'
   | 'verification-rejected'
@@ -132,21 +133,11 @@ export function renderDeveloperDashboard(input: DeveloperDashboardInput): string
 
 export function renderCreatedAppPage(app: RegisteredApp): string {
   const strings = english.developer;
-  const interaction = english.interaction;
   const redirects = app.redirectUris
     .map((uri): string => `<li><code>${escapeHtml(uri)}</code></li>`)
     .join('');
   const secret =
-    app.clientSecret === undefined
-      ? ''
-      : `
-        <div class="credential">
-          <p class="field-label">${escapeHtml(strings.app.secretLabel)}</p>
-          <code id="client-secret">${escapeHtml(app.clientSecret)}</code>
-          <div class="button-row">
-            <button type="button" class="button button-secondary" data-copy-target="#client-secret" data-copied-label="${escapeHtml(interaction.copied)}" hidden>${renderIcon('code', 'button-icon')}${escapeHtml(strings.app.copyLabel)}</button>
-          </div>
-        </div>`;
+    app.clientSecret === undefined ? '' : renderClientSecretCredential(app.clientSecret);
 
   return renderConsoleShell(
     strings.app.createdTitle,
@@ -169,6 +160,127 @@ export function renderCreatedAppPage(app: RegisteredApp): string {
             <dd><ul class="redirect-list">${redirects}</ul></dd>
           </div>
         </dl>${secret}
+        <div class="button-row">
+          <a class="button" href="/developers">${renderIcon('briefcase', 'button-icon')}${escapeHtml(strings.navigation.console)}</a>
+        </div>
+      </section>`,
+    },
+    { script: true },
+  );
+}
+
+function renderClientSecretCredential(clientSecret: string): string {
+  const strings = english.developer;
+  return `
+        <div class="credential">
+          <p class="field-label">${escapeHtml(strings.app.secretLabel)}</p>
+          <code id="client-secret">${escapeHtml(clientSecret)}</code>
+          <div class="button-row">
+            <button type="button" class="button button-secondary" data-copy-target="#client-secret" data-copied-label="${escapeHtml(english.interaction.copied)}" hidden>${renderIcon('code', 'button-icon')}${escapeHtml(strings.app.copyLabel)}</button>
+          </div>
+        </div>`;
+}
+
+export type AppRedirectsNotice = 'redirects-saved';
+
+export interface AppRedirectsPageInput {
+  readonly error?: string;
+  readonly notice?: AppRedirectsNotice;
+  readonly statusCode?: number;
+  readonly values?: string;
+}
+
+export function renderAppRedirectsPage(
+  app: ManagedApp,
+  csrfToken: string,
+  input: AppRedirectsPageInput = {},
+): string {
+  const strings = english.developer;
+  const appStrings = strings.app;
+  const redirectsPath = `/developers/apps/${encodeURIComponent(app.id)}/redirects`;
+  const values = input.values ?? app.redirectUris.join('\n');
+  const notice =
+    input.notice === 'redirects-saved' ? noticeLine(appStrings.redirectsSavedNotice, false) : '';
+  const error = input.error === undefined ? '' : noticeLine(input.error, true);
+
+  return renderConsoleShell(appStrings.redirectsTitle, {
+    className: 'container message-layout',
+    content: `      <section class="message-card card stack" aria-labelledby="app-redirects-heading">
+        <h1 class="icon-heading" id="app-redirects-heading">${renderIcon('server', 'heading-icon')}${escapeHtml(appStrings.redirectsHeading)}</h1>
+        <p class="lead">${escapeHtml(appStrings.redirectsIntro)}</p>
+${error}${notice}        <dl class="summary-list">
+          <div>
+            <dt>${escapeHtml(appStrings.nameLabel)}</dt>
+            <dd>${escapeHtml(app.name)}</dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(appStrings.clientIdLabel)}</dt>
+            <dd><code>${escapeHtml(app.clientId)}</code></dd>
+          </div>
+        </dl>
+        <form class="stack" action="${redirectsPath}" method="post">
+          ${csrfField(csrfToken)}
+          <div class="field">
+            <label for="app-redirects">${escapeHtml(appStrings.redirectLabel)}</label>
+            <textarea id="app-redirects" name="redirectUris" required rows="4" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(appStrings.redirectPlaceholder)}">${escapeHtml(values)}</textarea>
+            <small class="field-hint">${escapeHtml(appStrings.redirectHelp)}</small>
+          </div>
+          <div class="button-row">
+            <button class="button" type="submit">${escapeHtml(appStrings.redirectsSaveAction)}</button>
+            <a class="button button-secondary" href="/developers">${escapeHtml(strings.navigation.console)}</a>
+          </div>
+        </form>
+      </section>`,
+  });
+}
+
+export function renderAppSecretPage(app: ManagedApp, csrfToken: string): string {
+  const strings = english.developer;
+  return renderConsoleShell(strings.confirm.secretTitle, {
+    className: 'container message-layout',
+    content: `      <section class="message-card card stack" aria-labelledby="confirm-heading">
+        <h1 class="icon-heading" id="confirm-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(strings.confirm.secretHeading)}</h1>
+        <p class="lead">${escapeHtml(strings.confirm.secretBody)}</p>
+        <dl class="summary-list">
+          <div>
+            <dt>${escapeHtml(strings.app.nameLabel)}</dt>
+            <dd>${escapeHtml(app.name)}</dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(strings.app.clientIdLabel)}</dt>
+            <dd><code>${escapeHtml(app.clientId)}</code></dd>
+          </div>
+        </dl>
+        <form action="/developers/apps/${encodeURIComponent(app.id)}/secret/reset" method="post">
+          ${csrfField(csrfToken)}
+          <div class="button-row">
+            <button class="button button-danger" type="submit">${escapeHtml(strings.confirm.secretAction)}</button>
+            <a class="button button-secondary" href="/developers">${escapeHtml(strings.confirm.cancel)}</a>
+          </div>
+        </form>
+      </section>`,
+  });
+}
+
+export function renderAppSecretResetPage(app: ManagedApp, clientSecret: string): string {
+  const strings = english.developer;
+  return renderConsoleShell(
+    strings.app.secretResetTitle,
+    {
+      className: 'container message-layout',
+      content: `      <section class="message-card card stack" aria-labelledby="reset-heading">
+        <h1 class="icon-heading" id="reset-heading">${renderIcon('check', 'heading-icon')}${escapeHtml(strings.app.secretResetHeading)}</h1>
+        <p class="lead">${escapeHtml(strings.app.secretResetIntro)}</p>
+        <dl class="summary-list">
+          <div>
+            <dt>${escapeHtml(strings.app.nameLabel)}</dt>
+            <dd>${escapeHtml(app.name)}</dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(strings.app.clientIdLabel)}</dt>
+            <dd><code>${escapeHtml(app.clientId)}</code></dd>
+          </div>
+        </dl>${renderClientSecretCredential(clientSecret)}
         <div class="button-row">
           <a class="button" href="/developers">${renderIcon('briefcase', 'button-icon')}${escapeHtml(strings.navigation.console)}</a>
         </div>
@@ -334,6 +446,7 @@ function renderDashboardNotice(notice: DashboardNotice | undefined): string {
     'developer-verified': strings.admin.verificationDeveloperNotice,
     'last-admin': strings.admin.lastAdminNotice,
     'owner-protected': strings.admin.ownerProtectedNotice,
+    'secret-unavailable': strings.admin.secretUnavailableNotice,
     'session-revoked': strings.sessions.revokedNotice,
     'verification-approved': strings.admin.verificationApprovedNotice,
     'verification-rejected': strings.admin.verificationRejectedNotice,
@@ -522,8 +635,16 @@ function renderAppActions(app: ManagedApp, role: DeveloperRole, csrfToken: strin
     );
   }
   actions.push(
+    `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/redirects">${escapeHtml(strings.app.redirectsLinkLabel)}</a>`,
+  );
+  actions.push(
     `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/icon">${escapeHtml(strings.app.iconLinkLabel)}</a>`,
   );
+  if (app.clientType === 'confidential') {
+    actions.push(
+      `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/secret">${escapeHtml(strings.app.secretLinkLabel)}</a>`,
+    );
+  }
   actions.push(
     `<a class="button button-quiet button-danger-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/delete">${escapeHtml(strings.app.deleteAction)}</a>`,
   );
