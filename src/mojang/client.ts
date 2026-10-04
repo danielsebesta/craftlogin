@@ -7,7 +7,9 @@ import { canonicalMinecraftUuid, stripMinecraftUuidDashes } from './uuid.js';
 
 const USER_AGENT = 'CraftLogin/0.1 (+https://github.com/danielsebesta/craftlogin)';
 const PLAYER_NAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/u;
-const TEXTURE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
+// Mojang texture ids are 64-nibble hex values with leading zeros stripped, so
+// observed lengths vary below 64 (e.g. a hash starting with 0 is 63 chars).
+const TEXTURE_HASH_PATTERN = /^[0-9a-f]{1,64}$/u;
 
 const PROFILE_BY_NAME_URL = 'https://api.mojang.com/users/profiles/minecraft/';
 const PROFILE_BY_ID_URL = 'https://sessionserver.mojang.com/session/minecraft/profile/';
@@ -472,7 +474,7 @@ function textureHashFromUrl(rawUrl: string): string | undefined {
     return undefined;
   }
 
-  const pathMatch = /^\/texture\/([0-9a-f]{64})$/u.exec(url.pathname);
+  const pathMatch = /^\/texture\/([0-9a-f]{1,64})$/u.exec(url.pathname);
   const hash = pathMatch?.[1];
   return hash === undefined || !TEXTURE_HASH_PATTERN.test(hash) ? undefined : hash;
 }

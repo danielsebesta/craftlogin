@@ -6,7 +6,10 @@ export type AvatarSubject =
   | { readonly kind: 'uuid'; readonly uuid: string };
 
 const PLAYER_NAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/u;
-const TEXTURE_HASH_PATTERN = /^[0-9a-fA-F]{64}$/u;
+// Mojang texture ids are 64-nibble hex values with leading zeros stripped.
+// The lower bound stays above 16 so an identifier can never collide with a
+// Minecraft username, which is at most 16 characters.
+const TEXTURE_HASH_PATTERN = /^[0-9a-fA-F]{48,64}$/u;
 
 export function parseAvatarSubject(value: string): AvatarSubject | undefined {
   const uuid = canonicalMinecraftUuid(value);

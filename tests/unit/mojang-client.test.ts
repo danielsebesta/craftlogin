@@ -261,6 +261,38 @@ describe('HttpMojangClient', (): void => {
     });
   });
 
+  it('accepts texture ids shorter than 64 hex digits (Mojang strips leading zeros)', async (): Promise<void> => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
+    const shortHash = textureHash.slice(1);
+    const textures = signedTextures(privateKey, {
+      url: `http://textures.minecraft.net/texture/${shortHash}`,
+    });
+    const { fetch } = stubFetch((url) =>
+      url.includes('/publickeys')
+        ? { body: { profilePropertyKeys: [{ publicKey: profilePublicKey(publicKey) }] } }
+        : {
+            body: {
+              id: playerUuid.replaceAll('-', ''),
+              name: 'jeb_',
+              properties: [
+                { name: 'textures', signature: textures.signature, value: textures.value },
+              ],
+            },
+          },
+    );
+    const client = new HttpMojangClient({
+      cache: new MemoryMinecraftCache(),
+      fetch,
+      logger: silentLogger(),
+    });
+
+    await expect(client.findProfileById(playerUuid)).resolves.toEqual({
+      texture: { hash: shortHash, model: 'classic' },
+      username: 'jeb_',
+      uuid: playerUuid,
+    });
+  });
+
   it('accepts Mojang signed historical HTTP texture URLs', async (): Promise<void> => {
     const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2_048 });
     const textures = signedTextures(privateKey, {

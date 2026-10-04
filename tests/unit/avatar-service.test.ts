@@ -763,6 +763,27 @@ describe('CachedAvatarService', (): void => {
     ]);
   });
 
+  it('renders texture-hash subjects whose ids Mojang shortened below 64 hex digits', async (): Promise<void> => {
+    const skin = await createSkinPng([]);
+    const renderer = new RecordingRenderer();
+    const service = new CachedAvatarService({
+      cache: new RecordingCache(),
+      defaultSkins: missingDefaultSkins(),
+      players: playersWithTexture(),
+      renderer,
+      skins: skinStore(skin),
+    });
+
+    const result = await service.render(textureHash.slice(1), {
+      layers: 'all',
+      size: 128,
+      view: 'face',
+    });
+
+    expect(result.status).toBe('found');
+    expect(renderer.models).toEqual(['classic']);
+  });
+
   it('reports missing and malformed texture-hash subjects as not-found', async (): Promise<void> => {
     const notSkin = Buffer.from(await createSkinPng([]));
     notSkin.writeUInt32BE(32, 16);

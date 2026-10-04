@@ -142,7 +142,7 @@ const minecraftUuidProperty = {
 };
 const avatarIdentifierProperty = {
   pattern:
-    '^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$',
+    '^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$',
   type: 'string',
 };
 const avatarParamsSchema = {
@@ -1168,7 +1168,7 @@ export const skinRouteSchema: FastifySchema = {
   hide: true,
   params: {
     additionalProperties: false,
-    properties: { hash: { pattern: '^[0-9a-f]{64}$', type: 'string' } },
+    properties: { hash: { pattern: '^[0-9a-f]{1,64}$', type: 'string' } },
     required: ['hash'],
     type: 'object',
   },

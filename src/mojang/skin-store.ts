@@ -4,7 +4,8 @@ import { getErrorKind } from '../logging/error-kind.js';
 import { BoundedResponseError, readBoundedResponseBody } from './bounded-body.js';
 import type { CachedValue, MinecraftCache } from './cache.js';
 
-const SKIN_HASH_PATTERN = /^[0-9a-f]{64}$/u;
+// Mojang texture ids are 64-nibble hex values with leading zeros stripped.
+const SKIN_HASH_PATTERN = /^[0-9a-f]{1,64}$/u;
 const SKIN_BASE_URL = 'https://textures.minecraft.net/texture/';
 const USER_AGENT = 'CraftLogin/0.1 (+https://github.com/danielsebesta/craftlogin)';
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

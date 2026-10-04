@@ -458,6 +458,17 @@ describe('HttpSkinStore', (): void => {
     expect(calls).toHaveLength(1);
   });
 
+  it('accepts texture ids shorter than 64 hex digits, as Mojang strips leading zeros', async (): Promise<void> => {
+    const { calls, fetch } = stubFetch(() => ({ body: PNG_BODY }));
+    const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
+
+    await expect(store.fetchSkin(skinStoreHash.slice(1))).resolves.toEqual({
+      body: Buffer.from(PNG_BODY),
+      contentType: 'image/png',
+    });
+    expect(calls).toHaveLength(1);
+  });
+
   it('rejects an invalid hash without any request', async (): Promise<void> => {
     const { calls, fetch } = stubFetch(() => ({ body: new Uint8Array([1]) }));
     const store = new HttpSkinStore({ cache: new MemoryMinecraftCache(), fetch });
