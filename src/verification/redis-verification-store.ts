@@ -18,13 +18,17 @@ const VERIFICATION_TTL_MS = 5 * 60 * 1_000;
 const PROCESSING_TTL_MS = 60 * 1_000;
 const RESOLVED_TTL_MS = 5 * 60 * 1_000;
 const MAX_CODE_ALLOCATION_ATTEMPTS = 12;
+const MAX_CONFIRMATION_ATTEMPTS = 10;
+const MAX_CLIENT_NAME_LENGTH = 128;
 const KEY_ID_PATTERN = /^[0-9a-f]{64}$/u;
 const createResultSchema = z.union([z.literal(0), z.literal(1), z.literal(2)]);
 const scriptBooleanSchema = z.union([z.literal(0), z.literal(1)]);
+const claimResultSchema = z.union([z.literal(0), z.tuple([z.literal(1), z.string()])]);
 const keyIdSchema = z.string().regex(KEY_ID_PATTERN);
 const verifiedClaimResultSchema = z.union([
-  z.tuple([]),
+  z.tuple([z.union([z.literal(0), z.literal(2), z.literal(3)])]),
   z.tuple([
+    z.literal(1),
     authenticatedMinecraftPlayerSchema.shape.uuid,
     authenticatedMinecraftPlayerSchema.shape.username,
     z.iso.datetime({ offset: true }),
@@ -46,6 +50,7 @@ const storedStateSchema = z.discriminatedUnion('status', [
     username: authenticatedMinecraftPlayerSchema.shape.username,
     resolvedAt: z.iso.datetime({ offset: true }),
     method: verificationMethodSchema.optional(),
+    confirmCode: z.string().optional(),
   }),
   z.object({
     status: z.literal('finalizing'),
@@ -53,9 +58,13 @@ const storedStateSchema = z.discriminatedUnion('status', [
     username: authenticatedMinecraftPlayerSchema.shape.username,
     resolvedAt: z.iso.datetime({ offset: true }),
     method: verificationMethodSchema.optional(),
+    confirmCode: z.string().optional(),
   }),
 ]);
 
+// The client display name rides along on the record so the in-game kick can
+// name the application being signed into; a silent proxy cannot erase that
+// warning because it cannot read the encrypted channel it travels on.
 const CREATE_PENDING_SCRIPT = `
 if redis.call('EXISTS', KEYS[2]) == 1 then
   return 2
@@ -68,6 +77,9 @@ local nowMilliseconds = (redisTime[1] * 1000) + math.floor(redisTime[2] / 1000)
 local expiresAt = nowMilliseconds + tonumber(ARGV[3])
 redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[3])
 redis.call('HSET', KEYS[2], 'status', 'pending', 'code', ARGV[2], 'expiresAt', expiresAt)
+if ARGV[4] ~= '' then
+  redis.call('HSET', KEYS[2], 'clientName', ARGV[4])
+end
 redis.call('PEXPIRE', KEYS[2], ARGV[3])
 return 1
 `;
@@ -94,13 +106,17 @@ if remainingTtl <= 0 then
   redis.call('DEL', KEYS[1], KEYS[2])
   return 0
 end
+local clientName = redis.call('HGET', KEYS[2], 'clientName')
+if clientName == false then
+  clientName = ''
+end
 redis.call('HSET', KEYS[2], 'status', 'processing', 'claimId', ARGV[2])
 redis.call('HDEL', KEYS[2], 'code')
 redis.call('DEL', KEYS[1])
 if remainingTtl < tonumber(ARGV[3]) then
   redis.call('PEXPIRE', KEYS[2], ARGV[3])
 end
-return 1
+return { 1, clientName }
 `;
 
 const CLAIM_INTERACTION_SCRIPT = `
@@ -148,6 +164,9 @@ redis.call(
   'resolvedAt', ARGV[5],
   'method', ARGV[6]
 )
+if ARGV[8] ~= '' then
+  redis.call('HSET', KEYS[2], 'confirmCode', ARGV[8])
+end
 redis.call('HDEL', KEYS[2], 'claimId', 'expiresAt')
 redis.call('PEXPIRE', KEYS[2], ARGV[7])
 return 1
@@ -181,14 +200,29 @@ redis.call('PEXPIREAT', KEYS[2], expiresAt)
 return 1
 `;
 
+// Join-path records carry a confirmation code delivered over the encrypted
+// disconnect channel, so finalization requires echoing it back; a relaying
+// proxy never sees it. Wrong guesses count toward a bound that discards the
+// resolution entirely, so grinding forces a fresh verification.
 const CLAIM_VERIFIED_SCRIPT = `
 if redis.call('HGET', KEYS[1], 'status') ~= 'verified' then
-  return {}
+  return { 0 }
 end
 local remainingTtl = redis.call('PTTL', KEYS[1])
 if remainingTtl <= 0 then
   redis.call('DEL', KEYS[1])
-  return {}
+  return { 0 }
+end
+local confirmCode = redis.call('HGET', KEYS[1], 'confirmCode')
+if confirmCode ~= false and confirmCode ~= ARGV[2] then
+  local attempts = tonumber(redis.call('HGET', KEYS[1], 'confirmAttempts')) or 0
+  attempts = attempts + 1
+  if attempts >= tonumber(ARGV[3]) then
+    redis.call('DEL', KEYS[1])
+    return { 3 }
+  end
+  redis.call('HSET', KEYS[1], 'confirmAttempts', attempts)
+  return { 2 }
 end
 local userUuid = redis.call('HGET', KEYS[1], 'userUuid')
 local username = redis.call('HGET', KEYS[1], 'username')
@@ -198,10 +232,10 @@ if method == false then
   method = 'minecraft_online_mode'
 end
 if userUuid == false or username == false or resolvedAt == false then
-  return {}
+  return { 0 }
 end
 redis.call('HSET', KEYS[1], 'status', 'finalizing', 'finishClaimId', ARGV[1])
-return { userUuid, username, resolvedAt, method }
+return { 1, userUuid, username, resolvedAt, method }
 `;
 
 // "Not you" discards a verified identity: the whole record is deleted so the
@@ -240,6 +274,7 @@ return 1
 
 export interface VerificationClaim {
   readonly claimId: string;
+  readonly clientName?: string;
   readonly code: string;
   readonly codeKey: string;
   readonly interactionKey: string;
@@ -254,6 +289,12 @@ export interface VerificationFinalizationClaim {
   readonly method: VerificationMethod;
 }
 
+export type VerifiedClaimResult =
+  | { readonly status: 'claimed'; readonly claim: VerificationFinalizationClaim }
+  | {
+      readonly status: 'attempts_exhausted' | 'code_mismatch' | 'unavailable';
+    };
+
 export class VerificationStateError extends Error {
   public override readonly name = 'VerificationStateError';
 }
@@ -264,8 +305,9 @@ export class RedisVerificationStore {
     private readonly keyPrefix = 'craftlogin:verification',
   ) {}
 
-  public async allocate(interactionIdInput: string): Promise<string> {
+  public async allocate(interactionIdInput: string, clientLabel?: string): Promise<string> {
     const interactionId = interactionIdSchema.parse(interactionIdInput);
+    const clientName = clientLabel?.trim().slice(0, MAX_CLIENT_NAME_LENGTH) ?? '';
     const keyId = this.interactionKeyId(interactionId);
     const interactionKey = this.interactionKey(keyId);
 
@@ -288,6 +330,7 @@ export class RedisVerificationStore {
           keyId,
           code,
           VERIFICATION_TTL_MS,
+          clientName,
         ),
       );
 
@@ -341,7 +384,7 @@ export class RedisVerificationStore {
 
     const claimId = randomUUID();
     const interactionKey = this.interactionKey(parsedKeyId.data);
-    const result = scriptBooleanSchema.parse(
+    const result = claimResultSchema.parse(
       await this.redis.eval(
         CLAIM_SCRIPT,
         2,
@@ -357,12 +400,14 @@ export class RedisVerificationStore {
       return null;
     }
 
+    const clientName = result[1];
     return {
       claimId,
       code,
       codeKey,
       interactionKey,
       keyId: parsedKeyId.data,
+      ...(clientName === '' ? {} : { clientName }),
     };
   }
 
@@ -399,6 +444,7 @@ export class RedisVerificationStore {
     playerInput: AuthenticatedMinecraftPlayer,
     resolvedAt: Date,
     method: VerificationMethod = 'minecraft_online_mode',
+    confirmationCode?: string,
   ): Promise<boolean> {
     const player = authenticatedMinecraftPlayerSchema.parse(playerInput);
     const result = scriptBooleanSchema.parse(
@@ -414,6 +460,7 @@ export class RedisVerificationStore {
         resolvedAt.toISOString(),
         verificationMethodSchema.parse(method),
         RESOLVED_TTL_MS,
+        confirmationCode ?? '',
       ),
     );
 
@@ -438,25 +485,40 @@ export class RedisVerificationStore {
 
   public async claimVerified(
     interactionIdInput: string,
-  ): Promise<VerificationFinalizationClaim | null> {
+    confirmationCode?: string,
+  ): Promise<VerifiedClaimResult> {
     const interactionId = interactionIdSchema.parse(interactionIdInput);
     const interactionKey = this.interactionKey(this.interactionKeyId(interactionId));
     const claimId = randomUUID();
     const result = verifiedClaimResultSchema.parse(
-      await this.redis.eval(CLAIM_VERIFIED_SCRIPT, 1, interactionKey, claimId),
+      await this.redis.eval(
+        CLAIM_VERIFIED_SCRIPT,
+        1,
+        interactionKey,
+        claimId,
+        confirmationCode?.trim().toUpperCase() ?? '',
+        MAX_CONFIRMATION_ATTEMPTS,
+      ),
     );
 
-    if (result.length === 0) {
-      return null;
+    if (result.length === 1) {
+      const marker = result[0];
+      return {
+        status:
+          marker === 2 ? 'code_mismatch' : marker === 3 ? 'attempts_exhausted' : 'unavailable',
+      };
     }
 
-    const [uuid, username, resolvedAt, method] = result;
+    const [, uuid, username, resolvedAt, method] = result;
     return {
-      claimId,
-      interactionKey,
-      player: { uuid, username },
-      resolvedAt,
-      method,
+      status: 'claimed',
+      claim: {
+        claimId,
+        interactionKey,
+        player: { uuid, username },
+        resolvedAt,
+        method,
+      },
     };
   }
 
@@ -512,6 +574,7 @@ export class RedisVerificationStore {
         username: parsed.data.username,
       },
       resolvedAt: parsed.data.resolvedAt,
+      ...(parsed.data.confirmCode === undefined ? {} : { requiresConfirmCode: true }),
     };
   }
 

@@ -62,7 +62,8 @@ function startTestServer(
         hasPendingCode: (code: string): Promise<boolean> => Promise.resolve(pending(code)),
       },
       resolver: {
-        resolve: (): Promise<'unavailable'> => Promise.resolve('unavailable'),
+        resolve: (): Promise<{ status: 'unavailable' }> =>
+          Promise.resolve({ status: 'unavailable' }),
       },
     },
   );
@@ -90,7 +91,8 @@ describe('Minecraft ghost server', (): void => {
           hasPendingCode: (): Promise<boolean> => Promise.resolve(false),
         },
         resolver: {
-          resolve: (): Promise<'unavailable'> => Promise.resolve('unavailable'),
+          resolve: (): Promise<{ status: 'unavailable' }> =>
+            Promise.resolve({ status: 'unavailable' }),
         },
       },
     );
@@ -136,9 +138,9 @@ describe('Minecraft ghost server', (): void => {
           hasPendingCode: (): Promise<boolean> => Promise.resolve(false),
         },
         resolver: {
-          resolve: (): Promise<'unavailable'> => {
+          resolve: (): Promise<{ status: 'unavailable' }> => {
             resolutionAttempts += 1;
-            return Promise.resolve('unavailable');
+            return Promise.resolve({ status: 'unavailable' });
           },
         },
       },
@@ -217,9 +219,9 @@ describe('Minecraft ghost server', (): void => {
           },
         },
         resolver: {
-          resolve: (): Promise<'resolved'> => {
+          resolve: (): Promise<{ status: 'resolved' }> => {
             resolutionAttempts += 1;
-            return Promise.resolve('resolved');
+            return Promise.resolve({ status: 'resolved' });
           },
         },
       },
@@ -274,7 +276,7 @@ describe('Minecraft ghost server', (): void => {
           },
         },
         resolver: {
-          resolve: (): Promise<'resolved'> => Promise.resolve('resolved'),
+          resolve: (): Promise<{ status: 'resolved' }> => Promise.resolve({ status: 'resolved' }),
         },
       },
     );

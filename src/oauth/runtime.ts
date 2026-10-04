@@ -9,7 +9,7 @@ import { createOidcAdapterFactory } from './adapter-factory.js';
 import { createAccountLookup, PrismaAccountUserStore } from './account-lookup.js';
 import { ProviderInteractionGateway } from './interaction-gateway.js';
 import { OAuthInteractionService } from './interaction-service.js';
-import type { OAuthInteractionLogger } from './interaction-service.js';
+import type { InteractionClientNameLookup, OAuthInteractionLogger } from './interaction-service.js';
 import {
   createCraftLoginProvider,
   type PostLogoutSuccessRenderer,
@@ -17,6 +17,7 @@ import {
 } from './provider.js';
 
 export interface OAuthRuntimeConfig {
+  readonly clientNames?: InteractionClientNameLookup;
   readonly cookieKeys: readonly string[];
   readonly issuer: string;
   readonly jwks: JWKS;
@@ -61,6 +62,7 @@ export function createOAuthRuntime(
       config.logger,
       config.skinVerification,
       config.microsoftVerificationEnabled ?? false,
+      config.clientNames,
     ),
     provider,
   };

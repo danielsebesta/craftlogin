@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type {
   RedisVerificationStore,
   VerificationFinalizationClaim,
+  VerifiedClaimResult,
 } from '../verification/redis-verification-store.js';
 import type { AuthenticatedMinecraftPlayer, VerificationStatus } from '../verification/types.js';
 import type { SkinVerificationChallenge } from '../verification/redis-skin-verification-store.js';
@@ -17,12 +18,16 @@ import {
 } from './constants.js';
 
 interface VerificationInteractionStore {
-  allocate(interactionId: string): Promise<string>;
-  claimVerified(interactionId: string): Promise<VerificationFinalizationClaim | null>;
+  allocate(interactionId: string, clientName?: string): Promise<string>;
+  claimVerified(interactionId: string, confirmationCode?: string): Promise<VerifiedClaimResult>;
   completeFinalization(claim: VerificationFinalizationClaim): Promise<boolean>;
   getStatus(interactionId: string): Promise<VerificationStatus>;
   releaseFinalization(claim: VerificationFinalizationClaim): Promise<boolean>;
   reset(interactionId: string): Promise<boolean>;
+}
+
+export interface InteractionClientNameLookup {
+  findClient(clientId: string): Promise<{ readonly name: string } | undefined>;
 }
 
 interface SkinInteractionVerification {
@@ -54,12 +59,14 @@ export interface PendingOAuthInteraction {
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
   readonly allowsMicrosoftVerification?: boolean;
+  /** True when the in-game kick delivered a confirmation code the browser must echo back. */
+  readonly requiresConfirmCode?: boolean;
   /** Server-side verified identity awaiting the user's explicit confirmation. */
   readonly verifiedPlayer?: AuthenticatedMinecraftPlayer;
 }
 
 export type OAuthInteractionCompletion =
-  { status: 'complete'; redirectTo: string } | { status: 'expired' | 'pending' };
+  { status: 'complete'; redirectTo: string } | { status: 'code_mismatch' | 'expired' | 'pending' };
 
 export interface OAuthInteractionAbortion {
   readonly redirectTo: string;
@@ -82,6 +89,7 @@ export class OAuthInteractionService {
     private readonly logger: OAuthInteractionLogger,
     private readonly skinVerification?: SkinInteractionVerification,
     private readonly microsoftVerificationEnabled = false,
+    private readonly clientNames?: InteractionClientNameLookup,
   ) {}
 
   public async start(
@@ -121,6 +129,7 @@ export class OAuthInteractionService {
         kind: 'login',
         scope: interaction.scope,
         verifiedPlayer: status.player,
+        ...(status.requiresConfirmCode === true ? { requiresConfirmCode: true } : {}),
       };
     }
     // 'processing' reports pending without a code; allocating here would collide
@@ -128,7 +137,7 @@ export class OAuthInteractionService {
     const code =
       status.status === 'pending' && status.code === null
         ? undefined
-        : await this.verification.allocate(interaction.interactionId);
+        : await this.allocateVerification(interaction);
     const skinChallenge = await this.readSkinChallenge(interaction.interactionId);
     const allowsSkinVerification = this.allowsSkinVerification(interaction);
     const allowsOnlineVerification = permitsAuthenticationMethod(
@@ -169,7 +178,7 @@ export class OAuthInteractionService {
         'The authorization request does not permit Microsoft OAuth verification',
       );
     }
-    await this.verification.allocate(interaction.interactionId);
+    await this.allocateVerification(interaction);
     return { interactionId: interaction.interactionId };
   }
 
@@ -191,7 +200,7 @@ export class OAuthInteractionService {
         'The authorization request does not permit Microsoft OAuth verification',
       );
     }
-    await this.verification.allocate(interaction.interactionId);
+    await this.allocateVerification(interaction);
     return { interactionId: interaction.interactionId };
   }
 
@@ -214,7 +223,7 @@ export class OAuthInteractionService {
         'The authorization request requires a different authentication method',
       );
     }
-    await this.verification.allocate(interaction.interactionId);
+    await this.allocateVerification(interaction);
     return toSkinInteractionChallenge(
       await this.skinVerification.start(interaction.interactionId, username),
     );
@@ -310,7 +319,7 @@ export class OAuthInteractionService {
     // record or block a different account's challenge.
     await this.skinVerification?.discard(interaction.interactionId);
     if (await this.verification.reset(interaction.interactionId)) {
-      await this.verification.allocate(interaction.interactionId);
+      await this.allocateVerification(interaction);
     }
   }
 
@@ -336,6 +345,7 @@ export class OAuthInteractionService {
     request: IncomingMessage,
     response: ServerResponse,
     expectedInteractionId?: string,
+    confirmationCode?: string,
   ): Promise<OAuthInteractionCompletion> {
     const { context: interaction } = await this.requireActiveInteraction(
       request,
@@ -354,11 +364,22 @@ export class OAuthInteractionService {
     if (interaction.promptName !== 'login') {
       throw new OAuthInteractionStateError('The OIDC interaction prompt is not supported');
     }
-    const claim = await this.verification.claimVerified(interaction.interactionId);
-    if (claim === null) {
+    const outcome = await this.verification.claimVerified(
+      interaction.interactionId,
+      confirmationCode,
+    );
+    if (outcome.status !== 'claimed') {
+      if (outcome.status === 'code_mismatch') {
+        return { status: 'code_mismatch' };
+      }
+      // Exhausted guesses deleted the record, so the interaction is finished.
+      if (outcome.status === 'attempts_exhausted') {
+        return { status: 'expired' };
+      }
       const status = await this.verification.getStatus(interaction.interactionId);
       return { status: status.status === 'expired' ? 'expired' : 'pending' };
     }
+    const claim = outcome.claim;
 
     let redirectTo: string;
     try {
@@ -427,6 +448,31 @@ export class OAuthInteractionService {
   ): Promise<SkinInteractionChallenge | undefined> {
     const challenge = await this.skinVerification?.getChallenge(interactionId);
     return challenge === undefined ? undefined : toSkinInteractionChallenge(challenge);
+  }
+
+  // The client display name is stored on the pending record so the in-game
+  // disconnect can name the application being signed into; a lookup failure
+  // degrades to a generic message instead of failing verification.
+  private async allocateVerification(interaction: OAuthInteractionContext): Promise<string> {
+    return await this.verification.allocate(
+      interaction.interactionId,
+      await this.resolveClientName(interaction.clientId),
+    );
+  }
+
+  private async resolveClientName(clientId: string): Promise<string | undefined> {
+    if (this.clientNames === undefined) {
+      return undefined;
+    }
+    try {
+      return (await this.clientNames.findClient(clientId))?.name;
+    } catch (error: unknown) {
+      this.logger.error(
+        { errorKind: getErrorKind(error) },
+        'Interaction client name lookup failed',
+      );
+      return undefined;
+    }
   }
 
   private allowsSkinVerification(interaction: OAuthInteractionContext): boolean {

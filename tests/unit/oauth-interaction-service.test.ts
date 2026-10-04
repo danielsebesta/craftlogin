@@ -10,7 +10,7 @@ import {
 } from '../../src/oauth/interaction-gateway.js';
 import { OAuthInteractionService } from '../../src/oauth/interaction-service.js';
 import type { OAuthInteractionLogger } from '../../src/oauth/interaction-service.js';
-import type { VerificationFinalizationClaim } from '../../src/verification/redis-verification-store.js';
+import type { VerifiedClaimResult } from '../../src/verification/redis-verification-store.js';
 import type {
   AuthenticatedMinecraftPlayer,
   VerificationMethod,
@@ -114,32 +114,50 @@ class SkinVerificationStub {
 
 class FinalizationStore {
   public allocations: string[] = [];
+  public allocatedClientNames: (string | undefined)[] = [];
   public completed = 0;
   public released = 0;
   public resets: string[] = [];
   public resetResult = true;
   public processing = false;
   public verified = false;
+  public confirmCode: string | undefined;
+  public confirmAttempts = 0;
   public completeError: Error | undefined;
   public completeResult = true;
   private claimed = false;
 
-  public allocate(interactionId: string): Promise<string> {
+  public allocate(interactionId: string, clientName?: string): Promise<string> {
     this.allocations.push(interactionId);
+    this.allocatedClientNames.push(clientName);
     return Promise.resolve('ABCDEFGH');
   }
 
-  public claimVerified(): Promise<VerificationFinalizationClaim | null> {
+  public claimVerified(
+    _interactionId: string,
+    confirmationCode?: string,
+  ): Promise<VerifiedClaimResult> {
     if (!this.verified || this.claimed) {
-      return Promise.resolve(null);
+      return Promise.resolve({ status: 'unavailable' });
+    }
+    if (this.confirmCode !== undefined && this.confirmCode !== confirmationCode) {
+      this.confirmAttempts += 1;
+      if (this.confirmAttempts >= 10) {
+        this.verified = false;
+        return Promise.resolve({ status: 'attempts_exhausted' });
+      }
+      return Promise.resolve({ status: 'code_mismatch' });
     }
     this.claimed = true;
     return Promise.resolve({
-      claimId: 'claim-id',
-      interactionKey: 'interaction-key',
-      method: 'minecraft_online_mode',
-      player,
-      resolvedAt,
+      status: 'claimed',
+      claim: {
+        claimId: 'claim-id',
+        interactionKey: 'interaction-key',
+        method: 'minecraft_online_mode',
+        player,
+        resolvedAt,
+      },
     });
   }
 
@@ -151,11 +169,22 @@ class FinalizationStore {
   }
 
   public getStatus(): Promise<
+    | { status: 'expired' }
     | { status: 'pending'; code: string | null }
-    | { status: 'verified'; player: AuthenticatedMinecraftPlayer; resolvedAt: string }
+    | {
+        status: 'verified';
+        player: AuthenticatedMinecraftPlayer;
+        resolvedAt: string;
+        requiresConfirmCode?: boolean;
+      }
   > {
     if (this.verified) {
-      return Promise.resolve({ status: 'verified', player, resolvedAt });
+      return Promise.resolve({
+        status: 'verified',
+        player,
+        resolvedAt,
+        ...(this.confirmCode === undefined ? {} : { requiresConfirmCode: true }),
+      });
     }
     if (this.processing) {
       return Promise.resolve({ status: 'pending', code: null });
@@ -498,6 +527,88 @@ describe('OAuthInteractionService', (): void => {
     });
     expect(store.released).toBe(0);
     expect(logger.errorKinds).toEqual(['VerificationFinalizationClaimLost']);
+  });
+
+  it('requires the in-game confirmation code before finalizing an online-mode join', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    store.verified = true;
+    store.confirmCode = 'K7X2QM';
+    const service = new OAuthInteractionService(gateway, store, new RecordingLogger());
+    const { request, response } = createTransport();
+
+    // start() surfaces the requirement without exposing the code itself.
+    await expect(service.start(request, response)).resolves.toMatchObject({
+      requiresConfirmCode: true,
+      verifiedPlayer: player,
+    });
+
+    await expect(service.complete(request, response)).resolves.toEqual({
+      status: 'code_mismatch',
+    });
+    await expect(service.complete(request, response, 'interaction-id', 'ZZZZ99')).resolves.toEqual({
+      status: 'code_mismatch',
+    });
+    expect(gateway.persisted).toBe(0);
+
+    await expect(service.complete(request, response, 'interaction-id', 'K7X2QM')).resolves.toEqual({
+      status: 'complete',
+      redirectTo: '/oauth2/resume',
+    });
+    expect(gateway.persisted).toBe(1);
+  });
+
+  it('expires the interaction once confirmation attempts run out', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    store.verified = true;
+    store.confirmCode = 'K7X2QM';
+    const service = new OAuthInteractionService(gateway, store, new RecordingLogger());
+    const { request, response } = createTransport();
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      await expect(
+        service.complete(request, response, 'interaction-id', 'ZZZZ99'),
+      ).resolves.toEqual({ status: 'code_mismatch' });
+    }
+    await expect(service.complete(request, response, 'interaction-id', 'ZZZZ99')).resolves.toEqual({
+      status: 'expired',
+    });
+    expect(gateway.persisted).toBe(0);
+  });
+
+  it('passes the client display name into the verification allocation', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    const service = new OAuthInteractionService(
+      gateway,
+      store,
+      new RecordingLogger(),
+      undefined,
+      false,
+      {
+        findClient: (clientId: string): Promise<{ name: string } | undefined> =>
+          Promise.resolve(clientId === 'test-client' ? { name: 'Example App' } : undefined),
+      },
+    );
+    const { request, response } = createTransport();
+
+    await service.start(request, response);
+    expect(store.allocatedClientNames).toEqual(['Example App']);
+  });
+
+  it('verifies without a client name when the lookup fails', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const store = new FinalizationStore();
+    const logger = new RecordingLogger();
+    const service = new OAuthInteractionService(gateway, store, logger, undefined, false, {
+      findClient: (): Promise<never> => Promise.reject(new Error('directory down')),
+    });
+    const { request, response } = createTransport();
+
+    await expect(service.start(request, response)).resolves.toMatchObject({ code: 'ABCDEFGH' });
+    expect(store.allocatedClientNames).toEqual([undefined]);
+    expect(logger.errorKinds).toEqual(['Error']);
   });
 });
 

@@ -54,6 +54,14 @@ interface SkinVerificationLookupQuery {
   readonly username: string;
 }
 
+interface InteractionPageQuery {
+  readonly confirm?: string;
+}
+
+interface InteractionCompletionBody {
+  readonly code?: string;
+}
+
 export interface ApiInteractionService {
   abort(
     request: IncomingMessage,
@@ -84,6 +92,7 @@ export interface ApiInteractionService {
     request: IncomingMessage,
     response: ServerResponse,
     expectedInteractionId?: string,
+    confirmationCode?: string,
   ): Promise<OAuthInteractionCompletion>;
   prepareMicrosoft?(
     request: IncomingMessage,
@@ -146,7 +155,7 @@ export function registerInteractionRoutes(
   server: FastifyInstance,
   options: InteractionRoutesOptions,
 ): void {
-  server.get<{ Params: InteractionParams }>(
+  server.get<{ Params: InteractionParams; Querystring: InteractionPageQuery }>(
     '/interaction/:uid',
     {
       config: { rateLimit: interactionPageRateLimit },
@@ -197,6 +206,8 @@ export function registerInteractionRoutes(
           ...(interaction.verifiedPlayer === undefined
             ? {}
             : { verifiedPlayer: interaction.verifiedPlayer }),
+          ...(interaction.requiresConfirmCode === true ? { requiresConfirmCode: true } : {}),
+          ...(request.query.confirm === 'incorrect' ? { confirmCodeError: true } : {}),
           ...(interaction.skinChallenge === undefined
             ? {}
             : { skinChallenge: interaction.skinChallenge }),
@@ -466,7 +477,7 @@ export function registerInteractionRoutes(
     },
   );
 
-  server.post<{ Params: InteractionParams }>(
+  server.post<{ Body: InteractionCompletionBody; Params: InteractionParams }>(
     '/interaction/:uid/complete',
     {
       config: { rateLimit: interactionPageRateLimit },
@@ -479,6 +490,7 @@ export function registerInteractionRoutes(
           request.raw,
           reply.raw,
           request.params.uid,
+          request.body.code,
         );
       } catch (error: unknown) {
         if (isInteractionClientError(error)) {
@@ -489,6 +501,10 @@ export function registerInteractionRoutes(
       }
       if (completion.status === 'expired') {
         await reply.redirect(interactionPageUrl(request.params.uid), 303);
+        return;
+      }
+      if (completion.status === 'code_mismatch') {
+        await reply.redirect(`${interactionPageUrl(request.params.uid)}?confirm=incorrect`, 303);
         return;
       }
       if (completion.status === 'complete') {

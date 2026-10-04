@@ -3,13 +3,14 @@ import type {
   MicrosoftMinecraftIdentity,
 } from './microsoft-oauth-client.js';
 import type { InteractionVerifiedIdentity } from './types.js';
+import type { VerificationResolution } from './verification-resolver.js';
 
 export interface MicrosoftInteractionResolver {
   resolveInteraction(
     interactionId: string,
     identity: InteractionVerifiedIdentity,
     verifiedAt: Date,
-  ): Promise<'resolved' | 'unavailable'>;
+  ): Promise<VerificationResolution>;
 }
 
 export class MicrosoftVerificationResolutionError extends Error {
@@ -43,7 +44,7 @@ export class MicrosoftOAuthVerificationService {
       },
       new Date(),
     );
-    if (result !== 'resolved') {
+    if (result.status !== 'resolved') {
       throw new MicrosoftVerificationResolutionError(
         'The Microsoft verification interaction is no longer available',
       );

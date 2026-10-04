@@ -95,7 +95,12 @@ The verification flow is fixed:
    UUID and username with its pending interaction, upsert the user, mark the interaction resolved,
    then present the void world and disconnect with a clear success message. The disconnect must be a
    play-state kick sent after the Join Game packet; a login- or configuration-state disconnect is
-   dropped by the client and surfaces to the player as a generic connection error.
+   dropped by the client and surfaces to the player as a generic connection error. Online-mode joins
+   also deliver a short confirmation code and the name of the requesting application inside this
+   encrypted disconnect message, and the verified record stores that code server-side: it binds the
+   browser interaction to the physical player who joined, so a relaying proxy cannot harvest an
+   identity it cannot read. The confirmation code must never appear in status polling, public APIs,
+   page markup, or logs.
 7. A connection to the bare base domain enters the public void lobby, which renders an empty world,
    answers chat, and accepts the verification code typed into chat as a bare code, a pasted
    `<code>.craftlogin.com` subdomain, or a `/verify <code>` command. Chat entry uses the same
@@ -110,9 +115,12 @@ The verification flow is fixed:
    Microsoft OAuth) converges on the same server-rendered confirmation screen that shows the
    verified Minecraft username and avatar. The user must explicitly continue, which triggers the
    atomic `verified` → `finalizing` claim, or reject the identity ("not you"), which atomically
-   discards the record, drops any pending skin challenge, and re-issues a fresh code. The decision
-   is a server-side state transition, never client-side JavaScript alone; a finalization claim must
-   always win over a concurrent reset.
+   discards the record, drops any pending skin challenge, and re-issues a fresh code. Records
+   resolved by an online-mode join additionally carry a confirmation code shown only in the game,
+   and continuing requires echoing it; wrong guesses are counted per record and exhaust the
+   verification after a bounded number of attempts. Skin and Microsoft records carry no code and
+   continue with a bare confirm. The decision is a server-side state transition, never client-side
+   JavaScript alone; a finalization claim must always win over a concurrent reset.
 10. A resolved interaction resumes `oidc-provider`, which completes the standard authorization code,
     token, and `/api/users/@me` flow.
 

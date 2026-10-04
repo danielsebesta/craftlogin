@@ -110,6 +110,7 @@ async function main(): Promise<void> {
     const consoleClient = await ensureConsoleClient(database, environment.oidcIssuer, owner?.uuid);
     const oauth = createOAuthRuntime(
       {
+        clientNames: clients,
         cookieKeys: credentials.cookieKeys,
         issuer: environment.oidcIssuer,
         jwks: credentials.jwks,

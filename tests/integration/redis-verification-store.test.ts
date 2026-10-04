@@ -74,7 +74,7 @@ describe('RedisVerificationStore', (): void => {
     const finalizationClaims = await Promise.all(
       Array.from({ length: 8 }, async () => await verificationStore.claimVerified(interactionId)),
     );
-    const finalizationWinners = finalizationClaims.filter((claim) => claim !== null);
+    const finalizationWinners = finalizationClaims.filter((result) => result.status === 'claimed');
     expect(finalizationWinners).toHaveLength(1);
 
     const finalizationWinner = finalizationWinners[0];
@@ -82,7 +82,7 @@ describe('RedisVerificationStore', (): void => {
       throw new Error('Expected one interaction finalization winner');
     }
 
-    expect(await verificationStore.releaseFinalization(finalizationWinner)).toBe(true);
+    expect(await verificationStore.releaseFinalization(finalizationWinner.claim)).toBe(true);
     expect(await verificationStore.getStatus(interactionId)).toEqual({
       status: 'verified',
       player,
@@ -90,10 +90,10 @@ describe('RedisVerificationStore', (): void => {
     });
 
     const reclaimed = await verificationStore.claimVerified(interactionId);
-    if (reclaimed === null) {
+    if (reclaimed.status !== 'claimed') {
       throw new Error('Expected the released finalization claim to be reclaimable');
     }
-    expect(await verificationStore.completeFinalization(reclaimed)).toBe(true);
+    expect(await verificationStore.completeFinalization(reclaimed.claim)).toBe(true);
     expect(await verificationStore.getStatus(interactionId)).toEqual({ status: 'expired' });
   });
 
@@ -146,7 +146,8 @@ describe('RedisVerificationStore', (): void => {
     ).resolves.toBe(true);
 
     await expect(verificationStore.claimVerified(interactionId)).resolves.toMatchObject({
-      method: 'minecraft_profile_skin',
+      status: 'claimed',
+      claim: { method: 'minecraft_profile_skin' },
     });
   });
 
@@ -169,7 +170,8 @@ describe('RedisVerificationStore', (): void => {
       ),
     ).resolves.toBe(true);
     await expect(verificationStore.claimVerified(interactionId)).resolves.toMatchObject({
-      method: 'microsoft_oauth',
+      status: 'claimed',
+      claim: { method: 'microsoft_oauth' },
     });
   });
 
@@ -220,12 +222,114 @@ describe('RedisVerificationStore', (): void => {
     ).toBe(true);
 
     const finalization = await verificationStore.claimVerified(interactionId);
-    if (finalization === null) {
+    if (finalization.status !== 'claimed') {
       throw new Error('Expected a finalization claim');
     }
     expect(await verificationStore.reset(interactionId)).toBe(false);
-    expect(await verificationStore.completeFinalization(finalization)).toBe(true);
+    expect(await verificationStore.completeFinalization(finalization.claim)).toBe(true);
     expect(await verificationStore.getStatus(interactionId)).toEqual({ status: 'expired' });
+  });
+
+  it('requires the in-game confirmation code for online-mode finalization', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    const code = await verificationStore.allocate(interactionId);
+    const claim = await verificationStore.claim(code);
+    if (claim === null) {
+      throw new Error('Expected the verification code to be claimable');
+    }
+    const player = {
+      uuid: '123e4567-e89b-42d3-a456-426614174000',
+      username: 'VerifiedPlayer',
+    };
+    const resolvedAt = new Date('2026-09-06T12:00:00.000Z');
+    expect(
+      await verificationStore.complete(
+        claim,
+        player,
+        resolvedAt,
+        'minecraft_online_mode',
+        'K7X2QM',
+      ),
+    ).toBe(true);
+
+    // The confirmation flag surfaces, but the code itself must never leak
+    // through status polling.
+    expect(await verificationStore.getStatus(interactionId)).toEqual({
+      status: 'verified',
+      player,
+      resolvedAt: resolvedAt.toISOString(),
+      requiresConfirmCode: true,
+    });
+
+    await expect(verificationStore.claimVerified(interactionId)).resolves.toEqual({
+      status: 'code_mismatch',
+    });
+    await expect(verificationStore.claimVerified(interactionId, 'ZZZZ99')).resolves.toEqual({
+      status: 'code_mismatch',
+    });
+    await expect(verificationStore.claimVerified(interactionId, 'k7x2qm')).resolves.toMatchObject({
+      status: 'claimed',
+      claim: { method: 'minecraft_online_mode' },
+    });
+  });
+
+  it('exhausts the verification after bounded wrong confirmation attempts', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    const code = await verificationStore.allocate(interactionId);
+    const claim = await verificationStore.claim(code);
+    if (claim === null) {
+      throw new Error('Expected the verification code to be claimable');
+    }
+    expect(
+      await verificationStore.complete(
+        claim,
+        { uuid: '123e4567-e89b-42d3-a456-426614174000', username: 'VerifiedPlayer' },
+        new Date('2026-09-06T12:00:00.000Z'),
+        'minecraft_online_mode',
+        'K7X2QM',
+      ),
+    ).toBe(true);
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      await expect(verificationStore.claimVerified(interactionId, 'ZZZZ99')).resolves.toEqual({
+        status: 'code_mismatch',
+      });
+    }
+    await expect(verificationStore.claimVerified(interactionId, 'ZZZZ99')).resolves.toEqual({
+      status: 'attempts_exhausted',
+    });
+    await expect(verificationStore.getStatus(interactionId)).resolves.toEqual({
+      status: 'expired',
+    });
+  });
+
+  it('keeps a single finalization winner when the correct code races', async (): Promise<void> => {
+    const verificationStore = requireStore(store);
+    const interactionId = `interaction-${randomUUID()}`;
+    const code = await verificationStore.allocate(interactionId);
+    const claim = await verificationStore.claim(code);
+    if (claim === null) {
+      throw new Error('Expected the verification code to be claimable');
+    }
+    expect(
+      await verificationStore.complete(
+        claim,
+        { uuid: '123e4567-e89b-42d3-a456-426614174000', username: 'VerifiedPlayer' },
+        new Date('2026-09-06T12:00:00.000Z'),
+        'minecraft_online_mode',
+        'K7X2QM',
+      ),
+    ).toBe(true);
+
+    const outcomes = await Promise.all(
+      Array.from(
+        { length: 8 },
+        async () => await verificationStore.claimVerified(interactionId, 'K7X2QM'),
+      ),
+    );
+    expect(outcomes.filter((result) => result.status === 'claimed')).toHaveLength(1);
   });
 
   it('atomically deletes an authorization code after one consumption and stores no plaintext code', async (): Promise<void> => {

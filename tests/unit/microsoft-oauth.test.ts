@@ -192,9 +192,9 @@ describe('MicrosoftOAuthVerificationService', (): void => {
         },
       },
       {
-        resolveInteraction: (interactionId, identity): Promise<'resolved'> => {
+        resolveInteraction: (interactionId, identity): Promise<{ status: 'resolved' }> => {
           resolutions.push({ identity, interactionId });
-          return Promise.resolve('resolved');
+          return Promise.resolve({ status: 'resolved' });
         },
       },
     );

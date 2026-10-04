@@ -1,9 +1,23 @@
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import type { VerifiedUserRepository } from '../users/verified-user-repository.js';
+import { generateConfirmationCode } from './code.js';
 import type { RedisVerificationStore } from './redis-verification-store.js';
-import type { AuthenticatedMinecraftPlayer, InteractionVerifiedIdentity } from './types.js';
+import type {
+  AuthenticatedMinecraftPlayer,
+  InteractionVerifiedIdentity,
+  VerificationMethod,
+} from './types.js';
 
-export type VerificationResolution = 'resolved' | 'unavailable';
+// confirmCode is the anti-phishing secret shown only over the encrypted
+// in-game channel: it binds the browser interaction to the physical player
+// who joined, so a relaying proxy cannot harvest an identity it cannot read.
+export type VerificationResolution =
+  | {
+      readonly status: 'resolved';
+      readonly appName?: string;
+      readonly confirmCode?: string;
+    }
+  | { readonly status: 'unavailable' };
 
 export class VerificationResolutionError extends Error {
   public override readonly name = 'VerificationResolutionError';
@@ -46,10 +60,10 @@ export class VerificationResolver {
     claim: Awaited<ReturnType<RedisVerificationStore['claim']>>,
     player: AuthenticatedMinecraftPlayer,
     verifiedAt: Date,
-    method: 'minecraft_online_mode' | 'minecraft_profile_skin' | 'microsoft_oauth',
+    method: VerificationMethod,
   ): Promise<VerificationResolution> {
     if (claim === null) {
-      return 'unavailable';
+      return { status: 'unavailable' };
     }
 
     try {
@@ -67,7 +81,17 @@ export class VerificationResolver {
       throw new VerificationResolutionError('User persistence failed', { cause: error });
     }
 
-    const completed = await this.verificationStore.complete(claim, player, verifiedAt, method);
+    // The confirmation code exists only for the online-mode join path: skin
+    // and Microsoft verifications are proven in the user's own browser, where
+    // there is no encrypted channel to deliver a second secret through.
+    const confirmCode = method === 'minecraft_online_mode' ? generateConfirmationCode() : undefined;
+    const completed = await this.verificationStore.complete(
+      claim,
+      player,
+      verifiedAt,
+      method,
+      confirmCode,
+    );
 
     if (!completed) {
       throw new VerificationResolutionError('The verification claim could not be completed');
@@ -79,6 +103,10 @@ export class VerificationResolver {
       await this.profiles.findProfileById(player.uuid).catch((): undefined => undefined);
     }
 
-    return 'resolved';
+    return {
+      status: 'resolved',
+      ...(confirmCode === undefined ? {} : { confirmCode }),
+      ...(claim.clientName === undefined ? {} : { appName: claim.clientName }),
+    };
   }
 }

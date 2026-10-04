@@ -1,5 +1,6 @@
 import { english } from '../locales/en.js';
 import type { SkinInteractionChallenge } from '../oauth/interaction-service.js';
+import { CONFIRMATION_CODE_LENGTH } from '../verification/code.js';
 import type { AuthenticatedMinecraftPlayer } from '../verification/types.js';
 import { renderSignInPage, type ConsentPermission } from './ui/sign-in-page.js';
 
@@ -13,6 +14,7 @@ export interface InteractionPageInput {
   readonly appName: string;
   readonly appVerified?: boolean;
   readonly code?: string;
+  readonly confirmCodeError?: boolean;
   readonly interactionId: string;
   readonly minecraftBaseDomain: string;
   readonly scope: string;
@@ -24,6 +26,7 @@ export interface InteractionPageInput {
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
   readonly allowsMicrosoftVerification?: boolean;
+  readonly requiresConfirmCode?: boolean;
   readonly verifiedPlayer?: AuthenticatedMinecraftPlayer;
 }
 
@@ -147,6 +150,18 @@ export function renderInteractionPage(input: InteractionPageInput): string {
       : {
           verifiedIdentity: {
             avatarUrl: `/api/avatars/${encodeURIComponent(input.verifiedPlayer.uuid)}/face?size=64&layers=all`,
+            ...(input.requiresConfirmCode === true
+              ? {
+                  confirmCode: {
+                    ...(input.confirmCodeError === true
+                      ? { error: strings.confirmation.codeMismatch }
+                      : {}),
+                    hint: strings.confirmation.codeHint,
+                    inputLabel: strings.confirmation.codeLabel,
+                    length: CONFIRMATION_CODE_LENGTH,
+                  },
+                }
+              : {}),
             heading: strings.confirmation.heading,
             lead: strings.confirmation.lead,
             name: input.verifiedPlayer.username,

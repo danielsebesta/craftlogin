@@ -121,7 +121,14 @@ describe('Minecraft void lobby', (): void => {
       lifetimeMs: 10_000,
       promptCooldownMs: 0,
       verifyCode: (_client, code): Promise<LobbyCodeVerificationResult> =>
-        Promise.resolve(code === 'K7MPQ4RX' ? 'resolved' : 'unavailable'),
+        Promise.resolve(
+          code === 'K7MPQ4RX'
+            ? {
+                status: 'resolved',
+                message: english.minecraft.successWithCode('Example App', 'K7X2QM'),
+              }
+            : { status: 'unavailable' },
+        ),
     });
     const { port, server } = await createTestServer(lobby);
 
@@ -129,7 +136,9 @@ describe('Minecraft void lobby', (): void => {
       const outcome = await collectCodeVerification(port);
 
       expect(outcome.invalidReply).toBe(true);
-      expect(outcome.kick).toContain(english.minecraft.success);
+      expect(outcome.kick).toContain('K7X2QM');
+      expect(outcome.kick).toContain('Example App');
+      expect(outcome.kick).toContain('Never share this code');
       // The limbo chamber on 1.21.4: Slowness, Blindness, Darkness by registry id.
       expect(outcome.effects).toEqual([1, 14, 32]);
     } finally {

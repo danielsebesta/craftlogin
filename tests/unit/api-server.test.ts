@@ -10,6 +10,7 @@ import type { AuthenticatedAccessToken } from '../../src/api/access-token-authen
 import type { AppRegistrationInput, RegisteredApp } from '../../src/api/app-registration.js';
 import type { CurrentUser } from '../../src/api/current-user.js';
 import { ApiError } from '../../src/api/errors.js';
+import { english } from '../../src/locales/en.js';
 import { OAuthInteractionStateError } from '../../src/oauth/interaction-gateway.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 import type { AppIconStore } from '../../src/developers/app-icon-store.js';
@@ -50,6 +51,8 @@ class InteractionStub implements ApiInteractionService {
   public skinChallenge: SkinVerificationChallenge | undefined;
   public skinUsername: string | undefined;
   public verifiedPlayer: { uuid: string; username: string } | undefined;
+  public requiresConfirmCode = false;
+  public submittedCode: string | undefined;
 
   public abort(
     _request: IncomingMessage,
@@ -74,6 +77,7 @@ class InteractionStub implements ApiInteractionService {
     allowsSkinVerification: boolean;
     allowsOnlineVerification: boolean;
     allowsMicrosoftVerification: boolean;
+    requiresConfirmCode?: boolean;
     verifiedPlayer?: { uuid: string; username: string };
   }> {
     this.expectedIds.push(expectedInteractionId);
@@ -86,6 +90,7 @@ class InteractionStub implements ApiInteractionService {
       allowsOnlineVerification: true,
       allowsMicrosoftVerification: true,
       allowsSkinVerification: true,
+      ...(this.requiresConfirmCode ? { requiresConfirmCode: true } : {}),
       ...(this.verifiedPlayer === undefined ? {} : { verifiedPlayer: this.verifiedPlayer }),
       ...(this.skinChallenge === undefined
         ? {}
@@ -167,8 +172,10 @@ class InteractionStub implements ApiInteractionService {
     _request: IncomingMessage,
     _response: ServerResponse,
     expectedInteractionId?: string,
+    confirmationCode?: string,
   ): Promise<OAuthInteractionCompletion> {
     this.expectedIds.push(expectedInteractionId);
+    this.submittedCode = confirmationCode;
     return Promise.resolve(this.completion);
   }
 }
@@ -691,7 +698,9 @@ describe('CraftLogin API server', (): void => {
     interactions.completion = { status: 'expired' };
     const server = await buildServer('test', interactions);
     const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
       method: 'POST',
+      payload: '',
       url: '/interaction/interaction-id/complete',
     });
 
@@ -749,7 +758,9 @@ describe('CraftLogin API server', (): void => {
 
     interactions.completion = { status: 'complete', redirectTo: '/oauth2/authorize/resume-id' };
     const completed = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
       method: 'POST',
+      payload: '',
       url: '/interaction/interaction-id/complete',
     });
     expect(completed.statusCode).toBe(200);
@@ -883,6 +894,77 @@ describe('CraftLogin API server', (): void => {
     expect(page.body).not.toContain('signin-address');
     expect(page.body).not.toContain('skin-verification');
     expect(page.body).not.toContain('microsoft-verification');
+    // No in-game code was resolved, so no confirmation input renders.
+    expect(page.body).not.toContain('id="confirm-code"');
+  });
+
+  it('requires the in-game confirmation code on the shared screen for online-mode joins', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.verifiedPlayer = { uuid: avatarUuid, username: 'VerifiedPlayer' };
+    interactions.requiresConfirmCode = true;
+    const server = await buildServer('test', interactions);
+
+    const page = await server.inject({ method: 'GET', url: '/interaction/interaction-id' });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('id="confirm-code"');
+    expect(page.body).toContain('name="code"');
+    expect(page.body).toContain(english.interaction.confirmation.codeLabel);
+    // The code itself never ships in page markup; the player types it in.
+    expect(page.body).not.toMatch(/value="[A-Z0-9]{6}"/u);
+
+    const resubmitted = await server.inject({
+      method: 'GET',
+      url: '/interaction/interaction-id?confirm=incorrect',
+    });
+    expect(resubmitted.statusCode).toBe(200);
+    expect(resubmitted.body).toContain(english.interaction.confirmation.codeMismatch);
+  });
+
+  it('passes the submitted confirmation code into interaction completion', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.completion = { status: 'complete', redirectTo: '/oauth2/authorize/resume-id' };
+    const server = await buildServer('test', interactions);
+
+    const completed = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'code=K7X2QM',
+      url: '/interaction/interaction-id/complete',
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.body).toContain('/oauth2/authorize/resume-id');
+    expect(interactions.submittedCode).toBe('K7X2QM');
+  });
+
+  it('redirects back to the confirmation screen when the code does not match', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    interactions.completion = { status: 'code_mismatch' };
+    const server = await buildServer('test', interactions);
+
+    const rejected = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'code=ZZZZ99',
+      url: '/interaction/interaction-id/complete',
+    });
+    expect(rejected.statusCode).toBe(303);
+    expect(rejected.headers.location).toBe('/interaction/interaction-id?confirm=incorrect');
+    expect(interactions.submittedCode).toBe('ZZZZ99');
+  });
+
+  it('rejects a malformed confirmation code at the schema boundary', async (): Promise<void> => {
+    const interactions = new InteractionStub();
+    const server = await buildServer('test', interactions);
+
+    const response = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: `code=${'A'.repeat(64)}`,
+      url: '/interaction/interaction-id/complete',
+    });
+    expect(response.statusCode).toBe(400);
+    expect(errorResponseSchema.parse(response.json()).error.code).toBe('bad_request');
+    expect(interactions.submittedCode).toBeUndefined();
   });
 
   it('restarts verification when the confirmed identity is rejected', async (): Promise<void> => {
@@ -983,7 +1065,9 @@ describe('CraftLogin API server', (): void => {
     expect(status.body).not.toContain('ABCDEFGH');
 
     const pending = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
       method: 'POST',
+      payload: '',
       url: '/interaction/interaction-id/complete',
     });
     expect(pending.statusCode).toBe(303);
@@ -991,7 +1075,9 @@ describe('CraftLogin API server', (): void => {
 
     interactions.completion = { status: 'complete', redirectTo: '/oauth2/authorize/resume-id' };
     const complete = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
       method: 'POST',
+      payload: '',
       url: '/interaction/interaction-id/complete',
     });
     expect(complete.statusCode).toBe(200);
@@ -1000,7 +1086,9 @@ describe('CraftLogin API server', (): void => {
 
     interactions.completion = { status: 'expired' };
     const expired = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
       method: 'POST',
+      payload: '',
       url: '/interaction/interaction-id/complete',
     });
     expect(expired.statusCode).toBe(303);

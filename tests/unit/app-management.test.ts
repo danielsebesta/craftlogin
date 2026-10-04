@@ -320,7 +320,7 @@ describe('VerificationResolver', (): void => {
       resolver.resolve('ABCDEFGH', player, verifiedAt),
     ]);
 
-    expect(results.toSorted()).toEqual(['resolved', 'unavailable']);
+    expect(results.map((result) => result.status).toSorted()).toEqual(['resolved', 'unavailable']);
     expect(users.writes).toEqual([{ player, verifiedAt }]);
     expect(store.completed).toBe(1);
     expect(store.released).toBe(0);
@@ -342,7 +342,11 @@ describe('VerificationResolver', (): void => {
     const profiles = new RecordingProfiles();
     const resolver = new VerificationResolver(store, new RecordingUsers(), profiles);
 
-    await expect(resolver.resolve('ABCDEFGH', player, verifiedAt)).resolves.toBe('resolved');
+    const resolution = await resolver.resolve('ABCDEFGH', player, verifiedAt);
+    expect(resolution.status).toBe('resolved');
+    if (resolution.status === 'resolved') {
+      expect(resolution.confirmCode).toMatch(/^[A-Z2-9]{6}$/u);
+    }
     expect(profiles.lookups).toEqual([player.uuid]);
   });
 
@@ -357,7 +361,7 @@ describe('VerificationResolver', (): void => {
         { ...player, verifiedVia: 'microsoft-oauth' },
         verifiedAt,
       ),
-    ).resolves.toBe('resolved');
+    ).resolves.toEqual({ status: 'resolved' });
     expect(users.writes).toEqual([{ player, verifiedAt }]);
     expect(store.method).toBe('microsoft_oauth');
   });

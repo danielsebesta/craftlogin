@@ -956,6 +956,10 @@ export const english = {
     cancelButton: 'Cancel',
     changeAccount: 'Use a different account',
     confirmation: {
+      codeHint: 'Enter the code shown in the Minecraft disconnect message to finish signing in.',
+      codeLabel: 'Confirmation code',
+      codeMismatch:
+        'That code did not match. Check the Minecraft disconnect message and try again.',
       continueButton: 'Continue',
       heading: 'Is this you?',
       lead: 'This Minecraft account is verified. Continue only if it belongs to you.',
@@ -1011,7 +1015,7 @@ export const english = {
     steps: [
       'In Minecraft: Java Edition, choose Multiplayer, then Direct Connection.',
       'Paste the server address below and press Join Server.',
-      'The server disconnects you with a success message; this page continues automatically.',
+      'The server disconnects you with a confirmation code; enter it here to finish.',
     ],
     stepsHeading: 'How to connect',
     title: 'Verify with Minecraft',
@@ -1083,6 +1087,10 @@ export const english = {
     motd: 'CraftLogin verification',
     motdDetail: 'Join with the code shown in your browser',
     success: 'Verification complete.\nYou can return to your browser.',
+    successWithCode: (application: string | undefined, code: string): string =>
+      application === undefined
+        ? `Enter code ${code} on your CraftLogin sign-in page to finish.\nNever share this code. If someone sent you to this server, they may be stealing your sign-in.`
+        : `Signing in to ${application}.\nEnter code ${code} on your CraftLogin sign-in page to finish.\nNever share this code. If someone sent you to this server, they may be stealing your sign-in.`,
     unavailable:
       'This verification code is invalid or has expired.\nReturn to your browser and try again.',
     temporaryFailure:

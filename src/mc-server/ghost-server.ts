@@ -28,6 +28,7 @@ import { getMinecraftData } from './minecraft-data.js';
 import { MinecraftLobby, type LobbyCodeVerificationResult } from './lobby.js';
 import { installVersionedRegistryCodec } from './registry-codec.js';
 import { sendServerBrand } from './server-brand.js';
+import { verificationSuccessMessage } from './verification-message.js';
 import {
   presentVoidWorld,
   sendVoidMessage,
@@ -424,7 +425,7 @@ async function resolveVerification(
 ): Promise<VerificationResolution> {
   const availability = await pending.availability;
   if (availability !== 'available') {
-    return 'unavailable';
+    return { status: 'unavailable' };
   }
 
   const parsedPlayer = authenticatedMinecraftPlayerSchema.safeParse({
@@ -468,17 +469,18 @@ async function resolveLobbyCode(
   });
   if (!parsedPlayer.success) {
     dependencies.logger.warn('Lobby chat verification found an invalid authenticated profile');
-    return 'error';
+    return { status: 'error' };
   }
   try {
     const resolution = await dependencies.resolver.resolve(code, parsedPlayer.data, new Date());
-    if (resolution === 'resolved') {
+    if (resolution.status === 'resolved') {
       dependencies.logger.info({ username: client.username }, 'Minecraft verification resolved');
+      return { status: 'resolved', message: verificationSuccessMessage(resolution) };
     }
-    return resolution;
+    return { status: 'unavailable' };
   } catch (error: unknown) {
     dependencies.logger.error({ errorKind: getErrorKind(error) }, 'Lobby chat verification failed');
-    return 'error';
+    return { status: 'error' };
   }
 }
 
@@ -488,14 +490,15 @@ async function finalizeVerification(
   logger: Logger,
 ): Promise<void> {
   const result = await outcome;
-  if (result.kind === 'resolution' && result.value === 'resolved') {
+  const resolved = result.kind === 'resolution' && result.value.status === 'resolved';
+  if (resolved) {
     logger.info({ username: client.username }, 'Minecraft verification resolved');
   }
   const message =
     result.kind === 'failure'
       ? english.minecraft.temporaryFailure
-      : result.value === 'resolved'
-        ? english.minecraft.success
+      : result.value.status === 'resolved'
+        ? verificationSuccessMessage(result.value)
         : english.minecraft.unavailable;
 
   if (result.kind === 'failure') {
@@ -503,7 +506,7 @@ async function finalizeVerification(
   }
 
   await disconnect(client, message, {
-    tone: result.kind === 'resolution' && result.value === 'resolved' ? 'success' : 'error',
+    tone: resolved ? 'success' : 'error',
   });
 }
 

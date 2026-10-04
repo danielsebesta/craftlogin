@@ -96,6 +96,32 @@ describe('verified identity confirmation', (): void => {
     expect(page).not.toContain('<img src=x onerror=alert(1)>');
     expect(page).toContain('&lt;img src=x onerror=alert(1)&gt;');
   });
+
+  it('renders the confirmation code input only when the verification requires it', (): void => {
+    const withCode = renderInteractionPage({
+      ...baseInput,
+      requiresConfirmCode: true,
+      verifiedPlayer,
+    });
+    const withoutCode = renderInteractionPage({ ...baseInput, verifiedPlayer });
+
+    expect(withCode).toContain('name="code"');
+    expect(withCode).toContain(english.interaction.confirmation.codeLabel);
+    expect(withoutCode).not.toContain('name="code"');
+    expect(withoutCode).not.toContain(english.interaction.confirmation.codeLabel);
+  });
+
+  it('shows the mismatch message when the submitted code was rejected', (): void => {
+    const page = renderInteractionPage({
+      ...baseInput,
+      confirmCodeError: true,
+      requiresConfirmCode: true,
+      verifiedPlayer,
+    });
+
+    expect(page).toContain(english.interaction.confirmation.codeMismatch);
+    expect(page).toContain('role="alert"');
+  });
 });
 
 describe('skin verification lookup', (): void => {

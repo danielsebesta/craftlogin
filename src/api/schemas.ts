@@ -313,9 +313,27 @@ export function registerSharedSchemas(server: FastifyInstance): void {
   server.addSchema(capesResponseSchema);
 }
 
+const interactionPageQuerySchema = {
+  additionalProperties: false,
+  properties: {
+    confirm: { enum: ['incorrect'], type: 'string' },
+  },
+  type: 'object',
+};
+
+const interactionCompleteBodySchema = {
+  additionalProperties: false,
+  properties: {
+    // Server-side normalization uppercases the echo of the in-game code.
+    code: { maxLength: 16, pattern: '^[A-Za-z0-9]*$', type: 'string' },
+  },
+  type: 'object',
+};
+
 export const interactionPageRouteSchema: FastifySchema = {
   description: operations.interactionPage.description,
   params: interactionParamsSchema,
+  querystring: interactionPageQuerySchema,
   response: {
     200: {
       content: {
@@ -491,6 +509,7 @@ export const interactionNotYouRouteSchema: FastifySchema = {
 };
 
 export const interactionCompleteRouteSchema: FastifySchema = {
+  body: interactionCompleteBodySchema,
   description: operations.completeInteraction.description,
   params: interactionParamsSchema,
   response: {

@@ -36,4 +36,6 @@ export type VerificationStatus =
       status: 'verified';
       player: AuthenticatedMinecraftPlayer;
       resolvedAt: string;
+      /** True when the in-game join delivered a confirmation code the browser must echo back. */
+      requiresConfirmCode?: boolean;
     };

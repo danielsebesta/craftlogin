@@ -89,8 +89,16 @@ export interface SignInOwner {
   readonly name: string;
 }
 
+export interface SignInConfirmCodeField {
+  readonly error?: string;
+  readonly hint: string;
+  readonly inputLabel: string;
+  readonly length: number;
+}
+
 export interface SignInVerifiedIdentity {
   readonly avatarUrl?: string;
+  readonly confirmCode?: SignInConfirmCodeField;
   readonly heading: string;
   readonly lead: string;
   readonly name: string;
@@ -340,6 +348,20 @@ function renderMicrosoftVerification(input: SignInMicrosoftVerification | undefi
         </section>`;
 }
 
+function renderConfirmCodeField(field: SignInConfirmCodeField | undefined): string {
+  if (field === undefined) {
+    return '';
+  }
+  const length = field.length.toString();
+  return `
+          <div class="field signin-confirm-field">
+            <label for="confirm-code">${escapeHtml(field.inputLabel)}</label>
+            ${field.error === undefined ? '' : `<p class="notice notice-error" role="alert">${escapeHtml(field.error)}</p>`}
+            <input id="confirm-code" name="code" type="text" autocomplete="off" spellcheck="false" minlength="${length}" maxlength="${length}" pattern="[A-Za-z0-9]{${length}}" required>
+            <p class="field-hint">${escapeHtml(field.hint)}</p>
+          </div>`;
+}
+
 export function renderSignInPage(input: SignInPageInput): string {
   const verifiedBadge =
     input.appVerified === true
@@ -394,7 +416,7 @@ export function renderSignInPage(input: SignInPageInput): string {
           }
         </div>${renderVerifiedIdentity(input.verifiedIdentity)}${renderMethodChooser(input)}${renderVerification(input)}${renderMicrosoftVerification(input.microsoftVerification)}${renderSkinVerification(input.skinVerification)}
         <div class="consent-actions">${renderFormAction(input.cancel)}${renderFormAction(input.switchAccount)}${renderFormAction(input.verifiedIdentity?.notYou)}
-          <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">
+          <form class="signin-continue" data-continue-form action="${escapeHtml(input.action)}" method="post">${renderConfirmCodeField(input.verifiedIdentity?.confirmCode)}
             <button class="button" type="submit">${renderIcon('login', 'button-icon')}${escapeHtml(input.continueLabel)}</button>
           </form>
         </div>

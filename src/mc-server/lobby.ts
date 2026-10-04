@@ -22,7 +22,9 @@ import {
 const chatMessageSchema = z.object({ message: z.string() });
 const chatCommandSchema = z.object({ command: z.string() });
 
-export type LobbyCodeVerificationResult = 'resolved' | 'unavailable' | 'error';
+export type LobbyCodeVerificationResult =
+  | { readonly status: 'resolved'; readonly message: string }
+  | { readonly status: 'error' | 'unavailable' };
 
 export type LobbyCodeVerification = (
   client: ServerClient,
@@ -174,16 +176,16 @@ export class MinecraftLobby {
     try {
       result = await this.config.verifyCode(client, code);
     } catch {
-      result = 'error';
+      result = { status: 'error' };
     }
-    if (result === 'resolved') {
+    if (result.status === 'resolved') {
       this.leave(client);
-      await disconnect(client, english.minecraft.success, { tone: 'success' });
+      await disconnect(client, result.message, { tone: 'success' });
       return;
     }
     sendVoidComponent(client, {
       text:
-        result === 'error'
+        result.status === 'error'
           ? english.minecraft.temporaryFailure
           : english.minecraft.lobbyInvalidCode,
       color: lobbyPalette(client).muted,

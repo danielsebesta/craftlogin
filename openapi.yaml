@@ -148,7 +148,7 @@ paths:
       description: Return the current signed skin for a Minecraft player or texture hash.
       parameters:
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -215,7 +215,7 @@ paths:
         LabyMod, MinecraftCapes, 5zig, SkinMC).
       parameters:
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -319,7 +319,7 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -430,7 +430,7 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -541,7 +541,7 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -653,7 +653,7 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -764,7 +764,7 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -876,7 +876,7 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -988,7 +988,7 @@ paths:
           name: size
           required: false
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -1055,7 +1055,7 @@ paths:
         layers opaque, fully-opaque overlays cleared."
       parameters:
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -1137,7 +1137,7 @@ paths:
           description: Cape provider to query (mojang, optifine, labymod, minecraftcapes,
             5zig, skinmc, or any).
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier
@@ -1219,7 +1219,7 @@ paths:
           description: Cape provider to query (mojang, optifine, labymod, minecraftcapes,
             5zig, skinmc, or any).
         - schema:
-            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$
+            pattern: ^(?:[A-Za-z0-9_]{3,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-fA-F]{32}|[0-9a-fA-F]{48,64})$
             type: string
           in: path
           name: identifier

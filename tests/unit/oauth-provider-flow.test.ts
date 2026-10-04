@@ -30,7 +30,7 @@ import {
   installSessionSignalLogging,
   type SessionSignal,
 } from '../../src/oauth/session-security.js';
-import type { VerificationFinalizationClaim } from '../../src/verification/redis-verification-store.js';
+import type { VerifiedClaimResult } from '../../src/verification/redis-verification-store.js';
 import type { VerificationMethod } from '../../src/verification/types.js';
 
 const accountId = '123e4567-e89b-42d3-a456-426614174000';
@@ -120,6 +120,7 @@ class VerifiedInteractionStore {
   public interactionId: string | undefined;
   public method: VerificationMethod = 'microsoft_oauth';
   public verified = false;
+  public confirmCode: string | undefined;
   private claimed = false;
 
   public allocate(interactionId: string): Promise<string> {
@@ -129,17 +130,26 @@ class VerifiedInteractionStore {
     return Promise.resolve('ABCDEFGH');
   }
 
-  public claimVerified(interactionId: string): Promise<VerificationFinalizationClaim | null> {
+  public claimVerified(
+    interactionId: string,
+    confirmationCode?: string,
+  ): Promise<VerifiedClaimResult> {
     if (!this.verified || this.claimed || interactionId !== this.interactionId) {
-      return Promise.resolve(null);
+      return Promise.resolve({ status: 'unavailable' });
+    }
+    if (this.confirmCode !== undefined && this.confirmCode !== confirmationCode) {
+      return Promise.resolve({ status: 'code_mismatch' });
     }
     this.claimed = true;
     return Promise.resolve({
-      claimId: 'finalization-claim',
-      interactionKey: 'interaction-key',
-      method: this.method,
-      player: { uuid: accountId, username: 'VerifiedPlayer' },
-      resolvedAt: '2026-09-06T12:00:00.000Z',
+      status: 'claimed',
+      claim: {
+        claimId: 'finalization-claim',
+        interactionKey: 'interaction-key',
+        method: this.method,
+        player: { uuid: accountId, username: 'VerifiedPlayer' },
+        resolvedAt: '2026-09-06T12:00:00.000Z',
+      },
     });
   }
 
@@ -385,7 +395,8 @@ describe('CraftLogin OIDC provider', (): void => {
 
     const prematureCompletionUrl = interactionChildUrl(interactionLocation, 'complete', issuer);
     const prematureCompletion = await fetch(prematureCompletionUrl, {
-      headers: proxyHeaders(cookies),
+      body: '',
+      headers: { ...proxyHeaders(cookies), 'content-type': 'application/x-www-form-urlencoded' },
       method: 'POST',
       redirect: 'manual',
     });
@@ -398,7 +409,8 @@ describe('CraftLogin OIDC provider', (): void => {
     const completionResponse = await fetch(
       interactionChildUrl(interactionLocation, 'complete', issuer),
       {
-        headers: proxyHeaders(cookies),
+        body: '',
+        headers: { ...proxyHeaders(cookies), 'content-type': 'application/x-www-form-urlencoded' },
         method: 'POST',
         redirect: 'manual',
       },
@@ -525,7 +537,11 @@ describe('CraftLogin OIDC provider', (): void => {
     expect(secondInteractionPage.status).toBe(200);
     await expect(
       fetch(interactionChildUrl(secondInteractionLocation, 'complete', issuer), {
-        headers: proxyHeaders(secondInteractionCookies),
+        body: '',
+        headers: {
+          ...proxyHeaders(secondInteractionCookies),
+          'content-type': 'application/x-www-form-urlencoded',
+        },
         method: 'POST',
         redirect: 'manual',
       }).then((response): number => response.status),
@@ -534,7 +550,11 @@ describe('CraftLogin OIDC provider', (): void => {
     const secondCompletion = await fetch(
       interactionChildUrl(secondInteractionLocation, 'complete', issuer),
       {
-        headers: proxyHeaders(secondInteractionCookies),
+        body: '',
+        headers: {
+          ...proxyHeaders(secondInteractionCookies),
+          'content-type': 'application/x-www-form-urlencoded',
+        },
         method: 'POST',
         redirect: 'manual',
       },
@@ -731,7 +751,8 @@ describe('CraftLogin OIDC provider', (): void => {
     const completionResponse = await fetch(
       interactionChildUrl(interactionLocation, 'complete', issuer),
       {
-        headers: proxyHeaders(cookies),
+        body: '',
+        headers: { ...proxyHeaders(cookies), 'content-type': 'application/x-www-form-urlencoded' },
         method: 'POST',
         redirect: 'manual',
       },
