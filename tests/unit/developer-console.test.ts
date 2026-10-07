@@ -836,8 +836,8 @@ describe('Developer Console', (): void => {
       consoleClient: { clientId: consoleClientId },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
       database: {
-        refreshToken: {
-          deleteMany: unavailable,
+        oidcGrant: {
+          updateMany: unavailable,
           findMany: unavailable,
         },
         user: { deleteMany: unavailable },

@@ -48,8 +48,12 @@ async function main(): Promise<void> {
   const credentials = loadOAuthCredentials(process.env, environment.nodeEnvironment);
   const microsoftCredentials = loadMicrosoftOAuthCredentials(process.env);
   const logger = createLogger(environment.logLevel);
-  const database = createDatabaseClient(environment.databaseUrl);
+  const database = createDatabaseClient(environment.databaseUrl, environment.databasePoolMax);
   const redis = createRedisClient(environment.redisUrl);
+  const cacheRedis = createRedisClient(environment.cacheRedisUrl);
+  cacheRedis.on('error', (error: Error): void => {
+    logger.warn({ errorKind: getErrorKind(error) }, 'Cache Redis connection failed');
+  });
 
   redis.on('error', (error: Error): void => {
     logger.error({ errorKind: getErrorKind(error) }, 'Redis connection failed');
@@ -58,18 +62,15 @@ async function main(): Promise<void> {
   let server: Awaited<ReturnType<typeof createApiServer>> | null = null;
   const sweeper = new ExpiredRefreshTokenSweeper(database, logger);
   try {
-    await Promise.all([database.$connect(), redis.connect()]);
+    await Promise.all([database.$connect(), redis.connect(), cacheRedis.connect()]);
     sweeper.start();
     const [developerSessionKey] = credentials.cookieKeys;
     if (developerSessionKey === undefined) {
       throw new TypeError('A cookie key is required for developer sessions');
     }
-    const mojangCache = new RedisMinecraftCache(redis);
+    const mojangCache = new RedisMinecraftCache(cacheRedis);
     const players = new HttpMojangClient({ cache: mojangCache });
     const owner = await resolveOwnerProfile(environment.developerOwner, players);
-    if (environment.developerOwner !== undefined && owner === undefined) {
-      logger.warn('The configured DEVELOPER_OWNER could not be resolved to a Minecraft profile');
-    }
     const developers = new PrismaDeveloperAccessRepository(database, owner?.uuid);
     if (owner !== undefined) {
       // The owner is re-granted on every boot so the account stays admin even
@@ -122,7 +123,8 @@ async function main(): Promise<void> {
       database,
       redis,
     );
-    oauth.provider.proxy = environment.httpTrustProxy;
+    oauth.provider.proxy =
+      environment.httpTrustedProxies !== undefined || environment.httpTrustProxy;
     installSessionSignalLogging(oauth.provider, logger, credentials.cookieKeys);
     const avatars = new CachedAvatarService({
       cache: mojangCache,
@@ -161,7 +163,7 @@ async function main(): Promise<void> {
       rateLimitRedis: redis,
       redis,
       readiness: new InfrastructureReadinessCheck(database, redis),
-      trustProxy: environment.httpTrustProxy,
+      trustProxy: environment.httpTrustedProxies ?? environment.httpTrustProxy,
       users: new PrismaCurrentUserLookup(database),
     });
     await server.listen({ host: environment.httpHost, port: environment.httpPort });
@@ -171,7 +173,7 @@ async function main(): Promise<void> {
     );
   } catch (error: unknown) {
     try {
-      await closeResources(server, sweeper, redis, database, logger);
+      await closeResources(server, sweeper, redis, cacheRedis, database, logger);
     } catch (cleanupError: unknown) {
       throw new AggregateError([error, cleanupError], 'API startup and cleanup failed', {
         cause: cleanupError,
@@ -186,7 +188,7 @@ async function main(): Promise<void> {
       return;
     }
     shuttingDown = true;
-    void closeResources(server, sweeper, redis, database, logger)
+    void closeResources(server, sweeper, redis, cacheRedis, database, logger)
       .then((): void => {
         logger.info({ signal }, 'CraftLogin API stopped');
       })
@@ -203,6 +205,7 @@ async function closeResources(
   server: Awaited<ReturnType<typeof createApiServer>> | null,
   sweeper: ExpiredRefreshTokenSweeper,
   redis: Redis,
+  cacheRedis: Redis,
   database: PrismaClient,
   logger: Logger,
 ): Promise<void> {
@@ -216,15 +219,14 @@ async function closeResources(
       failures.push(error);
     }
   }
-  try {
-    if (redis.status === 'ready') {
-      await redis.quit();
-    } else {
-      redis.disconnect();
+  for (const client of [redis, cacheRedis]) {
+    try {
+      if (client.status === 'ready') await client.quit();
+      else client.disconnect();
+    } catch (error: unknown) {
+      client.disconnect();
+      failures.push(error);
     }
-  } catch (error: unknown) {
-    redis.disconnect();
-    failures.push(error);
   }
   try {
     await database.$disconnect();

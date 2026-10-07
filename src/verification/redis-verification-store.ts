@@ -120,6 +120,12 @@ return { 1, clientName }
 `;
 
 const CLAIM_INTERACTION_SCRIPT = `
+if #KEYS == 2 then
+  if redis.call('HGET', KEYS[2], 'status') ~= 'checking' or
+     redis.call('HGET', KEYS[2], 'claimId') ~= ARGV[5] then
+    return {}
+  end
+end
 if redis.call('HGET', KEYS[1], 'status') ~= 'pending' then
   return {}
 end
@@ -411,7 +417,10 @@ export class RedisVerificationStore {
     };
   }
 
-  public async claimInteraction(interactionIdInput: string): Promise<VerificationClaim | null> {
+  public async claimInteraction(
+    interactionIdInput: string,
+    skinClaim?: { readonly interactionKey: string; readonly claimId: string },
+  ): Promise<VerificationClaim | null> {
     const interactionId = interactionIdSchema.parse(interactionIdInput);
     const keyId = this.interactionKeyId(interactionId);
     const interactionKey = this.interactionKey(keyId);
@@ -419,12 +428,14 @@ export class RedisVerificationStore {
     const result = interactionClaimResultSchema.parse(
       await this.redis.eval(
         CLAIM_INTERACTION_SCRIPT,
-        1,
+        skinClaim === undefined ? 1 : 2,
         interactionKey,
+        ...(skinClaim === undefined ? [] : [skinClaim.interactionKey]),
         keyId,
         claimId,
         `${this.keyPrefix}:code:`,
         PROCESSING_TTL_MS,
+        skinClaim?.claimId ?? '',
       ),
     );
     const code = result[0];

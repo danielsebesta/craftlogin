@@ -6,6 +6,13 @@ import type { KoaContextWithOIDC, Session } from 'oidc-provider';
 export const SESSION_ABSOLUTE_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const SESSION_SLIDING_TTL_SECONDS = 12 * 60 * 60;
 
+export function sessionPastAbsoluteLifetime(payload: { readonly iat?: unknown }): boolean {
+  return (
+    typeof payload.iat === 'number' &&
+    payload.iat + SESSION_ABSOLUTE_TTL_SECONDS <= Math.floor(Date.now() / 1_000)
+  );
+}
+
 const MAX_IP_ADDRESS_LENGTH = 128;
 const MAX_USER_AGENT_LENGTH = 512;
 const SESSION_REFERENCE_LENGTH = 22;

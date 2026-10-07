@@ -14,6 +14,7 @@ model User {
   firstVerifiedAt DateTime       @default(now()) @db.Timestamptz(3)
   lastVerifiedAt  DateTime       @db.Timestamptz(3)
   refreshTokens   RefreshToken[]
+  grants          OidcGrant[]
 }
 
 model App {
@@ -28,6 +29,7 @@ model App {
   ownerUuid               String?        @db.Uuid
   owner                   Developer?     @relation(fields: [ownerUuid], references: [uuid], onDelete: SetNull)
   refreshTokens           RefreshToken[]
+  grants                  OidcGrant[]
   verificationNote        String?        @db.VarChar(500)
   verificationRequestedAt DateTime?      @db.Timestamptz(3)
   verifiedAt              DateTime?      @db.Timestamptz(3)
@@ -62,4 +64,19 @@ model RefreshToken {
   @@index([clientId, expiresAt])
   @@index([userUuid, expiresAt])
   @@index([grantIdHash])
+  @@index([expiresAt])
+}
+
+model OidcGrant {
+  grantIdHash    String    @id @db.VarChar(64)
+  clientId       String    @db.VarChar(64)
+  userUuid       String    @db.Uuid
+  expiresAt      DateTime  @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
+  adapterPayload Json
+  app            App       @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user           User      @relation(fields: [userUuid], references: [uuid], onDelete: Cascade)
+
+  @@index([userUuid, clientId, expiresAt])
+  @@index([expiresAt])
 }

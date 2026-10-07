@@ -5,6 +5,7 @@ import type { AdapterPayload } from 'oidc-provider';
 import { z } from 'zod';
 
 import { getErrorKind } from '../logging/error-kind.js';
+import { sessionPastAbsoluteLifetime } from '../oauth/session-security.js';
 
 // oidc-provider persists the session jti (adapter record id) in a signed
 // `__Host-` cookie; the keygrip signature lives in the sibling `<name>.sig`
@@ -116,6 +117,10 @@ export async function readAccountSession(
   const parsed = sessionPayloadSchema.safeParse(payload);
   if (!parsed.success) {
     logger.warn({ issues: parsed.error.issues.length }, 'OIDC session payload shape rejected');
+    return undefined;
+  }
+  if (sessionPastAbsoluteLifetime(parsed.data)) {
+    await sessions.destroy(jti);
     return undefined;
   }
   return {

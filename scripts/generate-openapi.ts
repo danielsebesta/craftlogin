@@ -32,7 +32,7 @@ async function generate(): Promise<void> {
       'documentation-cookie-key-b'.padEnd(48, 'b'),
     ],
     database: {
-      refreshToken: { deleteMany: unavailable, findMany: unavailable },
+      oidcGrant: { updateMany: unavailable, findMany: unavailable },
       user: { deleteMany: unavailable },
     },
     developerAuthentication: {

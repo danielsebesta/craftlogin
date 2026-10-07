@@ -21,6 +21,7 @@ export async function fetchOptifineCape(
       `http://s.optifine.net/capes/${encodeURIComponent(sanitized)}.png`,
       {
         headers: { 'User-Agent': CRAFTLOGIN_USER_AGENT },
+        redirect: 'error',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );
@@ -43,6 +44,7 @@ export async function fetchLabymodCape(
       `https://dl.labymod.net/capes/${encodeURIComponent(canonicalUuid)}`,
       {
         headers: { 'User-Agent': CRAFTLOGIN_USER_AGENT },
+        redirect: 'error',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );
@@ -65,6 +67,7 @@ export async function fetchMinecraftcapesCape(
       `https://api.minecraftcapes.net/profile/${encodeURIComponent(undashedUuid)}/cape`,
       {
         headers: { 'User-Agent': CRAFTLOGIN_USER_AGENT },
+        redirect: 'error',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );
@@ -87,6 +90,7 @@ export async function fetch5zigCape(
       `https://textures.5zigreborn.eu/profile/${encodeURIComponent(canonicalUuid)}`,
       {
         headers: { 'User-Agent': CRAFTLOGIN_USER_AGENT },
+        redirect: 'error',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );
@@ -117,6 +121,7 @@ export async function fetchSkinmcCape(
       `https://skinmc.net/api/v1/skinmcCape/${encodeURIComponent(canonicalUuid)}`,
       {
         headers: { 'User-Agent': CRAFTLOGIN_USER_AGENT },
+        redirect: 'error',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );

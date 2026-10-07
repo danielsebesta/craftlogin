@@ -21,7 +21,10 @@ import {
 import type { VerificationStatus } from './types.js';
 
 interface PrimaryVerificationStore {
-  claimInteraction(interactionId: string): Promise<VerificationClaim | null>;
+  claimInteraction(
+    interactionId: string,
+    skinClaim?: SkinVerificationCheckClaim,
+  ): Promise<VerificationClaim | null>;
   complete(
     claim: VerificationClaim,
     player: { uuid: string; username: string },
@@ -183,7 +186,9 @@ export class SkinVerificationService {
     skinClaim: SkinVerificationCheckClaim,
     player: { readonly username: string; readonly uuid: string },
   ): Promise<VerificationStatus> {
-    const verificationClaim = await this.verification.claimInteraction(interactionId);
+    // Checking the challenge's claim and claiming the primary record must be one
+    // Redis transition: "not you" may have discarded it during the HTTP lookup.
+    const verificationClaim = await this.verification.claimInteraction(interactionId, skinClaim);
     if (verificationClaim === null) {
       const status = await this.verification.getStatus(interactionId);
       if (status.status === 'pending') {

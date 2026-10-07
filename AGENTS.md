@@ -50,10 +50,10 @@ Keep modules small and organized by responsibility:
 - Translation resources own every user-facing string. English is the default and fallback locale.
 - `src/generated/` contains generated artifacts and is never edited or committed.
 
-PostgreSQL is durable storage for users, registered applications, refresh-token records, and any
-durable `oidc-provider` adapter state. Redis owns temporary verification records and ephemeral
-provider state where atomic expiry and consumption are required. Do not duplicate provider-managed
-authorization codes or access tokens in ad hoc application tables.
+PostgreSQL is durable storage for users, registered applications, hashed authorization grants,
+refresh-token records, and any durable `oidc-provider` adapter state. Redis owns temporary
+verification records and ephemeral provider state where atomic expiry and consumption are required.
+Do not duplicate provider-managed authorization codes or access tokens in ad hoc application tables.
 
 Verification records use a Redis state machine: `pending` → `processing` → `verified` →
 `finalizing`. Lua claims give exactly one authenticated Minecraft connection and exactly one OIDC
@@ -261,7 +261,7 @@ npm install
 Start the PostgreSQL and Redis services with an explicit development-only database password:
 
 ```sh
-POSTGRES_PASSWORD=craftlogin-dev-only docker compose up -d postgres redis
+POSTGRES_PASSWORD=craftlogin-dev-only docker compose up -d postgres redis redis-cache
 ```
 
 Export matching local connection values, apply migrations, and start both public listeners through
@@ -341,3 +341,23 @@ isolated fixture server can serve all page families plus the `public/` assets (f
 through `@playwright/test` installed outside the repository driving an installed Edge or Chrome via
 `executablePath` (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`); keep fixture servers and such tooling out
 of the work tree.
+
+## Audit hardening invariants (2026-10-07)
+
+- `OidcGrant` is the durable revocation authority, including authorization without offline access.
+  Refresh-token issuance locks the active grant row; Redis token reads also check the grant. Revoked
+  grant rows remain tombstones until expiry. Never resurrect them on adapter upsert.
+- Reject sender-constrained tokens at the custom Bearer-only user API; use provider userinfo for
+  DPoP.
+- Enforce the absolute session lifetime on adapter reads and writes independently of clock
+  tolerance.
+- Skin resolution atomically checks ownership of both the skin challenge and primary verification.
+- Shared session index expiry may extend but never shrink when touching an older session.
+- Image/profile Redis is a separate evictable instance; authentication Redis uses noeviction.
+- Reject upstream redirects. Bound expensive work, queued work, response bytes and database pools.
+- Normalize source addresses, keep limiter keys distinct, and apply per-source admission before
+  global admission.
+- Forwarded proxy headers reaching the raw OIDC bridge must come from Fastify's trusted topology
+  resolution.
+- CI must run isolated PostgreSQL and Redis integration suites and fail on high/critical image
+  findings.

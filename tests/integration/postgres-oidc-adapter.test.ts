@@ -1,3 +1,4 @@
+import { PostgresGrantAdapter } from '../../src/oauth/postgres-grant-adapter.js';
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -57,13 +58,19 @@ describe('PostgresRefreshTokenAdapter', (): void => {
     const databaseClient = requireDatabase(database);
     const adapter = new PostgresRefreshTokenAdapter(databaseClient);
     const refreshToken = `refresh-token-${randomUUID()}`;
+    const grantId = `grant-${randomUUID()}`;
+    await new PostgresGrantAdapter(databaseClient).upsert(
+      grantId,
+      { accountId: userUuid, clientId },
+      3600,
+    );
 
     await adapter.upsert(
       refreshToken,
       {
         accountId: userUuid,
         clientId,
-        grantId: `grant-${randomUUID()}`,
+        grantId,
       },
       3_600,
     );
@@ -89,11 +96,47 @@ describe('PostgresRefreshTokenAdapter', (): void => {
       {
         accountId: userUuid,
         clientId,
-        grantId: `grant-${randomUUID()}`,
+        grantId,
       },
       3_600,
     );
     await expect(adapter.consume(refreshToken)).rejects.toThrow();
+  });
+
+  it('keeps grant revocation authoritative across concurrent token issuance and stale saves', async (): Promise<void> => {
+    const db = requireDatabase(database);
+    const grants = new PostgresGrantAdapter(db);
+    const tokens = new PostgresRefreshTokenAdapter(db);
+    const grantId = randomUUID();
+    const payload = { accountId: userUuid, clientId, grantId };
+    await grants.upsert(grantId, payload, 3600);
+    await tokens.upsert('before-revocation', payload, 3600);
+    const attempts = await Promise.allSettled([
+      ...Array.from({ length: 16 }, (_, i) =>
+        tokens.upsert(`racing-${i.toString()}`, payload, 3600),
+      ),
+      grants.destroy(grantId),
+    ]);
+    expect(attempts[16]?.status).toBe('fulfilled');
+    expect(await grants.find(grantId)).toBeUndefined();
+    expect(await tokens.find('before-revocation')).toBeUndefined();
+    for (let i = 0; i < 16; i += 1)
+      expect(await tokens.find(`racing-${i.toString()}`)).toBeUndefined();
+    await expect(tokens.upsert('after-revocation', payload, 3600)).rejects.toThrow();
+    await expect(grants.upsert(grantId, payload, 3600)).rejects.toThrow();
+    // An authorization without offline_access is still listed and revocable.
+    const interactive = randomUUID();
+    await grants.upsert(
+      interactive,
+      { accountId: userUuid, clientId, openid: { scope: 'openid profile' } },
+      3600,
+    );
+    expect(await db.oidcGrant.count({ where: { clientId, revokedAt: null } })).toBeGreaterThan(0);
+    await db.oidcGrant.updateMany({
+      where: { clientId, userUuid, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    expect(await grants.find(interactive)).toBeUndefined();
   });
 
   it('maps public client metadata and rejects mismatched adapter ids', async (): Promise<void> => {

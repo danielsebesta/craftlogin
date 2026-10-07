@@ -12,18 +12,16 @@ export class PrismaVerifiedUserRepository implements VerifiedUserRepository {
     player: AuthenticatedMinecraftPlayer,
     verifiedAt: Date,
   ): Promise<void> {
-    await this.database.user.upsert({
-      where: { uuid: player.uuid },
-      create: {
-        uuid: player.uuid,
-        username: player.username,
-        firstVerifiedAt: verifiedAt,
-        lastVerifiedAt: verifiedAt,
-      },
-      update: {
-        username: player.username,
-        lastVerifiedAt: verifiedAt,
-      },
-    });
+    // Arrival order is not verification order. Keep both timestamps monotonic
+    // and never let a slower, older verification overwrite the current name.
+    await this.database.$executeRaw`
+      INSERT INTO "User" ("uuid", "username", "firstVerifiedAt", "lastVerifiedAt")
+      VALUES (${player.uuid}::uuid, ${player.username}, ${verifiedAt}, ${verifiedAt})
+      ON CONFLICT ("uuid") DO UPDATE SET
+        "firstVerifiedAt" = LEAST("User"."firstVerifiedAt", EXCLUDED."firstVerifiedAt"),
+        "lastVerifiedAt" = GREATEST("User"."lastVerifiedAt", EXCLUDED."lastVerifiedAt"),
+        "username" = CASE WHEN EXCLUDED."lastVerifiedAt" > "User"."lastVerifiedAt"
+          THEN EXCLUDED."username" ELSE "User"."username" END
+    `;
   }
 }

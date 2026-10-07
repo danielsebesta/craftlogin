@@ -1,3 +1,4 @@
+import { SESSION_ABSOLUTE_TTL_SECONDS } from '../../src/oauth/session-security.js';
 import { randomUUID } from 'node:crypto';
 
 import { Redis } from 'ioredis';
@@ -27,11 +28,47 @@ describe('RedisDeveloperSessionStore', (): void => {
     await redis.quit();
   });
 
+  it('never shortens a shared index when an older session is touched or rotated', async (): Promise<void> => {
+    const client = requireRedis(redis);
+    const indexPrefix = `${keyPrefix}:index`;
+    const store = new RedisDeveloperSessionStore(client, keyPrefix, indexPrefix);
+    const input = {
+      ipReference: 'ip_test',
+      role: 'developer' as const,
+      userAgent: 'Test',
+      userUuid: randomUUID(),
+    };
+    const old = await store.create(input);
+    const young = await store.create(input);
+    const oldKey = `${keyPrefix}:${store.keyIdFor(old.sessionId)}`;
+    const raw = await client.get(oldKey);
+    if (raw === null) throw new Error('Expected stored session');
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== 'object' || value === null) throw new Error('Expected session object');
+    await client.set(
+      oldKey,
+      JSON.stringify({
+        ...value,
+        issuedAtMilliseconds: Date.now() - SESSION_ABSOLUTE_TTL_SECONDS * 1000 + 30_000,
+      }),
+      'PX',
+      30_000,
+    );
+    await store.read(old.sessionId);
+    await store.rotateRole(old.sessionId, 'admin');
+    const keys = await client.keys(`${indexPrefix}*`);
+    expect(keys).toHaveLength(1);
+    expect(await client.pttl(keys[0] ?? '')).toBeGreaterThan(60_000);
+    expect((await store.listForUser(input.userUuid)).map((entry) => entry.sessionKeyId)).toContain(
+      store.keyIdFor(young.sessionId),
+    );
+  });
+
   it('touches, atomically rotates, and revokes opaque developer sessions', async (): Promise<void> => {
     const store = new RedisDeveloperSessionStore(
       requireRedis(redis),
       keyPrefix,
-      `${keyPrefix}-index`,
+      `${keyPrefix}:index`,
     );
     const created = await store.create({
       ipReference: 'ip_integrationreference',

@@ -1,7 +1,9 @@
+import { SESSION_ABSOLUTE_TTL_SECONDS } from '../../src/oauth/session-security.js';
+import { RedisSkinVerificationStore } from '../../src/verification/redis-skin-verification-store.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { Redis } from 'ioredis';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { RedisOidcAdapter } from '../../src/oauth/redis-oidc-adapter.js';
 import {
@@ -32,6 +34,83 @@ describe('RedisVerificationStore', (): void => {
       await redis.del(...keys);
     }
     await redis.quit();
+  });
+
+  it('rejects a skin check whose challenge was discarded during a reset', async (): Promise<void> => {
+    const client = requireRedis(redis);
+    const verification = requireStore(store);
+    const skins = new RedisSkinVerificationStore(client, `${keyPrefix}:skins`);
+    const id = randomUUID();
+    await verification.allocate(id);
+    await skins.create(id, {
+      body: Buffer.from('skin'),
+      height: 64,
+      model: 'classic',
+      markerHash: 'a'.repeat(64),
+      userUuid: '123e4567-e89b-42d3-a456-426614174000',
+      username: 'PlayerOne',
+    });
+    const skinClaim = await skins.claimCheck(id);
+    if (skinClaim === null) throw new Error('Expected skin claim');
+    const winner = await verification.claimInteraction(id);
+    if (winner === null) throw new Error('Expected competing verification');
+    await verification.complete(
+      winner,
+      { uuid: '123e4567-e89b-42d3-a456-426614174000', username: 'OtherPlayer' },
+      new Date(),
+    );
+    await skins.discard(id);
+    expect(await verification.reset(id)).toBe(true);
+    const fresh = await verification.allocate(id);
+    expect(await verification.claimInteraction(id, skinClaim)).toBeNull();
+    expect(await verification.hasPendingCode(fresh)).toBe(true);
+  });
+
+  it('expires OIDC sessions at the absolute boundary despite clock tolerance and repeated writes', async (): Promise<void> => {
+    const sessions = new RedisOidcAdapter('Session', requireRedis(redis), keyPrefix);
+    const issued = Math.floor(Date.now() / 1000);
+    const payload = { kind: 'Session', iat: issued, uid: randomUUID() };
+    const id = randomUUID();
+    await sessions.upsert(id, payload, SESSION_ABSOLUTE_TTL_SECONDS);
+    const clock = vi.spyOn(Date, 'now');
+    try {
+      clock.mockReturnValue((issued + SESSION_ABSOLUTE_TTL_SECONDS) * 1000);
+      expect(await sessions.find(id)).toBeUndefined();
+      await sessions.upsert(id, payload, 1);
+      expect(await sessions.find(id)).toBeUndefined();
+      expect(await sessions.findByUid(payload.uid)).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('rejects revoked-grant access tokens and late writes across replicas', async (): Promise<void> => {
+    let active = true;
+    const first = new RedisOidcAdapter('AccessToken', requireRedis(redis), keyPrefix, () =>
+      Promise.resolve(active),
+    );
+    const second = new RedisOidcAdapter('AccessToken', requireRedis(redis), keyPrefix, () =>
+      Promise.resolve(active),
+    );
+    const payload = { grantId: randomUUID(), accountId: randomUUID(), clientId: 'test-client' };
+    await first.upsert('revoked-access', payload, 3600);
+    expect(await second.find('revoked-access')).toBeDefined();
+    active = false;
+    expect(await second.find('revoked-access')).toBeUndefined();
+    await expect(first.upsert('late-access', payload, 3600)).rejects.toThrow();
+  });
+
+  it('invalidates every old browser session after account deletion', async (): Promise<void> => {
+    const sessions = new RedisOidcAdapter('Session', requireRedis(redis), keyPrefix);
+    const accountId = randomUUID();
+    const payload = { kind: 'Session', iat: Math.floor(Date.now() / 1000) - 60, accountId };
+    await sessions.upsert('browser-one', payload, 3600);
+    await sessions.upsert('browser-two', payload, 3600);
+    await sessions.invalidateAccountSessions(accountId);
+    expect(await sessions.find('browser-one')).toBeUndefined();
+    expect(await sessions.find('browser-two')).toBeUndefined();
+    await sessions.upsert('browser-two', payload, 3600);
+    expect(await sessions.find('browser-two')).toBeUndefined();
   });
 
   it('allocates idempotently and gives a code to one concurrent claimant', async (): Promise<void> => {

@@ -113,7 +113,7 @@ describe('resolveOwnerProfile', (): void => {
 
     await expect(resolveOwnerProfile(undefined, lookup)).resolves.toBeUndefined();
     await expect(resolveOwnerProfile('   ', lookup)).resolves.toBeUndefined();
-    await expect(resolveOwnerProfile('Nobody', lookup)).resolves.toBeUndefined();
+    await expect(resolveOwnerProfile('Nobody', lookup)).rejects.toThrow('could not be resolved');
   });
 });
 

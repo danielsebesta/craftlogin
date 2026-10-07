@@ -289,7 +289,7 @@ describe('CraftLogin OIDC provider', (): void => {
       },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
       database: {
-        refreshToken: { deleteMany: unavailable, findMany: unavailable },
+        oidcGrant: { updateMany: unavailable, findMany: unavailable },
         user: { deleteMany: unavailable },
       },
       developerAuthentication: {
@@ -665,7 +665,7 @@ describe('CraftLogin OIDC provider', (): void => {
       },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
       database: {
-        refreshToken: { deleteMany: unavailable, findMany: unavailable },
+        oidcGrant: { updateMany: unavailable, findMany: unavailable },
         user: { deleteMany: unavailable },
       },
       developerAuthentication: {
@@ -821,6 +821,9 @@ describe('CraftLogin OIDC provider', (): void => {
       .object({ access_token: z.string(), token_type: z.string() })
       .parse(await tokenResponse.json());
     expect(tokens.token_type).toBe('DPoP');
+    await expect(
+      new ProviderAccessTokenAuthenticator(provider).authenticate(`Bearer ${tokens.access_token}`),
+    ).rejects.toMatchObject({ statusCode: 401 });
 
     const expectedThumbprint = createHash('sha256')
       .update(JSON.stringify(publicJwk), 'utf8')

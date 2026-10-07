@@ -1,3 +1,5 @@
+import { WorkBudget } from '../infrastructure/work-budget.js';
+import { createPublicFetch } from '../infrastructure/public-fetch.js';
 import { createHash } from 'node:crypto';
 
 import { getErrorKind } from '../logging/error-kind.js';
@@ -94,11 +96,15 @@ export interface AvatarLogger {
 }
 
 export class CachedAvatarService implements AvatarService {
+  private readonly renderBudget = new WorkBudget(2, 32);
+  private readonly publicFetch: typeof fetch;
   private readonly inFlightRenders = new Map<string, Promise<AvatarLookupResult>>();
   private readonly inFlightRequests = new Map<string, Promise<AvatarLookupResult>>();
   private readonly inFlightTextures = new Map<string, Promise<Buffer>>();
 
-  public constructor(private readonly options: CachedAvatarServiceOptions) {}
+  public constructor(private readonly options: CachedAvatarServiceOptions) {
+    this.publicFetch = createPublicFetch(options.fetch);
+  }
 
   public async findRawSkin(subject: string): Promise<AvatarLookupResult> {
     const source = await this.findSource(subject);
@@ -106,7 +112,7 @@ export class CachedAvatarService implements AvatarService {
       return source;
     }
     try {
-      await decodeSkinTexture(source.body);
+      await this.renderBudget.run(() => decodeSkinTexture(source.body));
     } catch (error: unknown) {
       this.logFailure(error, 'decode-raw-skin');
       return { status: 'unavailable' };
@@ -129,10 +135,12 @@ export class CachedAvatarService implements AvatarService {
     const cacheKey = `avatar-processed:${RENDERER_VERSION}:${source.texture.hash}`;
     const identity = `processed:${source.texture.hash}`;
     try {
-      const body = await this.cachedTexture(cacheKey, async (): Promise<Buffer> => {
-        const texture = await decodeSkinTexture(source.body);
-        return await encodeProcessedSkin(texture);
-      });
+      const body = await this.cachedTexture(cacheKey, () =>
+        this.renderBudget.run(async (): Promise<Buffer> => {
+          const texture = await decodeSkinTexture(source.body);
+          return await encodeProcessedSkin(texture);
+        }),
+      );
       return foundRenderedImage(body, identity);
     } catch (error: unknown) {
       this.logFailure(error, 'process-skin');
@@ -319,6 +327,7 @@ export class CachedAvatarService implements AvatarService {
     if (pending !== undefined) {
       return await pending;
     }
+    if (this.inFlightRequests.size >= 256) return { status: 'unavailable' };
     const operation = this.renderForSubject(subject, renderOptions);
     this.inFlightRequests.set(requestKey, operation);
     try {
@@ -369,7 +378,9 @@ export class CachedAvatarService implements AvatarService {
     if (pending !== undefined) {
       return await pending;
     }
-    const operation = this.renderAndCache(cacheKey, identity, source, renderOptions, cape?.body);
+    const operation = this.renderBudget
+      .run(() => this.renderAndCache(cacheKey, identity, source, renderOptions, cape?.body))
+      .catch((): AvatarLookupResult => ({ status: 'unavailable' }));
     this.inFlightRenders.set(cacheKey, operation);
     try {
       return await operation;
@@ -620,7 +631,7 @@ export class CachedAvatarService implements AvatarService {
 
     let body: Buffer | undefined;
     try {
-      body = await fetchThirdPartyCape(provider, identity, this.options.fetch);
+      body = await fetchThirdPartyCape(provider, identity, this.publicFetch);
     } catch (error: unknown) {
       this.logFailure(error, `fetch-${provider}-cape`);
       return { status: 'failed' };

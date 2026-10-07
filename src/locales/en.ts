@@ -6,8 +6,8 @@ export const english = {
     deleteLead:
       'Permanently deletes your CraftLogin identity record, disconnects every application, and signs this browser out. You can come back any time by verifying your Minecraft account again.',
     durableNote:
-      'Only apps that asked to stay signed in appear here. Sign-ins without that permission end on their own and never reach this list.',
-    emptyConnected: 'Applications you allow to stay signed in will appear here.',
+      'All active application authorizations appear here, including sign-ins without offline access. Disconnecting an app revokes its access and refresh tokens.',
+    emptyConnected: 'Applications you authorize will appear here.',
     heading: 'Your account',
     identityHeading: 'Minecraft identity',
     lead: 'See which applications can keep working with your Minecraft account and disconnect them.',

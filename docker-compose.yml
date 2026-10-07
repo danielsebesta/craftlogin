@@ -12,11 +12,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      redis-cache:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DEVELOPER_OWNER: ${DEVELOPER_OWNER:-}
+      CACHE_REDIS_URL: ${CACHE_REDIS_URL:-redis://redis-cache:6379}
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 3000
       HTTP_TRUST_PROXY: ${HTTP_TRUST_PROXY:-false}
+      HTTP_TRUSTED_PROXIES: ${HTTP_TRUSTED_PROXIES:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       MC_BASE_DOMAIN: ${MC_BASE_DOMAIN:-}
       MC_HOST: 0.0.0.0
@@ -41,7 +47,7 @@ services:
       retries: 5
       start_period: 20s
     ports:
-      - '${HTTP_PUBLIC_PORT:-3000}:3000'
+      - '${HTTP_BIND_ADDRESS:-127.0.0.1}:${HTTP_PUBLIC_PORT:-3000}:3000'
       - '${MC_PUBLIC_PORT:-25565}:25565'
     cap_drop:
       - ALL
@@ -88,8 +94,8 @@ services:
       - sh
       - -c
       - >-
-        exec redis-server --save '' --appendonly no $${REDIS_PASSWORD:+--requirepass
-        "$${REDIS_PASSWORD}"}
+        exec redis-server --save '' --appendonly no --maxmemory 320mb --maxmemory-policy noeviction
+        $${REDIS_PASSWORD:+--requirepass "$${REDIS_PASSWORD}"}
     healthcheck:
       test:
         - CMD-SHELL
@@ -104,6 +110,33 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
       - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 128
+
+  redis-cache:
+    image: redis:8.10-alpine
+    restart: unless-stopped
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory',
+        '320mb',
+        '--maxmemory-policy',
+        'allkeys-lru',
+      ]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - '127.0.0.1:${CACHE_REDIS_PORT:-6380}:6379'
     security_opt:
       - no-new-privileges:true
     mem_limit: 512m

@@ -34,6 +34,39 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  integration:
+    name: Redis and PostgreSQL atomicity
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: integration-only
+          POSTGRES_DB: craftlogin_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:8.10-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:integration-only@localhost:5432/craftlogin_test
+      TEST_DATABASE_URL: postgresql://postgres:integration-only@localhost:5432/craftlogin_test
+      TEST_REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npm run db:migrate:deploy
+      - run: npm run test:integration:redis
+      - run: npm run test:integration:postgres
+
   dependencies:
     name: Dependencies and supply chain
     runs-on: ubuntu-latest
@@ -90,6 +123,7 @@ jobs:
           format: sarif
           output: trivy.sarif
           severity: CRITICAL,HIGH
+          exit-code: '1'
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:

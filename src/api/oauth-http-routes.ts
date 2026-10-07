@@ -74,16 +74,15 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    // The global ceiling runs first so an over-limit request doesn't spend
-    // per-address budget.
-    onRequest: [enforceGlobalTokenBudget, limitTokenRequests, forward],
+    // Rejected per-address traffic must never consume the shared budget.
+    onRequest: [limitTokenRequests, enforceGlobalTokenBudget, forward],
     schema: oauthTokenRouteSchema,
     url: '/oauth2/token',
   });
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    onRequest: [enforceGlobalTokenBudget, limitTokenRequests, forward],
+    onRequest: [limitTokenRequests, enforceGlobalTokenBudget, forward],
     schema: oauthIntrospectionRouteSchema,
     url: '/oauth2/introspect',
   });
@@ -92,7 +91,7 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
     method: 'POST',
     // PAR authenticates the client (secret compares hit Argon2) and writes a
     // pushed request record, so it shares the token-endpoint budgets.
-    onRequest: [enforceGlobalTokenBudget, limitTokenRequests, forward],
+    onRequest: [limitTokenRequests, enforceGlobalTokenBudget, forward],
     schema: oauthParRouteSchema,
     url: '/oauth2/par',
   });
@@ -120,7 +119,7 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
   server.route({
     handler: unreachableOidcHandler,
     method: 'POST',
-    onRequest: [limitPublicOidcRequests, forward],
+    onRequest: [limitTokenRequests, enforceGlobalTokenBudget, forward],
     schema: oauthRevocationRouteSchema,
     url: '/oauth2/revoke',
   });
@@ -165,6 +164,10 @@ function createOidcForwarder(
   handler: OidcHttpHandler,
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request, reply): Promise<void> => {
+    // Koa has a boolean proxy switch; pass only Fastify's topology-validated values.
+    request.raw.headers['x-forwarded-for'] = request.ip;
+    request.raw.headers['x-forwarded-proto'] = request.protocol;
+    request.raw.headers['x-forwarded-host'] = request.host;
     reply.hijack();
     // The provider writes directly to the raw response, so the fallback CSP
     // and frame policy helmet cannot supply are applied here; headers the

@@ -9,6 +9,7 @@ import { english } from '../locales/en.js';
 import { authenticatedMinecraftPlayerSchema } from '../verification/types.js';
 import { clientSecretHashSchema, hashClientSecret } from './client-secret.js';
 import { redirectUriSchema } from './redirect-uri.js';
+import { grantDigest, PostgresGrantAdapter } from './postgres-grant-adapter.js';
 
 const clientIdSchema = z.string().min(1).max(64);
 const adapterPayloadSchema = z.record(z.string(), z.unknown());
@@ -120,23 +121,35 @@ export class PostgresRefreshTokenAdapter implements Adapter {
     const token = refreshTokenPayloadSchema.parse(payload);
     const tokenHash = digest(id);
 
-    await this.database.refreshToken.upsert({
-      where: { tokenHash },
-      create: {
-        tokenHash,
-        clientId: token.clientId,
-        userUuid: token.accountId,
-        expiresAt: new Date(Date.now() + ttlSeconds * 1_000),
-        grantIdHash: digest(token.grantId),
-        adapterPayload: toPrismaJsonObject(payload),
-      },
-      update: {
-        clientId: token.clientId,
-        userUuid: token.accountId,
-        expiresAt: new Date(Date.now() + ttlSeconds * 1_000),
-        grantIdHash: digest(token.grantId),
-        adapterPayload: toPrismaJsonObject(payload),
-      },
+    await this.database.$transaction(async (transaction): Promise<void> => {
+      // Shared row locks serialize token issuance with grant revocation without
+      // serializing independent refreshes for different users.
+      const grants = await transaction.$queryRaw<{ grantIdHash: string }[]>`
+        SELECT "grantIdHash" FROM "OidcGrant"
+        WHERE "grantIdHash" = ${grantDigest(token.grantId)}
+          AND "clientId" = ${token.clientId} AND "userUuid" = ${token.accountId}::uuid
+          AND "revokedAt" IS NULL AND "expiresAt" > CURRENT_TIMESTAMP
+        FOR SHARE
+      `;
+      if (grants.length !== 1) throw new errors.InvalidGrant(english.api.oauthArtifactUnavailable);
+      await transaction.refreshToken.upsert({
+        where: { tokenHash },
+        create: {
+          tokenHash,
+          clientId: token.clientId,
+          userUuid: token.accountId,
+          expiresAt: new Date(Date.now() + ttlSeconds * 1_000),
+          grantIdHash: digest(token.grantId),
+          adapterPayload: toPrismaJsonObject(payload),
+        },
+        update: {
+          clientId: token.clientId,
+          userUuid: token.accountId,
+          expiresAt: new Date(Date.now() + ttlSeconds * 1_000),
+          grantIdHash: digest(token.grantId),
+          adapterPayload: toPrismaJsonObject(payload),
+        },
+      });
     });
   }
 
@@ -150,6 +163,11 @@ export class PostgresRefreshTokenAdapter implements Adapter {
     }
 
     const payload = adapterPayloadSchema.parse(record.adapterPayload);
+    if (
+      typeof payload['grantId'] !== 'string' ||
+      (await new PostgresGrantAdapter(this.database).find(payload['grantId'])) === undefined
+    )
+      return undefined;
     return {
       ...payload,
       jti: id,
@@ -184,6 +202,7 @@ export class PostgresRefreshTokenAdapter implements Adapter {
   }
 
   public async revokeByGrantId(grantId: string): Promise<void> {
+    await new PostgresGrantAdapter(this.database).destroy(grantId);
     await this.database.refreshToken.deleteMany({ where: { grantIdHash: digest(grantId) } });
   }
 }

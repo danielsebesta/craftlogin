@@ -39,10 +39,10 @@ import {
 
 // Shutdown must not stall on a client that never completes configuration; the reason is best effort.
 const SHUTDOWN_WORLD_WAIT_TIMEOUT_MS = 1_500;
-const MAX_PLAYERS = 10_000;
+const MAX_PLAYERS = 1_024;
 // minecraft-protocol never refuses a TCP connection itself, so these gates
 // bound pre-login socket floods.
-const MAX_CONNECTIONS = 10_000;
+const MAX_CONNECTIONS = 1_024;
 const MAX_CONNECTIONS_PER_ADDRESS = 64;
 // New-connection pacing bound per address, independent of the concurrent cap:
 // churning sockets would otherwise keep every slot below 64 while still
@@ -211,6 +211,7 @@ export async function startGhostServer(
 
   let activeConnections = 0;
   const connectionsByAddress = new Map<string, number>();
+  let lastPacingSweep = 0;
   const connectionPacing = new Map<string, { attempts: number; resetAt: number }>();
   const pendingVerificationsByAddress = new Map<string, number>();
   let lastConnectionLimitLogAt = 0;
@@ -235,12 +236,20 @@ export async function startGhostServer(
     let pacing = connectionPacing.get(address);
     if (pacing === undefined || now >= pacing.resetAt) {
       pacing = { attempts: 0, resetAt: now + CONNECTION_PACING_WINDOW_MS };
-      if (connectionPacing.size >= CONNECTION_PACING_MAP_MAX_ENTRIES) {
+      if (
+        connectionPacing.size >= CONNECTION_PACING_MAP_MAX_ENTRIES &&
+        now - lastPacingSweep >= CONNECTION_PACING_WINDOW_MS
+      ) {
+        lastPacingSweep = now;
         // Bound the map under a rotating-source flood: expired buckets are dead weight.
         for (const [key, entry] of connectionPacing) {
           if (now >= entry.resetAt) {
             connectionPacing.delete(key);
           }
+        }
+        if (connectionPacing.size >= CONNECTION_PACING_MAP_MAX_ENTRIES) {
+          rejectConnection(client);
+          return;
         }
       }
       connectionPacing.set(address, pacing);

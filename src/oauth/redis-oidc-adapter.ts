@@ -5,6 +5,7 @@ import { errors, type Adapter, type AdapterPayload } from 'oidc-provider';
 import { z } from 'zod';
 
 import { english } from '../locales/en.js';
+import { sessionPastAbsoluteLifetime, SESSION_ABSOLUTE_TTL_SECONDS } from './session-security.js';
 
 const CLOCK_TOLERANCE_SECONDS = 15;
 const MODEL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,63}$/u;
@@ -149,6 +150,7 @@ export class RedisOidcAdapter implements Adapter {
     modelInput: string,
     private readonly redis: Pick<Redis, 'eval' | 'get'> | RedisOidcCommands,
     private readonly keyPrefix = 'craftlogin:oidc',
+    private readonly grantActive?: (id: string) => Promise<boolean>,
   ) {
     if (!MODEL_NAME_PATTERN.test(modelInput)) {
       throw new TypeError('Invalid OIDC adapter model name');
@@ -157,6 +159,16 @@ export class RedisOidcAdapter implements Adapter {
   }
 
   public async upsert(id: string, payload: AdapterPayload, expiresIn?: number): Promise<void> {
+    if (
+      this.model === 'Session' &&
+      (sessionPastAbsoluteLifetime(payload) || (await this.sessionInvalidated(payload)))
+    ) {
+      await this.destroy(id);
+      return;
+    }
+    if (!(await this.permitsGrant(payload))) {
+      throw new errors.InvalidGrant(english.api.oauthArtifactUnavailable);
+    }
     const ttlMilliseconds = toTtlMilliseconds(expiresIn);
     const uidKey =
       this.model === 'Session' && typeof payload.uid === 'string'
@@ -195,7 +207,41 @@ export class RedisOidcAdapter implements Adapter {
       return undefined;
     }
 
-    return { ...parseEnvelope(raw).payload, jti: id };
+    const payload = parseEnvelope(raw).payload;
+    if (
+      (this.model === 'Session' &&
+        (sessionPastAbsoluteLifetime(payload) || (await this.sessionInvalidated(payload)))) ||
+      !(await this.permitsGrant(payload))
+    ) {
+      await this.destroy(id);
+      return undefined;
+    }
+    return { ...payload, jti: id };
+  }
+
+  public async invalidateAccountSessions(accountId: string): Promise<void> {
+    // Survives account deletion/recreation for the maximum possible session lifetime.
+    await this.redis.eval(
+      "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]); return 1",
+      1,
+      this.indexKey('account-deleted', accountId),
+      Math.floor(Date.now() / 1000),
+      SESSION_ABSOLUTE_TTL_SECONDS,
+    );
+  }
+
+  private async sessionInvalidated(payload: AdapterPayload): Promise<boolean> {
+    if (typeof payload.accountId !== 'string') return false;
+    const invalidated = await this.redis.get(this.indexKey('account-deleted', payload.accountId));
+    return (
+      invalidated !== null &&
+      (typeof payload.iat !== 'number' || payload.iat <= Number(invalidated))
+    );
+  }
+
+  private async permitsGrant(payload: AdapterPayload): Promise<boolean> {
+    if (!GRANTABLE_MODELS.has(this.model) || this.grantActive === undefined) return true;
+    return typeof payload.grantId === 'string' && (await this.grantActive(payload.grantId));
   }
 
   public async findByUid(uid: string): Promise<AdapterPayload | undefined> {

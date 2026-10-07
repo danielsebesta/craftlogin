@@ -23,8 +23,8 @@ export interface OwnerProfile {
 }
 
 // The configured owner accepts either form; a name resolves through Mojang so
-// the landing showcase shows the canonical casing. A failed lookup degrades to
-// no owner rather than blocking startup on an upstream hiccup.
+// the landing showcase shows the canonical casing. A configured owner must
+// never silently lose protection when the upstream lookup fails.
 export async function resolveOwnerProfile(
   identifier: string | undefined,
   players: MinecraftPlayerLookup,
@@ -40,7 +40,7 @@ export async function resolveOwnerProfile(
   }
   const profile = await players.findProfileByName(trimmed).catch((): undefined => undefined);
   if (profile === undefined) {
-    return undefined;
+    throw new Error('The configured owner could not be resolved; use a canonical UUID');
   }
   return { name: profile.username, uuid: profile.uuid };
 }

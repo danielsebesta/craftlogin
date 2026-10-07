@@ -21,6 +21,7 @@ export async function readBoundedResponseBody(
   if (contentLength !== null) {
     const declaredBytes = Number(contentLength);
     if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+      await response.body?.cancel().catch((): undefined => undefined);
       throw new ResponseBodyTooLargeError(`${label} image exceeds the size limit`);
     }
   }

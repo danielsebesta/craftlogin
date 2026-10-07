@@ -1,3 +1,4 @@
+import { createPublicFetch } from '../infrastructure/public-fetch.js';
 import { createHash } from 'node:crypto';
 
 import { getErrorKind } from '../logging/error-kind.js';
@@ -118,7 +119,7 @@ export class HttpDefaultSkinStore implements DefaultSkinSource {
 
   public constructor(options: HttpDefaultSkinStoreOptions) {
     this.cache = options.cache;
-    this.fetchImplementation = options.fetch ?? globalThis.fetch;
+    this.fetchImplementation = createPublicFetch(options.fetch ?? globalThis.fetch);
     this.logger = options.logger;
     this.maxBytes = options.maxBytes ?? 256 * 1_024;
     this.notFoundTtlSeconds = options.notFoundTtlSeconds ?? 60;
@@ -146,6 +147,7 @@ export class HttpDefaultSkinStore implements DefaultSkinSource {
     try {
       const response = await this.fetchImplementation(defaultSkinUrl(skin), {
         headers: { accept: 'image/png', 'user-agent': USER_AGENT },
+        redirect: 'error',
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (response.status === 404) {

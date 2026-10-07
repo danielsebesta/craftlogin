@@ -1,11 +1,22 @@
 import { randomUUID } from 'node:crypto';
 
-import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import Fastify, { type FastifyInstance, type LightMyRequestResponse } from 'fastify';
+import {
+  appRegistrationRateLimit,
+  developerLoginPageRateLimit,
+  registerRateLimiting,
+  tokenEndpointGlobalRateLimit,
+  tokenRateLimit,
+  publicOidcRateLimit,
+  verificationStatusRateLimit,
+} from '../../src/api/rate-limit.js';
+import { registerOidcHttpRoutes } from '../../src/api/oauth-http-routes.js';
+import { registerSharedSchemas } from '../../src/api/schemas.js';
+import { registerErrorHandling } from '../../src/api/errors.js';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { appRegistrationRateLimit, developerLoginPageRateLimit } from '../../src/api/rate-limit.js';
 import { createApiServer } from '../../src/api/server.js';
 import type { AuthenticatedDeveloperSession } from '../../src/developers/session-service.js';
 
@@ -39,6 +50,65 @@ describe('Redis-backed API rate limits', (): void => {
       await redis.del(...keys);
     }
     await redis.quit();
+  });
+
+  it('isolates manual limiter buckets and keeps rejected IP traffic off the global budget', async (): Promise<void> => {
+    if (redis === null) throw new Error('Expected Redis');
+    const api = Fastify();
+    servers.push(api);
+    await registerRateLimiting(api, redis, `${namespace}oauth:`);
+    registerSharedSchemas(api);
+    registerErrorHandling(api);
+    registerOidcHttpRoutes(api, (_request, response): void => {
+      response.end('ok');
+    });
+    await api.ready();
+    expect((await api.inject('/oauth2/jwks')).statusCode).toBe(200);
+    const publicKey = (await redis.keys(`${namespace}oauth:*`)).find((key) =>
+      key.includes('public:'),
+    );
+    if (publicKey === undefined) throw new Error('Expected public rate bucket');
+    await redis.incrby(publicKey, publicOidcRateLimit.max - 1);
+    expect((await api.inject('/oauth2/jwks')).statusCode).toBe(429);
+    // Public metadata requests do not consume the first token request.
+    expect((await api.inject({ method: 'POST', url: '/oauth2/token' })).statusCode).toBe(200);
+    const globalKey = (await redis.keys(`${namespace}oauth:*`)).find((key) =>
+      key.includes('oauth-grant-global'),
+    );
+    if (globalKey === undefined) throw new Error('Expected global rate bucket');
+    await redis.incrby(globalKey, tokenEndpointGlobalRateLimit.max - tokenRateLimit.max - 10);
+    const attack = Array.from({ length: tokenRateLimit.max + 50 }, () =>
+      api.inject({ method: 'POST', url: '/oauth2/revoke' }),
+    );
+    const responses = await Promise.all(attack);
+    expect(responses.filter((response) => response.statusCode === 429)).toHaveLength(51);
+    const other = await api.inject({
+      method: 'POST',
+      url: '/oauth2/token',
+      remoteAddress: '192.0.2.55',
+    });
+    expect(other.statusCode).toBe(200);
+  }, 15000);
+
+  it('admits polling for 800 interactions sharing one NAT while bounding each interaction', async (): Promise<void> => {
+    if (redis === null) throw new Error('Expected Redis');
+    const api = Fastify();
+    servers.push(api);
+    await registerRateLimiting(api, redis, `${namespace}poll:`);
+    api.get(
+      '/interaction/:uid/status',
+      { config: { rateLimit: verificationStatusRateLimit } },
+      (): { status: string } => ({ status: 'pending' }),
+    );
+    await api.ready();
+    const responses = await Promise.all(
+      Array.from({ length: 800 }, (_, i) => api.inject(`/interaction/user-${i.toString()}/status`)),
+    );
+    expect(responses.every((response) => response.statusCode === 200)).toBe(true);
+    for (let i = 1; i < verificationStatusRateLimit.max; i += 1)
+      await api.inject('/interaction/user-0/status');
+    expect((await api.inject('/interaction/user-0/status')).statusCode).toBe(429);
+    expect((await api.inject('/interaction/user-1/status')).statusCode).toBe(200);
   });
 
   it('shares counters between API instances', async (): Promise<void> => {
@@ -114,7 +184,7 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
     },
     cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
     database: {
-      refreshToken: { deleteMany: unavailable, findMany: unavailable },
+      oidcGrant: { updateMany: unavailable, findMany: unavailable },
       user: { deleteMany: unavailable },
     },
     developerAuthentication: {

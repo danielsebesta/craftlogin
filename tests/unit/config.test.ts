@@ -7,9 +7,27 @@ import { loadOAuthCredentials } from '../../src/config/oauth-credentials.js';
 const clientId = '7f143b3d-bf80-4896-86ee-bd902f90ca63';
 
 describe('loadEnvironment', (): void => {
+  it('requires separate production cache storage and validates explicit proxy networks', (): void => {
+    expect(() =>
+      loadEnvironment({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://test:test@database/test',
+        OIDC_ISSUER: 'https://login.example',
+        REDIS_URL: 'redis://redis:6379/0',
+        CACHE_REDIS_URL: 'redis://redis:6379/1',
+      }),
+    ).toThrow('separate Redis server');
+    expect(
+      loadEnvironment({ HTTP_TRUSTED_PROXIES: '127.0.0.1,10.0.0.0/24,::1' }).httpTrustedProxies,
+    ).toEqual(['127.0.0.1', '10.0.0.0/24', '::1']);
+    expect(() => loadEnvironment({ HTTP_TRUSTED_PROXIES: '0.0.0.0/999' })).toThrow();
+    expect(() => loadEnvironment({ DATABASE_POOL_MAX: '0' })).toThrow();
+  });
+
   it('loads explicit Minecraft and infrastructure settings', (): void => {
     const environment = loadEnvironment({
       NODE_ENV: 'production',
+      CACHE_REDIS_URL: 'redis://images:6379',
       LOG_LEVEL: 'warn',
       DATABASE_URL: 'postgresql://service:secret@database:5432/craftlogin',
       REDIS_URL: 'rediss://cache:6380',
@@ -24,6 +42,8 @@ describe('loadEnvironment', (): void => {
 
     expect(environment).toEqual({
       nodeEnvironment: 'production',
+      cacheRedisUrl: 'redis://images:6379',
+      databasePoolMax: 10,
       logLevel: 'warn',
       databaseUrl: 'postgresql://service:secret@database:5432/craftlogin',
       redisUrl: 'rediss://cache:6380',
@@ -45,7 +65,13 @@ describe('loadEnvironment', (): void => {
 
   it('requires HTTPS for the production issuer while allowing local development HTTP', (): void => {
     expect((): void => {
-      loadEnvironment({ NODE_ENV: 'production', OIDC_ISSUER: 'http://login.example.com' });
+      loadEnvironment({
+        NODE_ENV: 'production',
+        CACHE_REDIS_URL: 'redis://images:6379',
+        DATABASE_URL: 'postgresql://test:test@database/test',
+        REDIS_URL: 'redis://auth:6379',
+        OIDC_ISSUER: 'http://login.example.com',
+      });
     }).toThrow('must use HTTPS in production');
     expect(loadEnvironment({ OIDC_ISSUER: 'http://localhost:3000' }).oidcIssuer).toBe(
       'http://localhost:3000',

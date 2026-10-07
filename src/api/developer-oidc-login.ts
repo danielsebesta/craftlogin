@@ -1,3 +1,4 @@
+import { readBoundedResponseBody } from '../mojang/bounded-body.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { z } from 'zod';
@@ -72,6 +73,7 @@ export async function exchangeConsoleCode(
       }).toString(),
       headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
       method: 'POST',
+      redirect: 'error',
       signal: AbortSignal.timeout(10_000),
     });
   } catch (error: unknown) {
@@ -84,7 +86,9 @@ export async function exchangeConsoleCode(
   }
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = JSON.parse(
+      (await readBoundedResponseBody(response, 256 * 1024, 'OAuth response')).toString('utf8'),
+    );
   } catch (error: unknown) {
     throw new ConsoleOidcError('Console token exchange returned invalid JSON', { cause: error });
   }
@@ -104,6 +108,7 @@ export async function fetchConsoleSubject(
   try {
     response = await fetchImplementation(endpoints.userInfoEndpoint, {
       headers: { accept: 'application/json', authorization: `Bearer ${accessToken}` },
+      redirect: 'error',
       signal: AbortSignal.timeout(10_000),
     });
   } catch (error: unknown) {
@@ -116,7 +121,9 @@ export async function fetchConsoleSubject(
   }
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = JSON.parse(
+      (await readBoundedResponseBody(response, 256 * 1024, 'OAuth response')).toString('utf8'),
+    );
   } catch (error: unknown) {
     throw new ConsoleOidcError('Console userinfo returned invalid JSON', { cause: error });
   }

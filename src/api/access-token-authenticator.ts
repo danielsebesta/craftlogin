@@ -30,9 +30,15 @@ export class ProviderAccessTokenAuthenticator implements AccessTokenAuthenticato
     if (
       token === undefined ||
       !token.isValid ||
+      token.isSenderConstrained() ||
       typeof token.accountId !== 'string' ||
       typeof token.clientId !== 'string'
     ) {
+      throw unauthorized();
+    }
+    const grant =
+      typeof token.grantId === 'string' ? await this.provider.Grant.find(token.grantId) : undefined;
+    if (grant?.accountId !== token.accountId || grant.clientId !== token.clientId) {
       throw unauthorized();
     }
     if (!token.scopes.has('openid') || !token.scopes.has('profile')) {

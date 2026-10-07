@@ -65,7 +65,7 @@ Anonymous public APIs resolve players (`GET /api/users/{name|uuid}`) and render 
 ```sh
 nvm use
 npm install
-POSTGRES_PASSWORD='craftlogin-dev-only' docker compose up -d postgres redis
+POSTGRES_PASSWORD='craftlogin-dev-only' docker compose up -d postgres redis redis-cache
 export DATABASE_URL='postgresql://craftlogin:craftlogin-dev-only@localhost:5432/craftlogin?schema=public'
 export REDIS_URL='redis://localhost:6379'
 export MICROSOFT_OAUTH_CLIENT_ID='your-personal-accounts-application-id'
@@ -130,7 +130,50 @@ Minecraft Services returns `403` until the app ID passes Microsoft's AppID revie
 The entrypoint applies committed migrations via `prisma migrate deploy`, the healthcheck calls
 `/health` (live PostgreSQL + Redis), and PostgreSQL/Redis stay loopback-bound. Terminate TLS at a
 trusted reverse proxy, forward `OIDC_ISSUER` to the HTTP port and Minecraft TCP untouched, and set
-`HTTP_TRUST_PROXY=true` only for the documented single-proxy topology.
+`HTTP_TRUSTED_PROXIES` to the proxy IP addresses or CIDRs (comma separated). The HTTP port is
+loopback-bound by default (`HTTP_BIND_ADDRESS=127.0.0.1`). Keep `HTTP_TRUST_PROXY=false` when using
+the explicit list; the legacy `true` option is only safe behind a controlled proxy with no untrusted
+direct path. The proxy must overwrite forwarded headers. The OIDC bridge uses Fastify's validated
+client address and scheme.
+
+Authentication Redis has a 320 MiB `noeviction` budget in a 512 MiB container. A separate
+`redis-cache` service uses a 320 MiB `allkeys-lru` budget for images and profiles. Production
+requires `CACHE_REDIS_URL` to reference a separate Redis server, not another database on the auth
+server. For local host processes use `CACHE_REDIS_URL=redis://localhost:6380`.
+
+`DATABASE_POOL_MAX` defaults to 10 connections **per process**; budget the sum across replicas and
+leave capacity for migrations and operations. Configure `DEVELOPER_OWNER` as a stable UUID where
+possible: unresolved configured names now stop startup rather than silently removing protection.
+
+### Security migration (2026-10-07)
+
+Stop all old application replicas before applying `20261007160000_durable_grants` and starting the
+new version. Existing Redis grants are intentionally not imported. Existing authorizations and
+refresh tokens require fresh authorization; identities, clients and developer roles remain intact. A
+rolling deployment mixing old and new adapters is unsupported. `/account` now includes grants
+without `offline_access`, and revocation invalidates tokens even when refresh rotation is racing.
+The custom `/api/users/@me` accepts ordinary Bearer tokens only. Sender-constrained DPoP tokens must
+use the provider's `/oauth2/userinfo` endpoint with a valid DPoP proof.
+
+### Capacity and overload
+
+Token/PAR/introspection/revocation share 6,000 admitted requests/minute across replicas and a
+1,200/minute source-address limit; rejected source traffic does not drain the shared allowance.
+Authorization and public OIDC routes have independent 2,400/minute source limits. Polling is limited
+per interaction and source address, with a coarse 30,000/minute source ceiling, so users behind one
+NAT do not share a 120/minute bucket. Argon2 runs at most four jobs with 32 waiting per process.
+Avatar rendering runs two jobs with 32 waiting; at most 256 distinct avatar requests are in flight.
+Public upstream requests are deduplicated, bounded to eight active and 32 waiting per
+provider/client, size limited, and use short backoff on failure. Redirects are rejected, including
+for the intentionally HTTP-only OptiFine provider. These are admission limits, not measured
+production throughput guarantees.
+
+Before sizing for 500?800 simultaneous users, run a staging test with warm and cold image caches,
+shared-NAT polling, login bursts, refresh rotation, revocation and unavailable upstreams. Record
+p50/p95/p99 latency, 429/503 rates, event-loop delay, RSS, Redis memory/evictions and database pool
+waits. Include sustained traffic for at least 15 minutes and verify recovery after overload. Local
+regressions cover 800 simultaneous polling interactions and bounded work admission; they do not
+measure end-to-end production capacity or Microsoft/Mojang quotas.
 
 ## Quality gates
 
@@ -144,9 +187,10 @@ npm run openapi:generate       # regenerate openapi.yaml after schema changes
 ## Data and privacy
 
 Durable identity data is the Minecraft UUID, current username, and first/last verification times.
-PostgreSQL additionally holds registered clients and hashed refresh-token records; Redis holds only
-short-lived verification and session state. Microsoft verification adds no durable data. Details:
-`/privacy` on a running instance and `docs/security-runbook.md` for rotation and incident handling.
+PostgreSQL additionally holds registered clients, hashed grant identifiers and hashed refresh-token
+records; Redis holds only short-lived verification and session state. Microsoft verification adds no
+durable data. Details: `/privacy` on a running instance and `docs/security-runbook.md` for rotation
+and incident handling.
 
 ## Acceptable use
 

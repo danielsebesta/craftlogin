@@ -77,7 +77,7 @@ interface StoredTokenRow {
   readonly clientId: string;
   readonly expiresAt: Date;
   readonly revokedAt: Date | null;
-  readonly tokenHash: string;
+  readonly grantIdHash: string;
   readonly userUuid: string;
 }
 
@@ -90,18 +90,17 @@ interface FindManyCall {
   };
 }
 
-interface DeleteManyCall {
+interface UpdateManyCall {
   readonly where: {
     readonly clientId?: string;
-    readonly expiresAt: { readonly gt: Date };
     readonly revokedAt: null;
-    readonly tokenHash: { readonly in: string[] };
     readonly userUuid: string;
   };
+  readonly data: { readonly revokedAt: Date };
 }
 
 class FakeTokenStore {
-  public readonly deleteManyCalls: DeleteManyCall[] = [];
+  public readonly updateManyCalls: UpdateManyCall[] = [];
   public readonly findManyCalls: FindManyCall[] = [];
   public readonly rows: StoredTokenRow[] = [];
 
@@ -119,27 +118,25 @@ class FakeTokenStore {
     );
   }
 
-  public deleteMany(query: DeleteManyCall): Promise<{ count: number }> {
-    this.deleteManyCalls.push(query);
-    const { where } = query;
-    const keep: StoredTokenRow[] = [];
-    let removed = 0;
-    for (const row of this.rows) {
-      const matches =
-        row.userUuid === where.userUuid &&
-        (where.clientId === undefined || row.clientId === where.clientId) &&
-        row.revokedAt === null &&
-        row.expiresAt > where.expiresAt.gt &&
-        where.tokenHash.in.includes(row.tokenHash);
-      if (matches) {
-        removed += 1;
-      } else {
-        keep.push(row);
-      }
-    }
-    this.rows.length = 0;
-    this.rows.push(...keep);
-    return Promise.resolve({ count: removed });
+  public updateMany(query: UpdateManyCall): Promise<{ count: number }> {
+    this.updateManyCalls.push(query);
+    let count = 0;
+    this.rows.splice(
+      0,
+      this.rows.length,
+      ...this.rows.map((row): StoredTokenRow => {
+        if (
+          row.userUuid === query.where.userUuid &&
+          row.revokedAt === null &&
+          (query.where.clientId === undefined || row.clientId === query.where.clientId)
+        ) {
+          count += 1;
+          return { ...row, revokedAt: query.data.revokedAt };
+        }
+        return row;
+      }),
+    );
+    return Promise.resolve({ count });
   }
 }
 
@@ -163,7 +160,7 @@ function tokenRow(overrides: Partial<StoredTokenRow> = {}): StoredTokenRow {
     clientId,
     expiresAt: new Date(Date.now() + 3_600_000),
     revokedAt: null,
-    tokenHash: 'a'.repeat(64),
+    grantIdHash: 'a'.repeat(64),
     userUuid: accountUuid,
     ...overrides,
   };
@@ -305,37 +302,41 @@ describe('account page', (): void => {
 
   it('renders the Minecraft identity and connected apps grouped by client', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const tokens = new FakeTokenStore();
     tokens.rows.push(
       tokenRow(),
       tokenRow({
         adapterPayload: { grantId: 'grant-two', iat: 1_757_100_000, scope: 'openid profile' },
-        tokenHash: 'b'.repeat(64),
+        grantIdHash: 'b'.repeat(64),
       }),
       tokenRow({
         adapterPayload: { grantId: 'grant-three', iat: 1_757_200_000, scope: 'openid' },
         app: { iconHash: null, name: 'Other app', verifiedAt: null },
         clientId: otherClientId,
         expiresAt: new Date(Date.now() + 7_200_000),
-        tokenHash: 'c'.repeat(64),
+        grantIdHash: 'c'.repeat(64),
       }),
       // Expired and revoked rows never surface.
       tokenRow({
         clientId: `cl_${'e'.repeat(32)}`,
         expiresAt: new Date(Date.now() - 1_000),
-        tokenHash: 'd'.repeat(64),
+        grantIdHash: 'd'.repeat(64),
       }),
       tokenRow({
         clientId: `cl_${'f'.repeat(32)}`,
         revokedAt: new Date(),
-        tokenHash: 'e'.repeat(64),
+        grantIdHash: 'e'.repeat(64),
       }),
       // Another user's rows are invisible.
       tokenRow({
         app: { iconHash: null, name: 'Hidden app', verifiedAt: null },
         clientId: `cl_${'0'.repeat(32)}`,
-        tokenHash: '9'.repeat(64),
+        grantIdHash: '9'.repeat(64),
         userUuid: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       }),
     );
@@ -376,7 +377,11 @@ describe('account page', (): void => {
 
   it('renders an empty state when nothing stays signed in', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const server = await buildServer(servers, { redis, tokens: new FakeTokenStore() });
 
     const response = await server.inject({
@@ -394,7 +399,11 @@ describe('account page', (): void => {
 
   it('escapes application names', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const tokens = new FakeTokenStore();
     tokens.rows.push(
       tokenRow({ app: { iconHash: null, name: '<script>alert(1)</script>', verifiedAt: null } }),
@@ -413,7 +422,11 @@ describe('account page', (): void => {
 
   it('still shows the UUID when the user record is missing', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const server = await buildServer(servers, { redis, user: 'missing' });
 
     const response = await server.inject({
@@ -429,7 +442,11 @@ describe('account page', (): void => {
 
   it('shows the revoked notice after a redirect', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const server = await buildServer(servers, { redis, tokens: new FakeTokenStore() });
 
     const response = await server.inject({
@@ -466,12 +483,16 @@ describe('account revoke', (): void => {
 
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/account');
-    expect(tokens.deleteManyCalls).toHaveLength(0);
+    expect(tokens.updateManyCalls).toHaveLength(0);
   });
 
   it('rejects a token that does not match this session and client', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const tokens = new FakeTokenStore();
     tokens.rows.push(tokenRow());
     const server = await buildServer(servers, { redis, tokens });
@@ -492,13 +513,17 @@ describe('account revoke', (): void => {
       expect(response.statusCode).toBe(403);
       expect(errorResponseSchema.parse(response.json()).error.code).toBe('forbidden');
     }
-    expect(tokens.deleteManyCalls).toHaveLength(0);
+    expect(tokens.updateManyCalls).toHaveLength(0);
     expect(tokens.rows).toHaveLength(1);
   });
 
   it('rejects malformed bodies before touching storage', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const tokens = new FakeTokenStore();
     tokens.rows.push(tokenRow());
     const server = await buildServer(servers, { redis, tokens });
@@ -517,24 +542,28 @@ describe('account revoke', (): void => {
       });
       expect(response.statusCode).toBe(400);
     }
-    expect(tokens.deleteManyCalls).toHaveLength(0);
+    expect(tokens.updateManyCalls).toHaveLength(0);
   });
 
   it('removes every active session for the selected client and revokes its grants', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const tokens = new FakeTokenStore();
     tokens.rows.push(
       tokenRow(),
-      tokenRow({ adapterPayload: { grantId: 'grant-two' }, tokenHash: 'b'.repeat(64) }),
+      tokenRow({ adapterPayload: { grantId: 'grant-two' }, grantIdHash: 'b'.repeat(64) }),
       tokenRow({
         adapterPayload: { grantId: 'other-user-grant' },
-        tokenHash: 'c'.repeat(64),
+        grantIdHash: 'c'.repeat(64),
         userUuid: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       }),
-      tokenRow({ clientId: otherClientId, tokenHash: 'd'.repeat(64) }),
-      tokenRow({ expiresAt: new Date(Date.now() - 1_000), tokenHash: 'e'.repeat(64) }),
-      tokenRow({ revokedAt: new Date(), tokenHash: 'f'.repeat(64) }),
+      tokenRow({ clientId: otherClientId, grantIdHash: 'd'.repeat(64) }),
+      tokenRow({ expiresAt: new Date(Date.now() - 1_000), grantIdHash: 'e'.repeat(64) }),
+      tokenRow({ revokedAt: new Date(), grantIdHash: 'f'.repeat(64) }),
     );
     const server = await buildServer(servers, { redis, tokens });
     const token = accountRevokeToken(signingKey, sessionId, clientId);
@@ -549,34 +578,29 @@ describe('account revoke', (): void => {
 
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/account?revoked=1');
-    expect(tokens.deleteManyCalls).toHaveLength(1);
-    const call = tokens.deleteManyCalls[0];
+    expect(tokens.updateManyCalls).toHaveLength(1);
+    const call = tokens.updateManyCalls[0];
     expect(call?.where.clientId).toBe(clientId);
     expect(call?.where.userUuid).toBe(accountUuid);
     expect(call?.where.revokedAt).toBeNull();
-    expect(call?.where.tokenHash.in).toEqual(['a'.repeat(64), 'b'.repeat(64)]);
-    // Exactly the two active rows of this user+client were deleted.
-    expect(tokens.rows.map((row): string => row.tokenHash).sort()).toEqual([
-      'c'.repeat(64),
-      'd'.repeat(64),
-      'e'.repeat(64),
-      'f'.repeat(64),
-    ]);
-    // Every grant of the deleted rows was revoked on the Redis side too.
-    expect(redis.grantRevokes).toEqual(
-      expect.arrayContaining([
-        `craftlogin:oidc:index:grant:${digest('grant-one')}`,
-        `craftlogin:oidc:index:grant:${digest('grant-two')}`,
-      ]),
-    );
-    expect(redis.grantRevokes).not.toContain(
-      `craftlogin:oidc:index:grant:${digest('other-user-grant')}`,
-    );
+    // Revocation leaves tombstones and covers expired grants as well.
+    expect(
+      tokens.rows
+        .filter((row) => row.revokedAt === null)
+        .map((row) => row.grantIdHash)
+        .sort(),
+    ).toEqual(['c'.repeat(64), 'd'.repeat(64)]);
+    expect(tokens.findManyCalls).toHaveLength(0);
+    expect(redis.grantRevokes).toHaveLength(0);
   });
 
   it('returns 303 unchanged when nothing active matches', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const tokens = new FakeTokenStore();
     const server = await buildServer(servers, { redis, tokens });
     const token = accountRevokeToken(signingKey, sessionId, clientId);
@@ -591,13 +615,17 @@ describe('account revoke', (): void => {
 
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/account?revoked=1');
-    expect(tokens.deleteManyCalls).toHaveLength(0);
+    expect(tokens.updateManyCalls).toHaveLength(1);
     expect(redis.grantRevokes).toHaveLength(0);
   });
 
   it('rate-limits revoke attempts', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const server = await buildServer(servers, { redis });
     const cookies = sessionCookies(sessionId, signingKey);
     const headers = { 'content-type': 'application/x-www-form-urlencoded' };
@@ -637,7 +665,11 @@ describe('account deletion', (): void => {
 
   it('renders a delete form bound to this session', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const server = await buildServer(servers, { redis });
 
     const response = await server.inject({
@@ -668,7 +700,11 @@ describe('account deletion', (): void => {
 
   it('rejects foreign, malformed, and revoke-scoped tokens', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const userStore = new FakeUserStore();
     const server = await buildServer(servers, { redis, userStore });
     const cookies = sessionCookies(sessionId, signingKey);
@@ -693,9 +729,16 @@ describe('account deletion', (): void => {
 
   it('erases the identity, revokes grants, destroys the session, and clears cookies', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const tokens = new FakeTokenStore();
-    tokens.rows.push(tokenRow(), tokenRow({ clientId: otherClientId, tokenHash: 'b'.repeat(64) }));
+    tokens.rows.push(
+      tokenRow(),
+      tokenRow({ clientId: otherClientId, grantIdHash: 'b'.repeat(64) }),
+    );
     const userStore = new FakeUserStore();
     const developerRevocations: string[] = [];
     const server = await buildServer(servers, {
@@ -721,20 +764,16 @@ describe('account deletion', (): void => {
     expect(developerRevocations).toEqual([accountUuid]);
     // The durable refresh tokens are removed explicitly before the identity
     // row, without a client filter so every connected service is covered.
-    expect(tokens.deleteManyCalls).toHaveLength(1);
-    const call = tokens.deleteManyCalls[0];
+    expect(tokens.updateManyCalls).toHaveLength(1);
+    const call = tokens.updateManyCalls[0];
     expect(call?.where.clientId).toBeUndefined();
     expect(call?.where.userUuid).toBe(accountUuid);
-    expect(call?.where.tokenHash.in).toEqual(['a'.repeat(64), 'b'.repeat(64)]);
-    expect(tokens.rows).toHaveLength(0);
+    expect(tokens.rows.every((row) => row.revokedAt !== null)).toBe(true);
     expect(userStore.deletedUuids).toEqual([accountUuid]);
     // Every active grant of the account was revoked on the Redis side, and the
     // session artifact itself was destroyed.
     expect(redis.grantRevokes).toEqual(
-      expect.arrayContaining([
-        `craftlogin:oidc:index:grant:${digest('grant-one')}`,
-        `craftlogin:oidc:artifact:Session:${digest(sessionId)}`,
-      ]),
+      expect.arrayContaining([`craftlogin:oidc:artifact:Session:${digest(sessionId)}`]),
     );
     const cleared = String(response.headers['set-cookie']);
     for (const name of [
@@ -751,7 +790,11 @@ describe('account deletion', (): void => {
 
   it('still deletes the account when a developer role is protected', async (): Promise<void> => {
     const redis = new FakeRedis();
-    redis.seedSession(sessionId, { accountId: accountUuid, iat: 1_757_000_000, kind: 'Session' });
+    redis.seedSession(sessionId, {
+      accountId: accountUuid,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      kind: 'Session',
+    });
     const userStore = new FakeUserStore();
     const server = await buildServer(servers, {
       developerRevoke: (): Promise<boolean> =>
@@ -810,7 +853,7 @@ async function buildServer(
       isAllowedOrigin: unavailable,
     },
     cookieKeys,
-    database: { refreshToken: tokens, user: userStore },
+    database: { oidcGrant: tokens, user: userStore },
     developerAuthentication: {
       authenticate: unavailable,
       logout: unavailable,

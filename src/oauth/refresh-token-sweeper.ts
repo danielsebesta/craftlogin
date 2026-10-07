@@ -2,17 +2,14 @@ import type { Logger } from 'pino';
 
 import { getErrorKind } from '../logging/error-kind.js';
 
-const DEFAULT_INTERVAL_MS = 60 * 60 * 1_000;
-
+const DEFAULT_INTERVAL_MS = 60 * 1_000;
 export interface ExpiredRefreshTokenStore {
-  readonly refreshToken: {
-    deleteMany(options: { where: { expiresAt: { lt: Date } } }): Promise<{ count: number }>;
-  };
+  $executeRaw(query: TemplateStringsArray, ...values: readonly unknown[]): Promise<number>;
 }
 
-// Expired rows are invisible to `find` but never removed, so a periodic
-// deleteMany keeps the table bounded; concurrent sweeps are harmless.
+// Indexed, bounded batches prevent an expiry backlog from holding long table locks.
 export class ExpiredRefreshTokenSweeper {
+  private sweeping = false;
   private timer: NodeJS.Timeout | null = null;
 
   public constructor(
@@ -40,15 +37,26 @@ export class ExpiredRefreshTokenSweeper {
   }
 
   private async sweep(): Promise<void> {
+    if (this.sweeping) return;
+    this.sweeping = true;
     try {
-      const removed = await this.database.refreshToken.deleteMany({
-        where: { expiresAt: { lt: new Date() } },
-      });
-      if (removed.count > 0) {
-        this.logger.info({ removed: removed.count }, 'Expired refresh tokens were swept');
-      }
+      const cutoff = new Date(Date.now() - 60_000);
+      const tokens = await this.database.$executeRaw`
+        DELETE FROM "RefreshToken" WHERE "tokenHash" IN (
+          SELECT "tokenHash" FROM "RefreshToken" WHERE "expiresAt" < ${cutoff}
+          ORDER BY "expiresAt" LIMIT 500 FOR UPDATE SKIP LOCKED
+        )`;
+      const grants = await this.database.$executeRaw`
+        DELETE FROM "OidcGrant" WHERE "grantIdHash" IN (
+          SELECT "grantIdHash" FROM "OidcGrant" WHERE "expiresAt" < ${cutoff}
+          ORDER BY "expiresAt" LIMIT 500 FOR UPDATE SKIP LOCKED
+        )`;
+      if (tokens + grants > 0)
+        this.logger.info({ removed: tokens + grants }, 'Expired authorizations were swept');
     } catch (error: unknown) {
-      this.logger.warn({ errorKind: getErrorKind(error) }, 'Expired refresh-token sweep failed');
+      this.logger.warn({ errorKind: getErrorKind(error) }, 'Expired authorization sweep failed');
+    } finally {
+      this.sweeping = false;
     }
   }
 }

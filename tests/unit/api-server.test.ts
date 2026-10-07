@@ -1616,8 +1616,8 @@ describe('CraftLogin API server', (): void => {
       },
       cookieKeys: ['a'.repeat(32), 'b'.repeat(32)],
       database: {
-        refreshToken: {
-          deleteMany: (): Promise<never> =>
+        oidcGrant: {
+          updateMany: (): Promise<never> =>
             Promise.reject(new Error('Unexpected refresh-token delete')),
           findMany: (): Promise<never> =>
             Promise.reject(new Error('Unexpected refresh-token list')),

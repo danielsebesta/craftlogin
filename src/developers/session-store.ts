@@ -61,7 +61,11 @@ if absoluteRemaining <= 0 then
 end
 local ttl = math.min(tonumber(ARGV[3]), absoluteRemaining)
 redis.call('PEXPIRE', KEYS[1], ttl)
-redis.call('PEXPIRE', ARGV[4] .. record.userUuid, ttl)
+local indexKey = ARGV[4] .. record.userUuid
+redis.call('SADD', indexKey, ARGV[5])
+if redis.call('PTTL', indexKey) < ttl then
+  redis.call('PEXPIRE', indexKey, ttl)
+end
 return { raw, ttl }
 `;
 
@@ -87,7 +91,9 @@ redis.call('SET', KEYS[2], cjson.encode(record), 'PX', ttl)
 local indexKey = ARGV[5] .. record.userUuid
 redis.call('SREM', indexKey, ARGV[6])
 redis.call('SADD', indexKey, ARGV[7])
-redis.call('PEXPIRE', indexKey, ttl)
+if redis.call('PTTL', indexKey) < ttl then
+  redis.call('PEXPIRE', indexKey, ttl)
+end
 return 1
 `;
 

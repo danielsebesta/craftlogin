@@ -1,3 +1,4 @@
+import { createPublicFetch } from '../infrastructure/public-fetch.js';
 import { createPublicKey, verify, type KeyObject } from 'node:crypto';
 
 import { z } from 'zod';
@@ -116,7 +117,7 @@ export class HttpMojangClient implements MinecraftPlayerLookup, FreshMinecraftPl
 
   public constructor(options: HttpMojangClientOptions) {
     this.cache = options.cache;
-    this.fetchImplementation = options.fetch ?? globalThis.fetch;
+    this.fetchImplementation = createPublicFetch(options.fetch ?? globalThis.fetch);
     this.freshTtlMs = (options.freshTtlSeconds ?? 60 * 60) * 1_000;
     this.keysTtlSeconds = options.keysTtlSeconds ?? 60 * 60;
     this.logger = options.logger;
@@ -363,6 +364,7 @@ export class HttpMojangClient implements MinecraftPlayerLookup, FreshMinecraftPl
           ...(requireFresh ? { 'cache-control': 'no-cache' } : {}),
           'user-agent': USER_AGENT,
         },
+        redirect: 'error',
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error: unknown) {

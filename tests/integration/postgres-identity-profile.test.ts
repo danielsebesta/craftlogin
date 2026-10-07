@@ -1,3 +1,4 @@
+import { PrismaVerifiedUserRepository } from '../../src/users/verified-user-repository.js';
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -33,6 +34,25 @@ describe('PostgreSQL identity profile', (): void => {
     }
     await database.user.deleteMany({ where: { uuid } });
     await database.$disconnect();
+  });
+
+  it('does not regress verification timestamps or usernames on out-of-order writes', async (): Promise<void> => {
+    const db = requireDatabase(database);
+    const users = new PrismaVerifiedUserRepository(db);
+    const id = randomUUID();
+    const newer = new Date('2026-10-07T12:00:00Z');
+    const older = new Date('2026-10-06T12:00:00Z');
+    try {
+      await users.upsertVerifiedUser({ uuid: id, username: 'NewName' }, newer);
+      await users.upsertVerifiedUser({ uuid: id, username: 'OldName' }, older);
+      expect(await db.user.findUnique({ where: { uuid: id } })).toMatchObject({
+        username: 'NewName',
+        firstVerifiedAt: older,
+        lastVerifiedAt: newer,
+      });
+    } finally {
+      await db.user.deleteMany({ where: { uuid: id } });
+    }
   });
 
   it('refreshes a changed username and publishes the avatar claim', async (): Promise<void> => {

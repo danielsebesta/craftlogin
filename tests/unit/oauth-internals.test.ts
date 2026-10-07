@@ -35,10 +35,6 @@ describe('expired OIDC interaction mapping', (): void => {
   });
 });
 
-interface DeleteManyCall {
-  readonly where: { readonly expiresAt: { readonly lt: Date } };
-}
-
 function recordingLogger(): { logger: Pick<Logger, 'info' | 'warn'>; records: unknown[][] } {
   const records: unknown[][] = [];
   return {
@@ -61,13 +57,11 @@ describe('ExpiredRefreshTokenSweeper', (): void => {
 
   it('sweeps on start, repeats on the interval, and stops cleanly', async (): Promise<void> => {
     vi.useFakeTimers();
-    const calls: DeleteManyCall[] = [];
+    const calls: unknown[][] = [];
     const store: ExpiredRefreshTokenStore = {
-      refreshToken: {
-        deleteMany: (options: DeleteManyCall): Promise<{ count: number }> => {
-          calls.push(options);
-          return Promise.resolve({ count: 3 });
-        },
+      $executeRaw: (...args: unknown[]): Promise<number> => {
+        calls.push(args);
+        return Promise.resolve(3);
       },
     };
     const { logger, records } = recordingLogger();
@@ -75,16 +69,16 @@ describe('ExpiredRefreshTokenSweeper', (): void => {
 
     sweeper.start();
     await vi.advanceTimersByTimeAsync(0);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.where.expiresAt.lt).toBeInstanceOf(Date);
-    expect(records[0]?.[0]).toEqual({ removed: 3 });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.[1]).toBeInstanceOf(Date);
+    expect(records[0]?.[0]).toEqual({ removed: 6 });
 
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(4);
 
     sweeper.stop();
     await vi.advanceTimersByTimeAsync(180_000);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(4);
     expect((): void => {
       sweeper.stop();
     }).not.toThrow();
@@ -93,10 +87,7 @@ describe('ExpiredRefreshTokenSweeper', (): void => {
   it('logs sweep failures instead of rejecting the timer callback', async (): Promise<void> => {
     vi.useFakeTimers();
     const store: ExpiredRefreshTokenStore = {
-      refreshToken: {
-        deleteMany: (): Promise<{ count: number }> =>
-          Promise.reject(new Error('database unavailable')),
-      },
+      $executeRaw: (): Promise<number> => Promise.reject(new Error('database unavailable')),
     };
     const { logger, records } = recordingLogger();
     const sweeper = new ExpiredRefreshTokenSweeper(store, logger, 60_000);

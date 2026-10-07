@@ -1,4 +1,4 @@
-import rateLimit from '@fastify/rate-limit';
+import rateLimit, { normalizeIP } from '@fastify/rate-limit';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Redis } from 'ioredis';
 
@@ -20,17 +20,17 @@ export const developerAppVerificationRateLimit = {
 
 export const tokenRateLimit = {
   groupId: 'oauth-token',
-  max: 30,
+  keyGenerator: (request: FastifyRequest): string => `token:${normalizeIP(request.ip)}`,
+  max: 1200,
   timeWindow: 60 * 1_000,
 };
 
-// Confidential auth costs an Argon2 verify per request; this shared ceiling
-// bounds worst-case CPU. Runs via createRateLimit() — a second rateLimit()
+// This shared admission ceiling complements the bounded Argon2 work queue. Runs via createRateLimit() — a second rateLimit()
 // hook would be skipped — and the constant key makes the bucket global.
 export const tokenEndpointGlobalRateLimit = {
   groupId: 'oauth-grant-global',
   keyGenerator: (): string => 'oauth-grant-global',
-  max: 600,
+  max: 6000,
   timeWindow: 60 * 1_000,
 };
 
@@ -38,24 +38,25 @@ export const tokenEndpointGlobalRateLimit = {
 // prefix keeps this bucket separate from limiters sharing one store prefix.
 export const authorizeRateLimit = {
   groupId: 'oauth-authorize',
-  keyGenerator: (request: FastifyRequest): string => `authorize:${request.ip}`,
-  max: 120,
+  keyGenerator: (request: FastifyRequest): string => `authorize:${normalizeIP(request.ip)}`,
+  max: 2400,
   timeWindow: 60 * 1_000,
 };
 
 // Cheap unauthenticated OIDC endpoints (jwks, discovery, webfinger, userinfo,
-// revoke, logout) share one per-address bucket; token and authorize keep their
+// logout) share one per-address bucket; token and authorize keep their
 // stricter dedicated budgets.
 export const publicOidcRateLimit = {
   groupId: 'oauth-public',
-  max: 120,
+  keyGenerator: (request: FastifyRequest): string => `public:${normalizeIP(request.ip)}`,
+  max: 2400,
   timeWindow: 60 * 1_000,
 };
 
 // The interaction page render hits Postgres (client + owner) on every load.
 export const interactionPageRateLimit = {
   groupId: 'interaction-page',
-  max: 120,
+  max: 2400,
   timeWindow: 60 * 1_000,
 };
 
@@ -89,6 +90,17 @@ export const developerLoginPageRateLimit = {
 // this is volumetric protection tolerant of polling tabs behind one shared IP.
 export const verificationStatusRateLimit = {
   groupId: 'verification-status',
+  keyGenerator: (request: FastifyRequest): string => {
+    const params = request.params;
+    const uid =
+      typeof params === 'object' &&
+      params !== null &&
+      'uid' in params &&
+      typeof params.uid === 'string'
+        ? params.uid
+        : '';
+    return `status:${normalizeIP(request.ip)}:${uid}`;
+  },
   max: 120,
   timeWindow: 60 * 1_000,
 };
@@ -174,6 +186,21 @@ export async function registerRateLimiting(
   };
 
   await server.register(rateLimit, redis === undefined ? options : { ...options, redis });
+  // Bound novel interaction ids as well as repeated polling of one id.
+  const checkPollingAddress = server.createRateLimit({
+    keyGenerator: (request: FastifyRequest): string => `poll-address:${normalizeIP(request.ip)}`,
+    max: 30000,
+    timeWindow: 60 * 1000,
+  });
+  server.addHook('onRequest', async (request, reply): Promise<void> => {
+    const route = request.routeOptions.url;
+    if (route !== '/interaction/:uid/status' && route !== '/interaction/:uid/skin/status') return;
+    const result = await checkPollingAddress(request);
+    if (!result.isAllowed && result.isExceeded) {
+      void reply.header('retry-after', result.ttlInSeconds);
+      throw buildRateLimitError();
+    }
+  });
 }
 
 function buildRateLimitError(): ApiError {

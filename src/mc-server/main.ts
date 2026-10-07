@@ -16,7 +16,7 @@ const bootstrapLogger = createLogger('info');
 async function main(): Promise<void> {
   const environment = loadEnvironment();
   const logger = createLogger(environment.logLevel);
-  const database = createDatabaseClient(environment.databaseUrl);
+  const database = createDatabaseClient(environment.databaseUrl, environment.databasePoolMax);
   const redis = createRedisClient(environment.redisUrl);
 
   redis.on('error', (error: Error): void => {

@@ -1,3 +1,7 @@
+import Fastify from 'fastify';
+import { registerOidcHttpRoutes } from '../../src/api/oauth-http-routes.js';
+import { registerRateLimiting } from '../../src/api/rate-limit.js';
+import { registerSharedSchemas } from '../../src/api/schemas.js';
 import { describe, expect, it } from 'vitest';
 
 import { renderAutoForwardPage } from '../../src/api/auto-forward-page.js';
@@ -167,5 +171,33 @@ describe('structured logger', (): void => {
       expect(output, secret).not.toContain(secret);
     }
     expect(output).not.toContain('raw-code');
+  });
+});
+
+describe('raw OIDC proxy boundary', (): void => {
+  it('forwards only topology-validated address and scheme to the provider', async (): Promise<void> => {
+    const api = Fastify({ trustProxy: ['127.0.0.1'] });
+    try {
+      await registerRateLimiting(api);
+      registerSharedSchemas(api);
+      const seen: unknown[] = [];
+      registerOidcHttpRoutes(api, (request, response): void => {
+        seen.push({
+          ip: request.headers['x-forwarded-for'],
+          proto: request.headers['x-forwarded-proto'],
+        });
+        response.end();
+      });
+      await api.ready();
+      const headers = { 'x-forwarded-for': '203.0.113.1', 'x-forwarded-proto': 'https' };
+      await api.inject({ url: '/oauth2/jwks', headers, remoteAddress: '192.0.2.99' });
+      await api.inject({ url: '/oauth2/jwks', headers, remoteAddress: '127.0.0.1' });
+      expect(seen).toEqual([
+        { ip: '192.0.2.99', proto: 'http' },
+        { ip: '203.0.113.1', proto: 'https' },
+      ]);
+    } finally {
+      await api.close();
+    }
   });
 });

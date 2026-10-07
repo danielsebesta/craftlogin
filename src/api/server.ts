@@ -91,7 +91,7 @@ export interface ApiServerOptions {
   readonly rateLimitRedis?: Redis;
   readonly redis: Pick<Redis, 'eval' | 'get'>;
   readonly readiness: ReadinessCheck;
-  readonly trustProxy?: boolean;
+  readonly trustProxy?: boolean | string[];
   readonly users: CurrentUserLookup;
 }
 

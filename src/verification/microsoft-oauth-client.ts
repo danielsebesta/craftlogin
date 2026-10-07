@@ -1,3 +1,4 @@
+import { readBoundedResponseBody } from '../mojang/bounded-body.js';
 import { z } from 'zod';
 
 import { canonicalMinecraftUuid } from '../mojang/uuid.js';
@@ -243,6 +244,7 @@ export class HttpMicrosoftOAuthClient {
     try {
       response = await this.fetchImplementation(url, {
         ...init,
+        redirect: 'error',
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {
@@ -252,7 +254,9 @@ export class HttpMicrosoftOAuthClient {
       throw new MicrosoftOAuthHttpError(response.status, url);
     }
     try {
-      const payload: unknown = await response.json();
+      const payload: unknown = JSON.parse(
+        (await readBoundedResponseBody(response, 256 * 1024, 'OAuth response')).toString('utf8'),
+      );
       return payload;
     } catch {
       throw this.invalidResponse('Microsoft authentication');

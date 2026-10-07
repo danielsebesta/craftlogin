@@ -38,7 +38,7 @@ import {
   accountRevokeRouteSchema,
 } from './schemas.js';
 
-interface ConnectedTokenRow {
+interface ConnectedGrantRow {
   readonly adapterPayload: unknown;
   readonly app: {
     readonly iconHash: string | null;
@@ -47,20 +47,15 @@ interface ConnectedTokenRow {
   };
   readonly clientId: string;
   readonly expiresAt: Date;
-  readonly tokenHash: string;
+  readonly grantIdHash: string;
 }
 
 /** The exact Prisma surface the account page needs; the real client satisfies it. */
 export interface AccountTokenStore {
-  readonly refreshToken: {
-    deleteMany(options: {
-      where: {
-        clientId?: string;
-        expiresAt: { gt: Date };
-        revokedAt: null;
-        tokenHash: { in: string[] };
-        userUuid: string;
-      };
+  readonly oidcGrant: {
+    updateMany(options: {
+      where: { clientId?: string; revokedAt: null; userUuid: string };
+      data: { revokedAt: Date };
     }): Promise<{ count: number }>;
     findMany(options: {
       select: {
@@ -68,7 +63,7 @@ export interface AccountTokenStore {
         app: { select: { iconHash: true; name: true; verifiedAt: true } };
         clientId: true;
         expiresAt: true;
-        tokenHash: true;
+        grantIdHash: true;
       };
       where: {
         clientId?: string;
@@ -76,28 +71,27 @@ export interface AccountTokenStore {
         revokedAt: null;
         userUuid: string;
       };
-    }): Promise<readonly ConnectedTokenRow[]>;
+    }): Promise<readonly ConnectedGrantRow[]>;
   };
   readonly user: {
-    // RefreshToken.user cascades on delete as a backstop; the account-delete
-    // route still removes token rows explicitly first so no step can leave a
-    // deleted identity behind live credentials.
+    // User deletion cascades grants and refresh tokens.
     deleteMany(options: { where: { uuid: string } }): Promise<{ count: number }>;
   };
 }
 
-const connectedTokenSelect = {
+const connectedGrantSelect = {
   adapterPayload: true,
   app: { select: { iconHash: true, name: true, verifiedAt: true } },
   clientId: true,
   expiresAt: true,
-  tokenHash: true,
+  grantIdHash: true,
 } as const;
 
-const connectedTokenPayloadSchema = z.looseObject({
+const connectedGrantPayloadSchema = z.looseObject({
   grantId: z.string().min(1).max(512).optional(),
   iat: z.number().int().positive().optional(),
   scope: z.string().optional(),
+  openid: z.object({ scope: z.string().optional() }).optional(),
 });
 
 interface AccountPageQuery {
@@ -131,9 +125,6 @@ export function registerAccountRoutes(
     throw new TypeError('A cookie signing key is required for the account page');
   }
   const sessions = new RedisOidcAdapter('Session', options.redis);
-  // Grantable Redis adapters share one index set per grantId, so a single
-  // instance clears every Redis-side artifact of the grant regardless of model.
-  const grants = new RedisOidcAdapter('AccessToken', options.redis);
 
   server.get<{ Querystring: AccountPageQuery }>(
     '/account',
@@ -152,8 +143,8 @@ export function registerAccountRoutes(
       }
       const [user, tokens] = await Promise.all([
         options.users.findCurrentUser(session.accountId),
-        options.database.refreshToken.findMany({
-          select: connectedTokenSelect,
+        options.database.oidcGrant.findMany({
+          select: connectedGrantSelect,
           where: { expiresAt: { gt: new Date() }, revokedAt: null, userUuid: session.accountId },
         }),
       ]);
@@ -188,40 +179,17 @@ export function registerAccountRoutes(
       if (!revokeTokenMatches(accountRevokeToken(signingKey, session.jti, client), token)) {
         throw new ApiError(403, 'forbidden', english.api.errors.csrfInvalid);
       }
-      const now = new Date();
-      const rows = await options.database.refreshToken.findMany({
-        select: connectedTokenSelect,
-        where: {
-          clientId: client,
-          expiresAt: { gt: now },
-          revokedAt: null,
-          userUuid: session.accountId,
-        },
+      // This single write revokes authorizations, including those without a
+      // refresh token. Token issuance locks the same grant row; all adapters
+      // reject revoked grants, even if an in-flight Redis write finishes later.
+      const removed = await options.database.oidcGrant.updateMany({
+        where: { clientId: client, userUuid: session.accountId, revokedAt: null },
+        data: { revokedAt: new Date() },
       });
-      if (rows.length > 0) {
-        const grantIds = rows
-          .map((row): string | undefined => tokenMetadata(row.adapterPayload).grantId)
-          .filter((grantId): grantId is string => grantId !== undefined);
-        // The conditional delete covers exactly the rows listed above, so a
-        // concurrent revoke can never double-delete and a token minted between
-        // the read and the delete survives untouched.
-        const removed = await options.database.refreshToken.deleteMany({
-          where: {
-            clientId: client,
-            expiresAt: { gt: now },
-            revokedAt: null,
-            tokenHash: { in: rows.map((row): string => row.tokenHash) },
-            userUuid: session.accountId,
-          },
-        });
-        await Promise.all(
-          grantIds.map((grantId): Promise<void> => grants.revokeByGrantId(grantId)),
-        );
-        options.logger.info(
-          { clientId: client, removed: removed.count, userUuid: session.accountId },
-          'Account revoked application sessions',
-        );
-      }
+      options.logger.info(
+        { clientId: client, removed: removed.count, userUuid: session.accountId },
+        'Account revoked application authorizations',
+      );
       await reply.redirect('/account?revoked=1', 303);
     },
   );
@@ -256,27 +224,11 @@ export function registerAccountRoutes(
           'Account deletion kept a protected developer role',
         );
       }
-      const now = new Date();
-      const rows = await options.database.refreshToken.findMany({
-        select: connectedTokenSelect,
-        where: { expiresAt: { gt: now }, revokedAt: null, userUuid: session.accountId },
+      await options.database.oidcGrant.updateMany({
+        where: { userUuid: session.accountId, revokedAt: null },
+        data: { revokedAt: new Date() },
       });
-      const grantIds = rows
-        .map((row): string | undefined => tokenMetadata(row.adapterPayload).grantId)
-        .filter((grantId): grantId is string => grantId !== undefined);
-      // Credentials die before the identity row: a failure partway leaves a
-      // signed-out account the owner can still re-verify, never a deleted
-      // identity with live tokens. The identity delete comes last and keeps
-      // the RefreshToken cascade as a backstop for tokens issued meanwhile.
-      await options.database.refreshToken.deleteMany({
-        where: {
-          expiresAt: { gt: now },
-          revokedAt: null,
-          tokenHash: { in: rows.map((row): string => row.tokenHash) },
-          userUuid: session.accountId,
-        },
-      });
-      await Promise.all(grantIds.map((grantId): Promise<void> => grants.revokeByGrantId(grantId)));
+      await sessions.invalidateAccountSessions(session.accountId);
       await sessions.destroy(session.jti);
       await options.database.user.deleteMany({ where: { uuid: session.accountId } });
       clearOidcCookies(reply);
@@ -291,12 +243,14 @@ function tokenMetadata(payload: unknown): {
   readonly iat?: number | undefined;
   readonly scope?: string | undefined;
 } {
-  const parsed = connectedTokenPayloadSchema.safeParse(payload);
-  return parsed.success ? parsed.data : {};
+  const parsed = connectedGrantPayloadSchema.safeParse(payload);
+  return parsed.success
+    ? { ...parsed.data, scope: parsed.data.openid?.scope ?? parsed.data.scope }
+    : {};
 }
 
 function groupConnectedServices(
-  tokens: readonly ConnectedTokenRow[],
+  tokens: readonly ConnectedGrantRow[],
   signingKey: string,
   session: AccountSession,
 ): ConnectedServiceView[] {

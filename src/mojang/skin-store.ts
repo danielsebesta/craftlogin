@@ -1,3 +1,4 @@
+import { createPublicFetch } from '../infrastructure/public-fetch.js';
 import { z } from 'zod';
 
 import { getErrorKind } from '../logging/error-kind.js';
@@ -53,7 +54,7 @@ export class HttpSkinStore implements SkinStore {
   public constructor(options: HttpSkinStoreOptions) {
     this.baseUrl = options.baseUrl ?? SKIN_BASE_URL;
     this.cache = options.cache;
-    this.fetchImplementation = options.fetch ?? globalThis.fetch;
+    this.fetchImplementation = createPublicFetch(options.fetch ?? globalThis.fetch);
     this.logger = options.logger;
     this.maxBytes = options.maxBytes ?? 256 * 1_024;
     this.notFoundTtlSeconds = options.notFoundTtlSeconds ?? 60;
@@ -84,6 +85,7 @@ export class HttpSkinStore implements SkinStore {
     try {
       const response = await this.fetchImplementation(`${this.baseUrl}${hash}`, {
         headers: { accept: 'image/png', 'user-agent': USER_AGENT },
+        redirect: 'error',
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (response.status === 204 || response.status === 404) {
