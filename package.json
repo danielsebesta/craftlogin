@@ -57,7 +57,7 @@
     "argon2": "0.45.1",
     "bowser": "2.14.1",
     "debug": "4.4.3",
-    "dotenv": "17.4.2",
+    "dotenv": "18.0.4",
     "fastify": "5.12.3",
     "ioredis": "6.0.0",
     "minecraft-data": "3.116.0",
