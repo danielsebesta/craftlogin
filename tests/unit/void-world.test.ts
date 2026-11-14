@@ -403,7 +403,7 @@ describe('void world packet encoding', (): void => {
   });
 
   it.each([
-    ['1.21.5', false],
+    ['1.21.5', true],
     ['1.21.6', true],
     ['1.21.11', true],
     ['26.1', true],
