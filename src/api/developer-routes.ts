@@ -29,6 +29,7 @@ import type {
   DeveloperSessionService,
 } from '../developers/session-service.js';
 import { ApiError } from './errors.js';
+import { CONSOLE_CLIENT_ID } from '../developers/console-client.js';
 import { resolveDeveloperIdentifier } from '../developers/developer-identifier.js';
 import type { MinecraftPlayerLookup } from '../mojang/client.js';
 import { english } from '../locales/en.js';
@@ -47,6 +48,7 @@ import {
   consoleAuthorizeUrl,
   consoleStatesEqual,
   createConsoleOidcTransaction,
+  assertConsoleAuthentication,
   exchangeConsoleCode,
   fetchConsoleSubject,
   ConsoleOidcError,
@@ -55,6 +57,7 @@ import {
   renderAppIconPage,
   renderAppRedirectsPage,
   renderAppSecretPage,
+  renderAppSkinVerificationPage,
   renderAppSecretResetPage,
   renderCreatedAppPage,
   renderDeleteAppPage,
@@ -88,6 +91,8 @@ import {
   developerAppRedirectsUpdateRouteSchema,
   developerAppSecretResetRouteSchema,
   developerAppSecretRouteSchema,
+  developerAppSkinVerificationRouteSchema,
+  developerAppSkinVerificationUpdateRouteSchema,
   developerAppVerificationDecisionRouteSchema,
   developerAppVerificationRequestRouteSchema,
   developerAppVerificationRouteSchema,
@@ -152,6 +157,10 @@ interface AppVerificationRequestBody extends CsrfBody {
 
 interface VerificationDecisionBody extends CsrfBody {
   readonly decision: string;
+}
+
+interface SkinVerificationBody extends CsrfBody {
+  readonly enabled: 'false' | 'true';
 }
 
 interface DeveloperParams {
@@ -241,8 +250,9 @@ export function registerDeveloperRoutes(
         return;
       }
       try {
-        const accessToken = await exchangeConsoleCode(oidcEndpoints, code, stored.verifier);
-        const subject = await fetchConsoleSubject(oidcEndpoints, accessToken);
+        const tokens = await exchangeConsoleCode(oidcEndpoints, code, stored.verifier);
+        const subject = await fetchConsoleSubject(oidcEndpoints, tokens.accessToken);
+        assertConsoleAuthentication(tokens.idToken, subject);
         const parsedUuid = developerUuidSchema.safeParse(subject);
         if (!parsedUuid.success) {
           throw new ConsoleOidcError('Console userinfo returned an invalid subject');
@@ -608,6 +618,67 @@ export function registerDeveloperRoutes(
       );
       await reply.redirect(
         `/developers/apps/${encodeURIComponent(request.params.id)}/redirects?notice=redirects-saved`,
+        303,
+      );
+    },
+  );
+
+  server.get<{ Params: AppParams }>(
+    '/developers/apps/:id/skin-verification',
+    { schema: developerAppSkinVerificationRouteSchema },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      const app = await findManagedApp(options, session, request.params.id);
+      if (app === undefined || app.clientId === CONSOLE_CLIENT_ID) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      setDeveloperPageHeaders(reply);
+      await reply
+        .type('text/html; charset=utf-8')
+        .send(renderAppSkinVerificationPage(app, session.csrfToken));
+    },
+  );
+
+  server.post<{ Body: SkinVerificationBody; Params: AppParams }>(
+    '/developers/apps/:id/skin-verification',
+    {
+      config: { rateLimit: developerAppUpdateRateLimit },
+      schema: developerAppSkinVerificationUpdateRouteSchema,
+    },
+    async (request, reply): Promise<void> => {
+      const session = await requireSession(options.authentication, request, reply);
+      if (session === undefined) {
+        return;
+      }
+      options.authentication.requireCsrf(session, request.body.csrfToken);
+      const enabled = request.body.enabled === 'true';
+      if (
+        !(await options.appManager.setSkinVerification(
+          request.params.id,
+          session.userUuid,
+          session.role,
+          enabled,
+        ))
+      ) {
+        await reply.redirect('/developers?notice=not-found', 303);
+        return;
+      }
+      options.logger.info(
+        {
+          actorUuid: session.userUuid,
+          appId: request.params.id,
+          audit: true,
+          enabled,
+          event: 'developer_app_skin_verification_changed',
+        },
+        'Developer changed application skin verification',
+      );
+      await reply.redirect(
+        `/developers?notice=${enabled ? 'skin-verification-enabled' : 'skin-verification-disabled'}`,
         303,
       );
     },

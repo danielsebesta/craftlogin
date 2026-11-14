@@ -55,7 +55,7 @@ function startTestServer(
   pending: (code: string) => boolean = (): boolean => false,
 ): Promise<MinecraftGhostServer> {
   return startGhostServer(
-    { baseDomain: 'craftlogin.com', host: '127.0.0.1', port },
+    { baseDomain: 'craftlogin.com', host: '127.0.0.1', port, signInHost: 'craftlogin.com' },
     {
       logger: createLogger('silent'),
       pendingCodes: {
@@ -84,7 +84,7 @@ describe('Minecraft ghost server', (): void => {
 
   it('listens with multi-version online-mode configuration and closes cleanly', async (): Promise<void> => {
     ghostServer = await startGhostServer(
-      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port: 0 },
+      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port: 0, signInHost: 'craftlogin.com' },
       {
         logger: createLogger('silent'),
         pendingCodes: {
@@ -131,7 +131,7 @@ describe('Minecraft ghost server', (): void => {
     const port = await findAvailablePort();
     let resolutionAttempts = 0;
     ghostServer = await startGhostServer(
-      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port },
+      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port, signInHost: 'craftlogin.com' },
       {
         logger: createLogger('silent'),
         pendingCodes: {
@@ -209,7 +209,7 @@ describe('Minecraft ghost server', (): void => {
     const checkedCodes: string[] = [];
     let resolutionAttempts = 0;
     ghostServer = await startGhostServer(
-      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port },
+      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port, signInHost: 'craftlogin.com' },
       {
         logger: createLogger('silent'),
         pendingCodes: {
@@ -266,7 +266,7 @@ describe('Minecraft ghost server', (): void => {
     const port = await findAvailablePort();
     let codeLookups = 0;
     ghostServer = await startGhostServer(
-      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port },
+      { baseDomain: 'craftlogin.com', host: '127.0.0.1', port, signInHost: 'craftlogin.com' },
       {
         logger: createLogger('silent'),
         pendingCodes: {

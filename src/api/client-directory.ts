@@ -63,7 +63,7 @@ export class PrismaClientDirectory implements ClientDirectoryLookup, RegisteredO
 
   public async findClient(clientId: string): Promise<ClientDirectoryEntry | undefined> {
     const client = await this.database.app.findUnique({
-      select: { iconHash: true, name: true, verifiedAt: true },
+      select: { iconHash: true, name: true, skinVerificationEnabled: true, verifiedAt: true },
       where: { clientId },
     });
     return client === null
@@ -71,6 +71,7 @@ export class PrismaClientDirectory implements ClientDirectoryLookup, RegisteredO
       : {
           ...(client.iconHash === null ? {} : { iconHash: client.iconHash }),
           name: client.name,
+          skinVerificationEnabled: client.skinVerificationEnabled,
           verified: client.verifiedAt !== null,
         };
   }

@@ -3,6 +3,17 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { z } from 'zod';
 
+import { MICROSOFT_OAUTH_ACR, MINECRAFT_ONLINE_MODE_ACR } from '../oauth/constants.js';
+import type { VerificationMethod } from '../verification/types.js';
+
+// The console can rewrite any client's redirect URIs, so it accepts only methods
+// that reach the player directly. A skin marker can be planted through phishing.
+const CONSOLE_ACR_VALUES = `${MINECRAFT_ONLINE_MODE_ACR} ${MICROSOFT_OAUTH_ACR}`;
+const CONSOLE_AUTHENTICATION_METHODS: ReadonlySet<string> = new Set<VerificationMethod>([
+  'microsoft_oauth',
+  'minecraft_online_mode',
+]);
+
 export interface ConsoleOidcEndpoints {
   readonly authorizationEndpoint: string;
   readonly clientId: string;
@@ -18,11 +29,21 @@ export interface ConsoleOidcTransaction {
   readonly verifier: string;
 }
 
+export interface ConsoleTokens {
+  readonly accessToken: string;
+  readonly idToken: string;
+}
+
 export class ConsoleOidcError extends Error {
   public override readonly name = 'ConsoleOidcError';
 }
 
-const tokenResponseSchema = z.object({ access_token: z.string().min(1) }).catchall(z.unknown());
+const tokenResponseSchema = z
+  .object({ access_token: z.string().min(1), id_token: z.string().min(1) })
+  .catchall(z.unknown());
+const idTokenClaimsSchema = z
+  .object({ amr: z.array(z.string()).optional(), sub: z.string().min(1) })
+  .catchall(z.unknown());
 const userInfoResponseSchema = z.object({ sub: z.string().min(1) }).catchall(z.unknown());
 
 export function createConsoleOidcTransaction(): ConsoleOidcTransaction {
@@ -37,6 +58,7 @@ export function consoleAuthorizeUrl(
   challenge: string,
 ): string {
   const url = new URL(endpoints.authorizationEndpoint);
+  url.searchParams.set('acr_values', CONSOLE_ACR_VALUES);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', endpoints.clientId);
   url.searchParams.set('redirect_uri', endpoints.redirectUri);
@@ -59,7 +81,7 @@ export async function exchangeConsoleCode(
   endpoints: ConsoleOidcEndpoints,
   code: string,
   verifier: string,
-): Promise<string> {
+): Promise<ConsoleTokens> {
   const fetchImplementation = endpoints.fetchImplementation ?? fetch;
   let response: Response;
   try {
@@ -96,7 +118,29 @@ export async function exchangeConsoleCode(
   if (!parsed.success) {
     throw new ConsoleOidcError('Console token exchange returned an unexpected payload');
   }
-  return parsed.data.access_token;
+  return { accessToken: parsed.data.access_token, idToken: parsed.data.id_token };
+}
+
+/**
+ * The browser carries acr_values and can drop them, so the method that was really
+ * used is checked here. The ID token came straight from the token endpoint, which
+ * OIDC Core 3.1.3.7 accepts in place of checking its signature.
+ */
+export function assertConsoleAuthentication(idToken: string, subject: string): void {
+  let claims: unknown;
+  try {
+    claims = JSON.parse(Buffer.from(idToken.split('.')[1] ?? '', 'base64url').toString('utf8'));
+  } catch (error: unknown) {
+    throw new ConsoleOidcError('Console ID token is not readable', { cause: error });
+  }
+  const parsed = idTokenClaimsSchema.safeParse(claims);
+  if (
+    !parsed.success ||
+    parsed.data.sub !== subject ||
+    parsed.data.amr?.some((method): boolean => CONSOLE_AUTHENTICATION_METHODS.has(method)) !== true
+  ) {
+    throw new ConsoleOidcError('Console sign-in used a method the console does not accept');
+  }
 }
 
 export async function fetchConsoleSubject(

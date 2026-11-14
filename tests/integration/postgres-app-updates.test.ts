@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { PrismaAppManager } from '../../src/developers/app-management.js';
+import { CONSOLE_CLIENT_ID } from '../../src/developers/console-client.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import { createDatabaseClient } from '../../src/infrastructure/database.js';
 import { hashClientSecret, verifyClientSecret } from '../../src/oauth/client-secret.js';
@@ -89,6 +90,80 @@ describe('PostgreSQL application updates', (): void => {
     await expect(storedRedirectUris(databaseClient, appId)).resolves.toEqual([
       'https://admin.example/cb',
     ]);
+  });
+
+  it('sends a verified application back through review when it changes', async (): Promise<void> => {
+    const databaseClient = requireDatabase(database);
+    const apps = new PrismaAppManager(databaseClient);
+    const appId = await requireAppId(databaseClient, confidentialClientId);
+    const markVerified = async (): Promise<void> => {
+      await databaseClient.app.update({ data: { verifiedAt: new Date() }, where: { id: appId } });
+    };
+    const verification = async (): Promise<string | undefined> =>
+      (await apps.list(ownerUuid, 'developer')).find((app): boolean => app.id === appId)
+        ?.verification;
+
+    await markVerified();
+    await expect(
+      apps.updateRedirectUris(appId, ownerUuid, 'developer', ['https://app.example/moved']),
+    ).resolves.toBe(true);
+    await expect(verification()).resolves.toBe('none');
+
+    await markVerified();
+    await expect(
+      apps.setIcon(appId, ownerUuid, 'developer', {
+        hash: 'a'.repeat(64),
+        png: Buffer.from('icon-bytes'),
+      }),
+    ).resolves.toBe(true);
+    await expect(verification()).resolves.toBe('none');
+
+    // A refused edit leaves the label alone, and removing an icon cannot spoof anything.
+    await markVerified();
+    await expect(
+      apps.updateRedirectUris(appId, otherDeveloperUuid, 'developer', ['https://x.example/cb']),
+    ).resolves.toBe(false);
+    await expect(apps.removeIcon(appId, ownerUuid, 'developer')).resolves.toBe(true);
+    await expect(verification()).resolves.toBe('verified');
+  });
+
+  it('switches skin verification only for the owner, an administrator, and never the console', async (): Promise<void> => {
+    const databaseClient = requireDatabase(database);
+    const apps = new PrismaAppManager(databaseClient);
+    const appId = await requireAppId(databaseClient, confidentialClientId);
+    const enabled = async (): Promise<boolean | undefined> =>
+      (await apps.list(ownerUuid, 'developer')).find((app): boolean => app.id === appId)
+        ?.skinVerificationEnabled;
+
+    await expect(enabled()).resolves.toBe(false);
+    await expect(
+      apps.setSkinVerification(appId, otherDeveloperUuid, 'developer', true),
+    ).resolves.toBe(false);
+    await expect(enabled()).resolves.toBe(false);
+
+    await expect(apps.setSkinVerification(appId, ownerUuid, 'developer', true)).resolves.toBe(true);
+    await expect(enabled()).resolves.toBe(true);
+    await expect(apps.setSkinVerification(appId, adminRoleUuid, 'admin', false)).resolves.toBe(
+      true,
+    );
+    await expect(enabled()).resolves.toBe(false);
+
+    // A database that has served the application already holds the seeded console client.
+    const seeded = await databaseClient.app.findUnique({ where: { clientId: CONSOLE_CLIENT_ID } });
+    const consoleApp =
+      seeded ??
+      (await databaseClient.app.create({
+        data: { clientId: CONSOLE_CLIENT_ID, name: 'Developer Console', redirectUris: [] },
+      }));
+    try {
+      await expect(
+        apps.setSkinVerification(consoleApp.id, adminRoleUuid, 'admin', true),
+      ).resolves.toBe(false);
+    } finally {
+      if (seeded === null) {
+        await databaseClient.app.delete({ where: { id: consoleApp.id } });
+      }
+    }
   });
 
   it('rejects redirect lists that violate the exact-match rules', async (): Promise<void> => {

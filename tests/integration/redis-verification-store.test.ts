@@ -411,7 +411,7 @@ describe('RedisVerificationStore', (): void => {
     expect(outcomes.filter((result) => result.status === 'claimed')).toHaveLength(1);
   });
 
-  it('atomically deletes an authorization code after one consumption and stores no plaintext code', async (): Promise<void> => {
+  it('atomically consumes an authorization code once and stores no plaintext code', async (): Promise<void> => {
     const redisClient = requireRedis(redis);
     const adapter = new RedisOidcAdapter('AuthorizationCode', redisClient, keyPrefix);
     const authorizationCode = `authorization-code-${randomUUID()}`;
@@ -439,10 +439,14 @@ describe('RedisVerificationStore', (): void => {
     );
     expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
     expect(attempts.filter((attempt) => attempt.status === 'rejected')).toHaveLength(7);
-    await expect(adapter.find(authorizationCode)).resolves.toBeUndefined();
+    // The code stays readable as consumed so that a replay revokes the grant.
+    const consumed = await adapter.find(authorizationCode);
+    expect(typeof consumed?.consumed).toBe('number');
+    const storedKeys = await redisClient.keys(`${keyPrefix}:*`);
+    expect(storedKeys.join('\n')).not.toContain(authorizationCode);
   });
 
-  it('rejects and removes a legacy authorization code already marked as consumed', async (): Promise<void> => {
+  it('rejects a legacy authorization code already marked as consumed', async (): Promise<void> => {
     const redisClient = requireRedis(redis);
     const adapter = new RedisOidcAdapter('AuthorizationCode', redisClient, keyPrefix);
     const authorizationCode = `legacy-authorization-code-${randomUUID()}`;
@@ -463,7 +467,8 @@ describe('RedisVerificationStore', (): void => {
     );
 
     await expect(adapter.consume(authorizationCode)).rejects.toThrow();
-    await expect(redisClient.exists(artifactKey)).resolves.toBe(0);
+    // Left in place so a later replay still reaches the provider as consumed.
+    await expect(redisClient.exists(artifactKey)).resolves.toBe(1);
   });
 
   it('maintains and removes the session uid index atomically', async (): Promise<void> => {

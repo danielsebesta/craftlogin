@@ -52,13 +52,21 @@ creates a session.
 
 Use these claims as follows:
 
-| Claim                | Meaning                         | Application use              |
-| -------------------- | ------------------------------- | ---------------------------- |
-| `sub`                | Stable canonical Minecraft UUID | Persistent account key       |
-| `preferred_username` | Current Minecraft username      | Display only; it can change  |
-| `picture`            | Current Minecraft avatar URL    | Profile image                |
-| `acr`                | Verification context            | Optional policy/audit signal |
-| `amr`                | Verification method             | Optional policy/audit signal |
+| Claim                | Meaning                         | Application use             |
+| -------------------- | ------------------------------- | --------------------------- |
+| `sub`                | Stable canonical Minecraft UUID | Persistent account key      |
+| `preferred_username` | Current Minecraft username      | Display only; it can change |
+| `picture`            | Current Minecraft avatar URL    | Profile image               |
+| `acr`                | Verification context            | Check it; see below         |
+| `amr`                | Verification method             | Check it; see below         |
+
+`acr` and `amr` are always in the ID token. A sign-in reaches your application only through a method
+your client allows: skin marker sign-in is off until you opt in from the Developer Console. To
+require a method for a request, send `acr_values`. CraftLogin verifies the player again when the
+current session does not satisfy them, but the browser carries that parameter and can remove it, so
+an application that depends on a method must also check `amr` in the ID token it receives.
+Applications with high-value accounts should accept only `minecraft_online_mode` or
+`microsoft_oauth`, which reach the player directly.
 
 Never key accounts, permissions, purchases, or bans by `preferred_username`. Rotate the
 application's local session identifier after successful login and prevent open redirects in
@@ -66,7 +74,9 @@ return-to parameters.
 
 The standard UserInfo endpoint can return the claims granted by the requested scopes. CraftLogin
 also exposes `GET /api/users/@me` for a bearer access token, but a normal OIDC integration should
-prefer the OIDC library and UserInfo support.
+prefer the OIDC library and UserInfo support. Its `clientId` names the client the token was issued
+to. A backend that accepts a token from a browser or app must reject any other `clientId`; otherwise
+a token issued to another application could sign a player in to yours.
 
 ## Logout
 

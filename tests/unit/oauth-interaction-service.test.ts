@@ -315,11 +315,99 @@ describe('OAuthInteractionService', (): void => {
     ).rejects.toThrow('does not match the active session');
   });
 
-  it('offers skin verification unless acr_values requires online mode only', async (): Promise<void> => {
+  it('offers skin verification only to opted-in clients', async (): Promise<void> => {
+    const clients = [
+      ['has not opted in', { name: 'Example App' }],
+      ['opted out', { name: 'Example App', skinVerificationEnabled: false }],
+      ['is unknown', undefined],
+    ] as const;
+    for (const [description, client] of clients) {
+      const service = new OAuthInteractionService(
+        new RecordingGateway(),
+        new FinalizationStore(),
+        new RecordingLogger(),
+        new SkinVerificationStub(),
+        false,
+        { findClient: (): Promise<typeof client> => Promise.resolve(client) },
+      );
+      const page = createTransport();
+      await expect(service.start(page.request, page.response), description).resolves.toMatchObject({
+        allowsSkinVerification: false,
+      });
+      const denied = createTransport();
+      await expect(
+        service.startSkin(denied.request, denied.response, 'VerifiedPlayer'),
+        description,
+      ).rejects.toThrow('requires a different authentication method');
+    }
+  });
+
+  it('never lets the browser opt a client in through acr_values', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    gateway.context = { ...gateway.context, acrValues: 'urn:craftlogin:minecraft-profile-skin' };
+    const service = new OAuthInteractionService(
+      gateway,
+      new FinalizationStore(),
+      new RecordingLogger(),
+      new SkinVerificationStub(),
+      false,
+      { findClient: (): Promise<{ name: string }> => Promise.resolve({ name: 'Example App' }) },
+    );
+    const { request, response } = createTransport();
+
+    await expect(service.start(request, response)).resolves.toMatchObject({
+      allowsSkinVerification: false,
+    });
+  });
+
+  it('fails closed when the client lookup behind skin verification fails', async (): Promise<void> => {
+    const service = new OAuthInteractionService(
+      new RecordingGateway(),
+      new FinalizationStore(),
+      new RecordingLogger(),
+      new SkinVerificationStub(),
+      false,
+      { findClient: (): Promise<undefined> => Promise.reject(new Error('directory down')) },
+    );
+    const { request, response } = createTransport();
+
+    await expect(service.start(request, response)).resolves.toMatchObject({
+      allowsSkinVerification: false,
+    });
+  });
+
+  it('reports where the browser will land, including for native clients', async (): Promise<void> => {
+    const gateway = new RecordingGateway();
+    const service = new OAuthInteractionService(
+      gateway,
+      new FinalizationStore(),
+      new RecordingLogger(),
+    );
+    for (const [redirectUri, redirectHost] of [
+      ['https://client.example:8443/callback', 'client.example:8443'],
+      ['com.example.app:/callback', 'com.example.app'],
+    ] as const) {
+      gateway.context = { ...gateway.context, redirectUri };
+      const { request, response } = createTransport();
+      await expect(service.start(request, response)).resolves.toMatchObject({ redirectHost });
+    }
+  });
+
+  it('offers skin verification to an opted-in client unless acr_values requires online mode only', async (): Promise<void> => {
     const gateway = new RecordingGateway();
     const skin = new SkinVerificationStub();
     const store = new FinalizationStore();
-    const service = new OAuthInteractionService(gateway, store, new RecordingLogger(), skin);
+    const service = new OAuthInteractionService(
+      gateway,
+      store,
+      new RecordingLogger(),
+      skin,
+      false,
+      {
+        findClient: (): Promise<{ name: string; skinVerificationEnabled: boolean }> =>
+          Promise.resolve({ name: 'Example App', skinVerificationEnabled: true }),
+      },
+    );
     const first = createTransport();
 
     await expect(service.start(first.request, first.response)).resolves.toMatchObject({

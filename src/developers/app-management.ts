@@ -9,10 +9,18 @@ import {
   developerUuidSchema,
   type DeveloperRole,
 } from './developer-repository.js';
+import { CONSOLE_CLIENT_ID } from './console-client.js';
 import { containsOnlyDisplayCharacters } from './display-text.js';
 
 const appIdSchema = z.uuid();
 const VERIFICATION_NOTE_MAX_LENGTH = 500;
+// The label vouches for a reviewed application, so changing where sign-ins land
+// or how the app presents itself sends it back through review.
+const CLEARED_VERIFICATION = {
+  verificationNote: null,
+  verificationRequestedAt: null,
+  verifiedAt: null,
+};
 
 /** Validated before persistence so a normalized icon is the only thing stored. */
 export const appIconSchema = z.object({
@@ -52,6 +60,7 @@ export interface ManagedApp {
   readonly name: string;
   readonly ownerUuid?: string;
   readonly redirectUris: readonly string[];
+  readonly skinVerificationEnabled: boolean;
   readonly verification: AppVerificationStatus;
   readonly verificationNote?: string;
   readonly verificationRequestedAt?: string;
@@ -80,6 +89,16 @@ export interface AppManager {
     actorUuid: string,
     actorRole: DeveloperRole,
   ): Promise<string | undefined>;
+  /**
+   * Opts a client in or out of skin verification. Returns false when the row is
+   * missing, unmanaged, or the first-party console, which never accepts that method.
+   */
+  setSkinVerification(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+    enabled: boolean,
+  ): Promise<boolean>;
   requestVerification(
     appId: string,
     actorUuid: string,
@@ -116,6 +135,7 @@ export class PrismaAppManager implements AppManager {
         name: true,
         ownerUuid: true,
         redirectUris: true,
+        skinVerificationEnabled: true,
         verificationNote: true,
         verificationRequestedAt: true,
         verifiedAt: true,
@@ -137,7 +157,11 @@ export class PrismaAppManager implements AppManager {
     const role = developerRoleSchema.parse(actorRole);
     const parsedIcon = appIconSchema.parse(icon);
     const updated = await this.database.app.updateMany({
-      data: { iconHash: parsedIcon.hash, iconPng: Uint8Array.from(parsedIcon.png) },
+      data: {
+        ...CLEARED_VERIFICATION,
+        iconHash: parsedIcon.hash,
+        iconPng: Uint8Array.from(parsedIcon.png),
+      },
       where: { id, ...(role === 'admin' ? {} : { ownerUuid: uuid }) },
     });
     return updated.count === 1;
@@ -191,7 +215,7 @@ export class PrismaAppManager implements AppManager {
     const role = developerRoleSchema.parse(actorRole);
     const uris = redirectUriListSchema.parse(redirectUris);
     const updated = await this.database.app.updateMany({
-      data: { redirectUris: uris },
+      data: { ...CLEARED_VERIFICATION, redirectUris: uris },
       where: { id, ...(role === 'admin' ? {} : { ownerUuid: uuid }) },
     });
     return updated.count === 1;
@@ -218,6 +242,26 @@ export class PrismaAppManager implements AppManager {
       },
     });
     return updated.count === 1 ? clientSecret : undefined;
+  }
+
+  public async setSkinVerification(
+    appId: string,
+    actorUuid: string,
+    actorRole: DeveloperRole,
+    enabled: boolean,
+  ): Promise<boolean> {
+    const id = appIdSchema.parse(appId);
+    const uuid = developerUuidSchema.parse(actorUuid);
+    const role = developerRoleSchema.parse(actorRole);
+    const updated = await this.database.app.updateMany({
+      data: { skinVerificationEnabled: enabled },
+      where: {
+        clientId: { not: CONSOLE_CLIENT_ID },
+        id,
+        ...(role === 'admin' ? {} : { ownerUuid: uuid }),
+      },
+    });
+    return updated.count === 1;
   }
 
   public async requestVerification(
@@ -293,6 +337,7 @@ interface StoredApp {
   readonly name: string;
   readonly ownerUuid: string | null;
   readonly redirectUris: readonly string[];
+  readonly skinVerificationEnabled: boolean;
   readonly verificationNote: string | null;
   readonly verificationRequestedAt: Date | null;
   readonly verifiedAt: Date | null;
@@ -308,6 +353,7 @@ function toManagedApp(app: StoredApp): ManagedApp {
     name: app.name,
     ...(app.ownerUuid === null ? {} : { ownerUuid: app.ownerUuid }),
     redirectUris: app.redirectUris,
+    skinVerificationEnabled: app.skinVerificationEnabled,
     verification: verificationStatusOf(app),
     ...(app.verificationNote === null ? {} : { verificationNote: app.verificationNote }),
     ...(app.verificationRequestedAt === null

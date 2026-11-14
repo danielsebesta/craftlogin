@@ -9,6 +9,7 @@ import type { AuthenticatedMinecraftPlayer, VerificationStatus } from '../verifi
 import type { SkinVerificationChallenge } from '../verification/redis-skin-verification-store.js';
 import type { SkinVerificationLookup } from '../verification/skin-verification-service.js';
 import { getErrorKind } from '../logging/error-kind.js';
+import { permitsAuthenticationContext } from './authentication-context.js';
 import type { OAuthInteractionContext, OAuthInteractionGateway } from './interaction-gateway.js';
 import { OAuthInteractionStateError } from './interaction-gateway.js';
 import {
@@ -27,7 +28,13 @@ interface VerificationInteractionStore {
 }
 
 export interface InteractionClientNameLookup {
-  findClient(clientId: string): Promise<{ readonly name: string } | undefined>;
+  findClient(clientId: string): Promise<
+    | {
+        readonly name: string;
+        readonly skinVerificationEnabled?: boolean;
+      }
+    | undefined
+  >;
 }
 
 interface SkinInteractionVerification {
@@ -55,6 +62,8 @@ export interface PendingOAuthInteraction {
   readonly kind: 'consent' | 'login';
   readonly accountId?: string;
   readonly code?: string;
+  /** Where the browser lands after this authorization, shown so a changed target is visible. */
+  readonly redirectHost?: string;
   readonly skinChallenge?: SkinInteractionChallenge;
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
@@ -102,6 +111,8 @@ export class OAuthInteractionService {
       response,
       expectedInteractionId,
     );
+    const redirectHost = redirectHostOf(interaction);
+    const destination = redirectHost === undefined ? {} : { redirectHost };
     if (interaction.promptName === 'consent') {
       if (interaction.sessionAccountId === undefined) {
         throw new OAuthInteractionStateError(
@@ -113,6 +124,7 @@ export class OAuthInteractionService {
         clientId: interaction.clientId,
         interactionId: interaction.interactionId,
         kind: 'consent',
+        ...destination,
         scope: consentScope(interaction),
       };
     }
@@ -127,6 +139,7 @@ export class OAuthInteractionService {
         clientId: interaction.clientId,
         interactionId: interaction.interactionId,
         kind: 'login',
+        ...destination,
         scope: interaction.scope,
         verifiedPlayer: status.player,
         ...(status.requiresConfirmCode === true ? { requiresConfirmCode: true } : {}),
@@ -139,19 +152,20 @@ export class OAuthInteractionService {
         ? undefined
         : await this.allocateVerification(interaction);
     const skinChallenge = await this.readSkinChallenge(interaction.interactionId);
-    const allowsSkinVerification = this.allowsSkinVerification(interaction);
-    const allowsOnlineVerification = permitsAuthenticationMethod(
-      interaction,
+    const allowsSkinVerification = await this.allowsSkinVerification(interaction);
+    const allowsOnlineVerification = permitsAuthenticationContext(
+      interaction.acrValues,
       MINECRAFT_ONLINE_MODE_ACR,
     );
     const allowsMicrosoftVerification =
       this.microsoftVerificationEnabled &&
-      permitsAuthenticationMethod(interaction, MICROSOFT_OAUTH_ACR);
+      permitsAuthenticationContext(interaction.acrValues, MICROSOFT_OAUTH_ACR);
     return {
       clientId: interaction.clientId,
       ...(allowsOnlineVerification && code !== undefined ? { code } : {}),
       interactionId: interaction.interactionId,
       kind: 'login',
+      ...destination,
       scope: interaction.scope,
       ...(skinChallenge === undefined ? {} : { skinChallenge }),
       allowsSkinVerification,
@@ -172,7 +186,7 @@ export class OAuthInteractionService {
     );
     if (
       !this.microsoftVerificationEnabled ||
-      !permitsAuthenticationMethod(interaction, MICROSOFT_OAUTH_ACR)
+      !permitsAuthenticationContext(interaction.acrValues, MICROSOFT_OAUTH_ACR)
     ) {
       throw new OAuthInteractionStateError(
         'The authorization request does not permit Microsoft OAuth verification',
@@ -194,7 +208,7 @@ export class OAuthInteractionService {
     }
     if (
       !this.microsoftVerificationEnabled ||
-      !permitsAuthenticationMethod(interaction, MICROSOFT_OAUTH_ACR)
+      !permitsAuthenticationContext(interaction.acrValues, MICROSOFT_OAUTH_ACR)
     ) {
       throw new OAuthInteractionStateError(
         'The authorization request does not permit Microsoft OAuth verification',
@@ -218,7 +232,7 @@ export class OAuthInteractionService {
     if (this.skinVerification === undefined) {
       throw new OAuthInteractionStateError('Skin verification is not available');
     }
-    if (!this.allowsSkinVerification(interaction)) {
+    if (!(await this.allowsSkinVerification(interaction))) {
       throw new OAuthInteractionStateError(
         'The authorization request requires a different authentication method',
       );
@@ -240,7 +254,10 @@ export class OAuthInteractionService {
       response,
       expectedInteractionId,
     );
-    if (this.skinVerification?.lookup === undefined || !this.allowsSkinVerification(interaction)) {
+    if (
+      this.skinVerification?.lookup === undefined ||
+      !(await this.allowsSkinVerification(interaction))
+    ) {
       throw new OAuthInteractionStateError('Skin verification is not available');
     }
     return await this.skinVerification.lookup(username);
@@ -461,11 +478,17 @@ export class OAuthInteractionService {
   }
 
   private async resolveClientName(clientId: string): Promise<string | undefined> {
+    return (await this.findClient(clientId))?.name;
+  }
+
+  private async findClient(
+    clientId: string,
+  ): ReturnType<InteractionClientNameLookup['findClient']> {
     if (this.clientNames === undefined) {
       return undefined;
     }
     try {
-      return (await this.clientNames.findClient(clientId))?.name;
+      return await this.clientNames.findClient(clientId);
     } catch (error: unknown) {
       this.logger.error(
         { errorKind: getErrorKind(error) },
@@ -475,11 +498,19 @@ export class OAuthInteractionService {
     }
   }
 
-  private allowsSkinVerification(interaction: OAuthInteractionContext): boolean {
-    if (this.skinVerification === undefined) {
+  // The marker reaches the victim's profile with no CraftLogin page or code in
+  // between, so persuading a player to upload it signs the sender in as them.
+  // Only a server-side client setting can opt in: acr_values travels through the
+  // browser of whoever is signing in, so it never widens what is allowed. An
+  // unavailable client record fails closed.
+  private async allowsSkinVerification(interaction: OAuthInteractionContext): Promise<boolean> {
+    if (
+      this.skinVerification === undefined ||
+      !permitsAuthenticationContext(interaction.acrValues, MINECRAFT_PROFILE_SKIN_ACR)
+    ) {
       return false;
     }
-    return permitsAuthenticationMethod(interaction, MINECRAFT_PROFILE_SKIN_ACR);
+    return (await this.findClient(interaction.clientId))?.skinVerificationEnabled === true;
   }
 
   private async releaseFailedFinalization(claim: VerificationFinalizationClaim): Promise<void> {
@@ -499,12 +530,13 @@ export class OAuthInteractionService {
   }
 }
 
-function permitsAuthenticationMethod(
-  interaction: OAuthInteractionContext,
-  method: string,
-): boolean {
-  const requested = interaction.acrValues;
-  return requested === undefined || requested.split(/\s+/u).includes(method);
+// Native clients redirect to a custom scheme with no host, so the scheme identifies them.
+function redirectHostOf(interaction: OAuthInteractionContext): string | undefined {
+  const target = interaction.redirectUri === undefined ? null : URL.parse(interaction.redirectUri);
+  if (target === null) {
+    return undefined;
+  }
+  return target.host.length > 0 ? target.host : target.protocol.replace(/:$/u, '');
 }
 
 function toSkinInteractionChallenge(

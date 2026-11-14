@@ -59,9 +59,13 @@ describe('Redis-backed API rate limits', (): void => {
     await registerRateLimiting(api, redis, `${namespace}oauth:`);
     registerSharedSchemas(api);
     registerErrorHandling(api);
-    registerOidcHttpRoutes(api, (_request, response): void => {
-      response.end('ok');
-    });
+    registerOidcHttpRoutes(
+      api,
+      (_request, response): void => {
+        response.end('ok');
+      },
+      'https://craftlogin.test',
+    );
     await api.ready();
     expect((await api.inject('/oauth2/jwks')).statusCode).toBe(200);
     const publicKey = (await redis.keys(`${namespace}oauth:*`)).find((key) =>
@@ -163,6 +167,7 @@ async function buildServer(redis: Redis, namespace: string): Promise<FastifyInst
       removeIcon: unavailable,
       resetSecret: unavailable,
       setIcon: unavailable,
+      setSkinVerification: unavailable,
       requestVerification: unavailable,
       updateRedirectUris: unavailable,
     },

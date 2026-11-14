@@ -14,6 +14,24 @@ const baseInput: InteractionPageInput = {
   scope: 'openid profile',
 };
 
+describe('redirect destination', (): void => {
+  it('names the host that will receive the player', (): void => {
+    const page = renderInteractionPage({ ...baseInput, redirectHost: 'client.example:8443' });
+
+    expect(page).toContain(english.interaction.redirectDestinationLabel);
+    expect(page).toContain('<code><bdi>client.example:8443</bdi></code>');
+  });
+
+  it('escapes the host and omits the line when no host is known', (): void => {
+    expect(renderInteractionPage({ ...baseInput, redirectHost: '<img src=x>' })).not.toContain(
+      '<img src=x>',
+    );
+    expect(renderInteractionPage(baseInput)).not.toContain(
+      english.interaction.redirectDestinationLabel,
+    );
+  });
+});
+
 describe('consent page verification badge', (): void => {
   it('labels a verified application beside its name', (): void => {
     const page = renderInteractionPage({ ...baseInput, appVerified: true });

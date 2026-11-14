@@ -18,6 +18,7 @@ async function generate(): Promise<void> {
       removeIcon: unavailable,
       resetSecret: unavailable,
       setIcon: unavailable,
+      setSkinVerification: unavailable,
       requestVerification: unavailable,
       updateRedirectUris: unavailable,
     },

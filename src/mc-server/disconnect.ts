@@ -9,6 +9,7 @@ declare module 'minecraft-protocol' {
   }
 }
 
+import { abortConnection } from './connection-guard.js';
 import { getMinecraftData, type MinecraftData } from './minecraft-data.js';
 import {
   createKickReason,
@@ -69,16 +70,22 @@ export async function disconnect(
   }
   disconnectingClients.add(client);
 
-  // Login hasn't completed, so a login-state disconnect is valid and immediate.
-  if (!loggedInClients.has(client) && client.state !== minecraftProtocol.states.PLAY) {
-    endWithReason(client, message, options, true);
-    return;
-  }
+  try {
+    // Login hasn't completed, so a login-state disconnect is valid and immediate.
+    if (!loggedInClients.has(client) && client.state !== minecraftProtocol.states.PLAY) {
+      endWithReason(client, message, options, true);
+      return;
+    }
 
-  // Wait for the play state so the reason goes out as a play-state kick instead
-  // of being dropped as an out-of-state packet.
-  await waitForWorldReady(client, options.worldWaitTimeoutMs ?? DEFAULT_WORLD_WAIT_TIMEOUT_MS);
-  endWithReason(client, message, options, false);
+    // Wait for the play state so the reason goes out as a play-state kick instead
+    // of being dropped as an out-of-state packet.
+    await waitForWorldReady(client, options.worldWaitTimeoutMs ?? DEFAULT_WORLD_WAIT_TIMEOUT_MS);
+    endWithReason(client, message, options, false);
+  } catch (error: unknown) {
+    // Callers fire and forget, so a failed kick must not become an unhandled
+    // rejection; the client just loses the reason.
+    abortConnection(client, error);
+  }
 }
 
 function endWithReason(

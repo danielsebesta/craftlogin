@@ -1110,6 +1110,7 @@ describe('CraftLogin API server', (): void => {
     });
     expect(accepted.statusCode).toBe(200);
     expect(accepted.json()).toEqual({
+      clientId: 'client-id',
       username: 'VerifiedPlayer',
       uuid: '123e4567-e89b-42d3-a456-426614174000',
     });
@@ -1589,6 +1590,7 @@ describe('CraftLogin API server', (): void => {
         removeIcon: (): Promise<boolean> => Promise.resolve(true),
         resetSecret: (): Promise<string | undefined> => Promise.resolve(undefined),
         setIcon: (): Promise<boolean> => Promise.resolve(true),
+        setSkinVerification: (): Promise<boolean> => Promise.resolve(true),
         requestVerification: (): Promise<'applied'> => Promise.resolve('applied'),
         updateRedirectUris: (): Promise<boolean> => Promise.resolve(true),
       },

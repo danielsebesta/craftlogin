@@ -1,5 +1,6 @@
 import type { DeveloperAccess, DeveloperRole } from '../developers/developer-repository.js';
 import type { ManagedApp } from '../developers/app-management.js';
+import { CONSOLE_CLIENT_ID } from '../developers/console-client.js';
 import type { DeveloperSessionView } from '../developers/session-service.js';
 import { english } from '../locales/en.js';
 import type { RegisteredApp } from './app-registration.js';
@@ -19,6 +20,8 @@ export type DashboardNotice =
   | 'owner-protected'
   | 'secret-unavailable'
   | 'session-revoked'
+  | 'skin-verification-disabled'
+  | 'skin-verification-enabled'
   | 'verification-approved'
   | 'verification-rejected'
   | 'verification-requested'
@@ -202,6 +205,11 @@ export function renderAppRedirectsPage(
   const notice =
     input.notice === 'redirects-saved' ? noticeLine(appStrings.redirectsSavedNotice, false) : '';
   const error = input.error === undefined ? '' : noticeLine(input.error, true);
+  const verificationReset =
+    app.verification === 'none'
+      ? ''
+      : `            <small class="field-hint">${escapeHtml(appStrings.verificationResetHint)}</small>
+`;
 
   return renderConsoleShell(appStrings.redirectsTitle, {
     className: 'container message-layout',
@@ -224,9 +232,41 @@ ${error}${notice}        <dl class="summary-list">
             <label for="app-redirects">${escapeHtml(appStrings.redirectLabel)}</label>
             <textarea id="app-redirects" name="redirectUris" required rows="4" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(appStrings.redirectPlaceholder)}">${escapeHtml(values)}</textarea>
             <small class="field-hint">${escapeHtml(appStrings.redirectHelp)}</small>
-          </div>
+${verificationReset}          </div>
           <div class="button-row">
             <button class="button" type="submit">${escapeHtml(appStrings.redirectsSaveAction)}</button>
+            <a class="button button-secondary" href="/developers">${escapeHtml(strings.navigation.console)}</a>
+          </div>
+        </form>
+      </section>`,
+  });
+}
+
+export function renderAppSkinVerificationPage(app: ManagedApp, csrfToken: string): string {
+  const strings = english.developer;
+  const appStrings = strings.app;
+  const enabled = app.skinVerificationEnabled;
+  return renderConsoleShell(appStrings.skinTitle, {
+    className: 'container message-layout',
+    content: `      <section class="message-card card stack" aria-labelledby="skin-verification-heading">
+        <h1 class="icon-heading" id="skin-verification-heading">${renderIcon('warning', 'heading-icon')}${escapeHtml(enabled ? appStrings.skinDisableHeading : appStrings.skinEnableHeading)}</h1>
+        <p class="lead">${escapeHtml(appStrings.skinIntro)}</p>
+        <p>${escapeHtml(appStrings.skinRisk)}</p>
+        <dl class="summary-list">
+          <div>
+            <dt>${escapeHtml(appStrings.nameLabel)}</dt>
+            <dd>${escapeHtml(app.name)}</dd>
+          </div>
+          <div>
+            <dt>${escapeHtml(appStrings.clientIdLabel)}</dt>
+            <dd><code>${escapeHtml(app.clientId)}</code></dd>
+          </div>
+        </dl>
+        <form class="stack" action="/developers/apps/${encodeURIComponent(app.id)}/skin-verification" method="post">
+          ${csrfField(csrfToken)}
+          <input type="hidden" name="enabled" value="${enabled ? 'false' : 'true'}">
+          <div class="button-row">
+            <button class="button" type="submit">${escapeHtml(enabled ? appStrings.skinDisableAction : appStrings.skinEnableAction)}</button>
             <a class="button button-secondary" href="/developers">${escapeHtml(strings.navigation.console)}</a>
           </div>
         </form>
@@ -448,6 +488,8 @@ function renderDashboardNotice(notice: DashboardNotice | undefined): string {
     'owner-protected': strings.admin.ownerProtectedNotice,
     'secret-unavailable': strings.admin.secretUnavailableNotice,
     'session-revoked': strings.sessions.revokedNotice,
+    'skin-verification-disabled': strings.app.skinDisabledNotice,
+    'skin-verification-enabled': strings.app.skinEnabledNotice,
     'verification-approved': strings.admin.verificationApprovedNotice,
     'verification-rejected': strings.admin.verificationRejectedNotice,
     'verification-requested': strings.admin.verificationRequestedNotice,
@@ -643,6 +685,11 @@ function renderAppActions(app: ManagedApp, role: DeveloperRole, csrfToken: strin
   if (app.clientType === 'confidential') {
     actions.push(
       `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/secret">${escapeHtml(strings.app.secretLinkLabel)}</a>`,
+    );
+  }
+  if (app.clientId !== CONSOLE_CLIENT_ID) {
+    actions.push(
+      `<a class="button button-quiet" href="/developers/apps/${encodeURIComponent(app.id)}/skin-verification">${escapeHtml(app.skinVerificationEnabled ? strings.app.skinLinkLabelEnabled : strings.app.skinLinkLabelDisabled)}</a>`,
     );
   }
   actions.push(

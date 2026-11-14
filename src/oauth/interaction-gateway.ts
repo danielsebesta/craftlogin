@@ -5,6 +5,7 @@ import { errors as oidcErrors } from 'oidc-provider';
 import { z } from 'zod';
 
 import type { AuthenticatedMinecraftPlayer, VerificationMethod } from '../verification/types.js';
+import { permitsAuthenticationContext } from './authentication-context.js';
 import {
   MICROSOFT_OAUTH_ACR,
   MINECRAFT_ONLINE_MODE_ACR,
@@ -26,6 +27,7 @@ const interactionContextSchema = z.object({
   sessionAccountId: z.string().min(1).optional(),
   grantId: z.string().min(1).optional(),
   acrValues: z.string().optional(),
+  redirectUri: z.string().optional(),
 });
 
 export interface OAuthConsentDetails {
@@ -43,6 +45,7 @@ export interface OAuthInteractionContext {
   readonly sessionAccountId?: string | undefined;
   readonly grantId?: string | undefined;
   readonly acrValues?: string | undefined;
+  readonly redirectUri?: string | undefined;
 }
 
 export interface OAuthInteractionGateway {
@@ -225,7 +228,7 @@ export class ProviderInteractionGateway implements OAuthInteractionGateway {
       throw new OAuthInteractionStateError('The OIDC interaction changed before completion');
     }
     const acr = authenticationContextForMethod(method);
-    if (context.acrValues !== undefined && !context.acrValues.split(/\s+/u).includes(acr)) {
+    if (!permitsAuthenticationContext(context.acrValues, acr)) {
       throw new OAuthInteractionStateError(
         'The completed authentication method does not satisfy the authorization request',
       );
@@ -287,6 +290,7 @@ function toInteractionContext(interaction: InteractionDetails): OAuthInteraction
     scope: interaction.params['scope'],
     promptDetails: interaction.prompt.details,
     acrValues: interaction.params['acr_values'],
+    redirectUri: interaction.params['redirect_uri'],
     ...(interaction.session === undefined
       ? {}
       : { sessionAccountId: interaction.session.accountId }),

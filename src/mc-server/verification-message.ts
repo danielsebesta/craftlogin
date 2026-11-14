@@ -2,10 +2,12 @@ import { english } from '../locales/en.js';
 import type { VerificationResolution } from '../verification/verification-resolver.js';
 
 // The confirmation code travels inside the encrypted disconnect: the app name
-// warns the player which site the sign-in is for, and the code itself is a
-// secret a relaying proxy cannot read or rewrite.
+// warns the player which site the sign-in is for, the host tells them where the
+// code belongs, and the code itself is a secret a relaying proxy cannot read or
+// rewrite.
 export function verificationSuccessMessage(
   resolution: Extract<VerificationResolution, { status: 'resolved' }>,
+  signInHost: string,
 ): string {
   if (resolution.confirmCode === undefined) {
     return english.minecraft.success;
@@ -13,6 +15,7 @@ export function verificationSuccessMessage(
   return english.minecraft.successWithCode(
     sanitizeMinecraftLabel(resolution.appName),
     resolution.confirmCode,
+    signInHost,
   );
 }
 

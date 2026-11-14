@@ -33,6 +33,7 @@ model App {
   verificationNote        String?        @db.VarChar(500)
   verificationRequestedAt DateTime?      @db.Timestamptz(3)
   verifiedAt              DateTime?      @db.Timestamptz(3)
+  skinVerificationEnabled Boolean        @default(false)
 
   @@index([ownerUuid, createdAt])
 }

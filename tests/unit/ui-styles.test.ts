@@ -54,6 +54,7 @@ const managedApp: ManagedApp = {
   name: 'Fixture Cartography Studio',
   ownerUuid: developerUuid,
   redirectUris: ['https://maps.example.com/oauth/callback'],
+  skinVerificationEnabled: false,
   verification: 'none',
 };
 

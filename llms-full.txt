@@ -43,8 +43,10 @@ Let the OIDC library validate issuer, signature, audience, expiry, nonce, and pr
 - `sub`: stable canonical Minecraft UUID; use this as the persistent account key.
 - `preferred_username`: current Minecraft username; display only because it can change.
 - `picture`: current Minecraft avatar URL.
-- `acr`: authentication context / verification path.
-- `amr`: authentication method.
+- `acr`: authentication context / verification path. Always in the ID token.
+- `amr`: authentication method. Always in the ID token. An application that depends on a method must check this itself, because the browser can remove `acr_values`.
+
+Skin marker sign-in is off for a client until its developer opts in from the Developer Console. `GET /api/users/@me` returns `clientId`, the client the token was issued to; a backend accepting tokens from a browser or app must reject any other value.
 
 Never key permissions, purchases, bans, or account links by username. A username change should update display data, not create another account.
 

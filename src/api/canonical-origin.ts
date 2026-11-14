@@ -27,7 +27,10 @@ export function canonicalRedirectTarget(
     return undefined;
   }
 
-  const requested = new URL(incoming.path, 'http://request.invalid');
+  const requested = URL.parse(incoming.path, 'http://request.invalid');
+  if (requested === null) {
+    return undefined;
+  }
   return `${canonical.origin}${requested.pathname}${requested.search}`;
 }
 

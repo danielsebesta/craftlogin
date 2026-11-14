@@ -1,6 +1,8 @@
 import { isIP } from 'node:net';
 import { z } from 'zod';
 
+import { canonicalMinecraftUuid } from '../mojang/uuid.js';
+
 const portSchema = z
   .string()
   .regex(/^[1-9]\d{0,4}$/u, 'must be a decimal TCP port')
@@ -93,6 +95,19 @@ const environmentSchema = z
           path: ['cacheRedisUrl'],
         });
       }
+    }
+    // The owner is re-granted administrator on every boot, and a Minecraft name
+    // can pass to another player after a rename, so production pins the UUID.
+    if (
+      environment.nodeEnvironment === 'production' &&
+      environment.developerOwner !== undefined &&
+      canonicalMinecraftUuid(environment.developerOwner) === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'must be a Minecraft UUID in production',
+        path: ['developerOwner'],
+      });
     }
     if (
       environment.nodeEnvironment === 'production' &&

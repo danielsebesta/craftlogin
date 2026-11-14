@@ -125,7 +125,11 @@ describe('Minecraft void lobby', (): void => {
           code === 'K7MPQ4RX'
             ? {
                 status: 'resolved',
-                message: english.minecraft.successWithCode('Example App', 'K7X2QM'),
+                message: english.minecraft.successWithCode(
+                  'Example App',
+                  'K7X2QM',
+                  'craftlogin.com',
+                ),
               }
             : { status: 'unavailable' },
         ),

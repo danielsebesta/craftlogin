@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertConsoleAuthentication,
   consoleAuthorizeUrl,
   consoleStatesEqual,
   createConsoleOidcTransaction,
@@ -228,17 +229,62 @@ describe('Developer Console OIDC client', (): void => {
     const fetchImplementation = stubFetch((url) => {
       calls.push(url);
       if (url.endsWith('/oauth2/token')) {
-        return Response.json({ access_token: 'console-token', token_type: 'Bearer' });
+        return Response.json({
+          access_token: 'console-token',
+          id_token: 'console-id-token',
+          token_type: 'Bearer',
+        });
       }
       return Response.json({ sub: '123e4567-e89b-42d3-a456-426614174000' });
     });
     const scoped = { ...endpoints, fetchImplementation };
 
-    await expect(exchangeConsoleCode(scoped, 'code', 'verifier')).resolves.toBe('console-token');
+    await expect(exchangeConsoleCode(scoped, 'code', 'verifier')).resolves.toEqual({
+      accessToken: 'console-token',
+      idToken: 'console-id-token',
+    });
     await expect(fetchConsoleSubject(scoped, 'console-token')).resolves.toBe(
       '123e4567-e89b-42d3-a456-426614174000',
     );
     expect(calls).toEqual([scoped.tokenEndpoint, scoped.userInfoEndpoint]);
+  });
+
+  it('refuses a token response without an ID token', async (): Promise<void> => {
+    const scoped = {
+      ...endpoints,
+      fetchImplementation: stubFetch(() =>
+        Response.json({ access_token: 'console-token', token_type: 'Bearer' }),
+      ),
+    };
+
+    await expect(exchangeConsoleCode(scoped, 'code', 'verifier')).rejects.toBeInstanceOf(
+      ConsoleOidcError,
+    );
+  });
+
+  it('accepts only sign-in methods that reach the player', (): void => {
+    const subject = '123e4567-e89b-42d3-a456-426614174000';
+    const idToken = (claims: object): string =>
+      `header.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.signature`;
+
+    for (const amr of ['minecraft_online_mode', 'microsoft_oauth']) {
+      expect(() => {
+        assertConsoleAuthentication(idToken({ amr: [amr], sub: subject }), subject);
+      }).not.toThrow();
+    }
+    for (const token of [
+      idToken({ amr: ['minecraft_profile_skin'], sub: subject }),
+      idToken({ amr: [], sub: subject }),
+      idToken({ sub: subject }),
+      idToken({ amr: ['minecraft_online_mode'], sub: 'someone-else' }),
+      idToken({ amr: 'minecraft_online_mode', sub: subject }),
+      'not-a-token',
+      'header.%%%.signature',
+    ]) {
+      expect(() => {
+        assertConsoleAuthentication(token, subject);
+      }).toThrow(ConsoleOidcError);
+    }
   });
 
   it('rejects failed token and userinfo responses without details', async (): Promise<void> => {

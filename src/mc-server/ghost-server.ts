@@ -22,6 +22,7 @@ import type {
 } from '../verification/verification-resolver.js';
 import { installCompatLoginGate } from './compat-login-gate.js';
 import { installConfigurationTags } from './configuration-tags.js';
+import { abortConnection, installConnectionGuard } from './connection-guard.js';
 import { disconnect, isLoggedIn, markLoggedIn, markWorldReady } from './disconnect.js';
 import { extractVerificationCode, isLobbyHost } from './hostname.js';
 import { getMinecraftData } from './minecraft-data.js';
@@ -60,6 +61,9 @@ const CONNECTION_LIMIT_LOG_INTERVAL_MS = 10_000;
 const LOBBY_MAX_PLAYERS = 64;
 const LOBBY_LIFETIME_MS = 40 * 1000;
 const LOBBY_PROMPT_COOLDOWN_MS = 3_000;
+// The library clears its login timeout before configuration starts and only runs
+// keep-alives in play, so a client that stops here would hold its slots forever.
+const WORLD_ENTRY_TIMEOUT_MS = 30_000;
 
 const loginHandshakeSchema = z.object({
   nextState: z.literal(2),
@@ -99,6 +103,8 @@ export interface GhostServerConfig {
   readonly baseDomain: string;
   readonly host: string;
   readonly port: number;
+  /** Host of the browser sign-in page, named in the in-game confirmation message. */
+  readonly signInHost: string;
 }
 
 interface PendingCodeLookup {
@@ -171,9 +177,10 @@ export async function startGhostServer(
     lifetimeMs: LOBBY_LIFETIME_MS,
     promptCooldownMs: LOBBY_PROMPT_COOLDOWN_MS,
     verifyCode: (client, code): Promise<LobbyCodeVerificationResult> =>
-      resolveLobbyCode(client, code, dependencies),
+      resolveLobbyCode(client, code, config.signInHost, dependencies),
   });
   const pendingClients = new WeakMap<ServerClient, PendingClient>();
+  const worldEntryTimeouts = new WeakMap<ServerClient, NodeJS.Timeout>();
   const options: ServerOptions = {
     host: config.host,
     port: config.port,
@@ -263,6 +270,12 @@ export async function startGhostServer(
       rejectConnection(client);
       return;
     }
+    installConnectionGuard(client, (error): void => {
+      dependencies.logger.warn(
+        { errorKind: getErrorKind(error) },
+        'Minecraft client connection was aborted',
+      );
+    });
     activeConnections += 1;
     connectionsByAddress.set(address, addressConnections + 1);
     client.once('end', (): void => {
@@ -356,56 +369,93 @@ export async function startGhostServer(
     });
   });
 
+  // These events also fire from the session-server callback, outside packet
+  // dispatch, where a throw would be an unhandled rejection that stops the process.
+  const handlePlayerEvent =
+    (handler: (client: ServerClient) => void): ((client: ServerClient) => void) =>
+    (client): void => {
+      try {
+        handler(client);
+      } catch (error: unknown) {
+        abortConnection(client, error);
+      }
+    };
+
   // 'login' fires only after online-mode auth populated the UUID; resolving
   // earlier would trust an unauthenticated profile.
-  server.on('login', (client): void => {
-    const pending = pendingClients.get(client);
-    if (pending?.kind === 'verification') {
-      pending.outcome = settleVerification(client, pending, dependencies);
-      if (pending.compat) {
-        // This client stays in the login state, so the outcome goes out as a
-        // login-state disconnect rather than a play-state kick.
-        void finalizeVerification(client, pending.outcome, dependencies.logger);
-        return;
+  server.on(
+    'login',
+    handlePlayerEvent((client): void => {
+      const pending = pendingClients.get(client);
+      if (pending?.kind === 'verification') {
+        pending.outcome = settleVerification(client, pending, dependencies);
+        if (pending.compat) {
+          // This client stays in the login state, so the outcome goes out as a
+          // login-state disconnect rather than a play-state kick.
+          finalizeVerification(
+            client,
+            pending.outcome,
+            config.signInHost,
+            dependencies.logger,
+          ).catch((error: unknown): void => {
+            abortConnection(client, error);
+          });
+          return;
+        }
       }
-    }
 
-    // Login success is written, so the client is no longer addressable in login state.
-    markLoggedIn(client);
-  });
+      // Login success is written, so the client is no longer addressable in login state.
+      markLoggedIn(client);
+      const worldEntryTimeout = setTimeout((): void => {
+        client.socket.destroy();
+      }, WORLD_ENTRY_TIMEOUT_MS);
+      worldEntryTimeouts.set(client, worldEntryTimeout);
+      client.once('end', (): void => {
+        clearTimeout(worldEntryTimeout);
+      });
+    }),
+  );
 
   // Play state exists here, so a later kick renders instead of dropping silently.
-  server.on('playerJoin', (client): void => {
-    const pending = pendingClients.get(client);
-    try {
-      presentVoidWorld(client, {
-        entityId: client.id,
-        maxPlayers: MAX_PLAYERS,
-        sendChunks: pending?.kind === 'lobby',
-      });
-    } catch (error: unknown) {
-      dependencies.logger.warn(
-        { errorKind: getErrorKind(error) },
-        'Minecraft void world could not be presented',
-      );
-    }
-    markWorldReady(client);
-    sendServerBrand(client);
-
-    if (pending?.kind === 'lobby') {
-      if (!lobby.enter(client)) {
-        sendVoidMessage(client, english.minecraft.lobbyFull);
-        void disconnect(client, english.minecraft.lobbyFull, { tone: 'error' });
+  server.on(
+    'playerJoin',
+    handlePlayerEvent((client): void => {
+      clearTimeout(worldEntryTimeouts.get(client));
+      const pending = pendingClients.get(client);
+      try {
+        presentVoidWorld(client, {
+          entityId: client.id,
+          maxPlayers: MAX_PLAYERS,
+          sendChunks: pending?.kind === 'lobby',
+        });
+      } catch (error: unknown) {
+        dependencies.logger.warn(
+          { errorKind: getErrorKind(error) },
+          'Minecraft void world could not be presented',
+        );
       }
-      return;
-    }
-    if (pending?.kind === 'verification' && pending.outcome !== null) {
-      void finalizeVerification(client, pending.outcome, dependencies.logger);
-      return;
-    }
+      markWorldReady(client);
+      sendServerBrand(client);
 
-    void disconnect(client, english.minecraft.unavailable, { tone: 'error' });
-  });
+      if (pending?.kind === 'lobby') {
+        if (!lobby.enter(client)) {
+          sendVoidMessage(client, english.minecraft.lobbyFull);
+          void disconnect(client, english.minecraft.lobbyFull, { tone: 'error' });
+        }
+        return;
+      }
+      if (pending?.kind === 'verification' && pending.outcome !== null) {
+        finalizeVerification(client, pending.outcome, config.signInHost, dependencies.logger).catch(
+          (error: unknown): void => {
+            abortConnection(client, error);
+          },
+        );
+        return;
+      }
+
+      void disconnect(client, english.minecraft.unavailable, { tone: 'error' });
+    }),
+  );
 
   let listening = false;
   return await new Promise<MinecraftGhostServer>((resolve, reject): void => {
@@ -470,6 +520,7 @@ async function settleVerification(
 async function resolveLobbyCode(
   client: ServerClient,
   code: string,
+  signInHost: string,
   dependencies: GhostServerDependencies,
 ): Promise<LobbyCodeVerificationResult> {
   const parsedPlayer = authenticatedMinecraftPlayerSchema.safeParse({
@@ -484,7 +535,7 @@ async function resolveLobbyCode(
     const resolution = await dependencies.resolver.resolve(code, parsedPlayer.data, new Date());
     if (resolution.status === 'resolved') {
       dependencies.logger.info({ username: client.username }, 'Minecraft verification resolved');
-      return { status: 'resolved', message: verificationSuccessMessage(resolution) };
+      return { status: 'resolved', message: verificationSuccessMessage(resolution, signInHost) };
     }
     return { status: 'unavailable' };
   } catch (error: unknown) {
@@ -496,6 +547,7 @@ async function resolveLobbyCode(
 async function finalizeVerification(
   client: ServerClient,
   outcome: Promise<VerificationOutcome>,
+  signInHost: string,
   logger: Logger,
 ): Promise<void> {
   const result = await outcome;
@@ -507,7 +559,7 @@ async function finalizeVerification(
     result.kind === 'failure'
       ? english.minecraft.temporaryFailure
       : result.value.status === 'resolved'
-        ? verificationSuccessMessage(result.value)
+        ? verificationSuccessMessage(result.value, signInHost)
         : english.minecraft.unavailable;
 
   if (result.kind === 'failure') {

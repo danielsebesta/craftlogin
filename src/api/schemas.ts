@@ -52,6 +52,18 @@ const userResponseSchema = {
   type: 'object',
 };
 
+// clientId lets a backend reject a token that was issued to a different application.
+const currentUserResponseSchema = {
+  additionalProperties: false,
+  properties: {
+    clientId: { minLength: 1, type: 'string' },
+    username: { maxLength: 16, minLength: 1, type: 'string' },
+    uuid: { format: 'uuid', type: 'string' },
+  },
+  required: ['clientId', 'uuid', 'username'],
+  type: 'object',
+};
+
 const appResponseSchema = {
   $id: APP_RESPONSE_SCHEMA_ID,
   additionalProperties: false,
@@ -650,7 +662,7 @@ export const currentUserRouteSchema: FastifySchema = {
   description: operations.currentUser.description,
   headers: bearerHeadersSchema,
   response: {
-    200: { $ref: `${USER_RESPONSE_SCHEMA_ID}#` },
+    200: currentUserResponseSchema,
     400: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
@@ -819,6 +831,8 @@ export const developerDashboardRouteSchema: FastifySchema = {
           'owner-protected',
           'secret-unavailable',
           'session-revoked',
+          'skin-verification-disabled',
+          'skin-verification-enabled',
           'verification-approved',
           'verification-rejected',
           'verification-requested',
@@ -1044,6 +1058,41 @@ export const developerAppSecretResetRouteSchema: FastifySchema = {
   params: appIdParamsSchema,
   response: {
     200: htmlResponseSchema,
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    429: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppSkinVerificationRouteSchema: FastifySchema = {
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
+    200: htmlResponseSchema,
+    303: { type: 'null' },
+    401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    404: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    500: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+    default: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
+  },
+};
+
+export const developerAppSkinVerificationUpdateRouteSchema: FastifySchema = {
+  body: {
+    additionalProperties: false,
+    properties: {
+      csrfToken: csrfFormProperty,
+      enabled: { enum: ['false', 'true'], type: 'string' },
+    },
+    required: ['csrfToken', 'enabled'],
+    type: 'object',
+  },
+  hide: true,
+  params: appIdParamsSchema,
+  response: {
     303: { type: 'null' },
     401: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },
     403: { $ref: `${ERROR_RESPONSE_SCHEMA_ID}#` },

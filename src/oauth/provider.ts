@@ -60,7 +60,9 @@ export function createCraftLoginProvider(options: CraftLoginProviderOptions): Pr
     allowOmittingSingleRegisteredRedirectUri: false,
     claims: {
       acr: null,
-      openid: ['sub', 'amr'],
+      // Listed explicitly so clients can check the verification method without
+      // first having to request acr_values.
+      openid: ['sub', 'acr', 'amr'],
       profile: ['preferred_username', 'picture'],
     },
     clientAuthMethods: ['none', 'client_secret_basic'],

@@ -177,7 +177,7 @@ export async function createApiServer(options: ApiServerOptions): Promise<Fastif
   registerHealthRoute(server, options.readiness);
   registerCspReportRoute(server);
   registerSecurityTxtRoute(server);
-  registerOidcHttpRoutes(server, options.oidcHandler);
+  registerOidcHttpRoutes(server, options.oidcHandler, options.issuer);
   registerInteractionRoutes(server, {
     accounts: options.users,
     clients: options.clients,

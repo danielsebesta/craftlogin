@@ -33,8 +33,12 @@ export type OidcHttpHandler = (
   response: ServerResponse,
 ) => Promise<void> | void;
 
-export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHttpHandler): void {
-  const forward = createOidcForwarder(handler);
+export function registerOidcHttpRoutes(
+  server: FastifyInstance,
+  handler: OidcHttpHandler,
+  issuer: string,
+): void {
+  const forward = createOidcForwarder(handler, issuer);
   const limitTokenRequests = server.rateLimit(tokenRateLimit);
   const limitAuthorizeRequests = server.rateLimit(authorizeRateLimit);
   const limitPublicOidcRequests = server.rateLimit(publicOidcRateLimit);
@@ -162,12 +166,17 @@ export function registerOidcHttpRoutes(server: FastifyInstance, handler: OidcHtt
 
 function createOidcForwarder(
   handler: OidcHttpHandler,
+  issuer: string,
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  const issuerHost = new URL(issuer).host;
   return async (request, reply): Promise<void> => {
     // Koa has a boolean proxy switch; pass only Fastify's topology-validated values.
     request.raw.headers['x-forwarded-for'] = request.ip;
     request.raw.headers['x-forwarded-proto'] = request.protocol;
-    request.raw.headers['x-forwarded-host'] = request.host;
+    // oidc-provider builds discovery and resume URLs from the host, so a client
+    // supplied value would be reflected into responses a cache may store.
+    request.raw.headers['x-forwarded-host'] = issuerHost;
+    request.raw.headers.host = issuerHost;
     reply.hijack();
     // The provider writes directly to the raw response, so the fallback CSP
     // and frame policy helmet cannot supply are applied here; headers the

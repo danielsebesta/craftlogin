@@ -16,6 +16,13 @@ const GRANTABLE_MODELS = new Set([
   'DeviceCode',
   'PreAuthorizedCode',
 ]);
+const CONSUMABLE_MODELS = new Set([
+  'AuthorizationCode',
+  'BackchannelAuthenticationRequest',
+  'DeviceCode',
+  'PreAuthorizedCode',
+  'PushedAuthorizationRequest',
+]);
 
 const scriptBooleanSchema = z.union([z.literal(0), z.literal(1)]);
 const storedEnvelopeSchema = z.object({
@@ -60,34 +67,25 @@ end
 return 1
 `;
 
+// The artifact stays readable until it expires so a replay reaches oidc-provider
+// as `consumed`, which is what makes it revoke the grant. The marker is a separate
+// key because a cjson round trip of the envelope would turn empty arrays into
+// objects. Only the first caller creates it, so concurrent redemption has one winner.
+// Artifacts written before the marker existed may carry `consumed` in their payload.
 const CONSUME_SCRIPT = `
 local raw = redis.call('GET', KEYS[1])
-if raw == false then
+if raw == false or redis.call('EXISTS', KEYS[2]) == 1 then
   return 0
 end
-local value = cjson.decode(raw)
-local function deleteArtifact()
-  redis.call('DEL', KEYS[1])
-  if value.uidKey ~= cjson.null and redis.call('GET', value.uidKey) == value.indexValue then
-    redis.call('DEL', value.uidKey)
-  end
-  if value.userCodeKey ~= cjson.null and redis.call('GET', value.userCodeKey) == value.indexValue then
-    redis.call('DEL', value.userCodeKey)
-  end
-  if value.grantKey ~= cjson.null then
-    redis.call('SREM', value.grantKey, KEYS[1])
-  end
-end
-if value.payload.consumed ~= nil then
-  deleteArtifact()
+local decodeOk, value = pcall(cjson.decode, raw)
+if not decodeOk or value.payload.consumed ~= nil then
   return 0
 end
 local remainingTtl = redis.call('PTTL', KEYS[1])
 if remainingTtl <= 0 then
-  deleteArtifact()
   return 0
 end
-deleteArtifact()
+redis.call('SET', KEYS[2], ARGV[1], 'PX', remainingTtl)
 return 1
 `;
 
@@ -216,7 +214,10 @@ export class RedisOidcAdapter implements Adapter {
       await this.destroy(id);
       return undefined;
     }
-    return { ...payload, jti: id };
+    const consumed = CONSUMABLE_MODELS.has(this.model)
+      ? await this.redis.get(this.consumedKey(id))
+      : null;
+    return { ...payload, ...(consumed === null ? {} : { consumed: Number(consumed) }), jti: id };
   }
 
   public async invalidateAccountSessions(accountId: string): Promise<void> {
@@ -254,7 +255,13 @@ export class RedisOidcAdapter implements Adapter {
 
   public async consume(id: string): Promise<void> {
     const result = scriptBooleanSchema.parse(
-      await this.redis.eval(CONSUME_SCRIPT, 1, this.artifactKey(id)),
+      await this.redis.eval(
+        CONSUME_SCRIPT,
+        2,
+        this.artifactKey(id),
+        this.consumedKey(id),
+        Math.floor(Date.now() / 1_000),
+      ),
     );
     if (result === 0) {
       throw new errors.InvalidGrant(english.api.oauthArtifactUnavailable);
@@ -279,6 +286,10 @@ export class RedisOidcAdapter implements Adapter {
 
   private artifactKey(id: string): string {
     return `${this.keyPrefix}:artifact:${this.model}:${digest(id)}`;
+  }
+
+  private consumedKey(id: string): string {
+    return `${this.keyPrefix}:consumed:${this.model}:${digest(id)}`;
   }
 
   private indexKey(kind: string, value: string): string {

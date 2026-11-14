@@ -181,20 +181,32 @@ describe('raw OIDC proxy boundary', (): void => {
       await registerRateLimiting(api);
       registerSharedSchemas(api);
       const seen: unknown[] = [];
-      registerOidcHttpRoutes(api, (request, response): void => {
-        seen.push({
-          ip: request.headers['x-forwarded-for'],
-          proto: request.headers['x-forwarded-proto'],
-        });
-        response.end();
-      });
+      registerOidcHttpRoutes(
+        api,
+        (request, response): void => {
+          seen.push({
+            forwardedHost: request.headers['x-forwarded-host'],
+            host: request.headers.host,
+            ip: request.headers['x-forwarded-for'],
+            proto: request.headers['x-forwarded-proto'],
+          });
+          response.end();
+        },
+        'https://craftlogin.test',
+      );
       await api.ready();
-      const headers = { 'x-forwarded-for': '203.0.113.1', 'x-forwarded-proto': 'https' };
+      const headers = {
+        host: 'attacker.example',
+        'x-forwarded-for': '203.0.113.1',
+        'x-forwarded-host': 'attacker.example',
+        'x-forwarded-proto': 'https',
+      };
       await api.inject({ url: '/oauth2/jwks', headers, remoteAddress: '192.0.2.99' });
       await api.inject({ url: '/oauth2/jwks', headers, remoteAddress: '127.0.0.1' });
+      const canonicalHost = { forwardedHost: 'craftlogin.test', host: 'craftlogin.test' };
       expect(seen).toEqual([
-        { ip: '192.0.2.99', proto: 'http' },
-        { ip: '203.0.113.1', proto: 'https' },
+        { ...canonicalHost, ip: '192.0.2.99', proto: 'http' },
+        { ...canonicalHost, ip: '203.0.113.1', proto: 'https' },
       ]);
     } finally {
       await api.close();

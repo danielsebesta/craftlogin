@@ -24,6 +24,30 @@ describe('loadEnvironment', (): void => {
     expect(() => loadEnvironment({ DATABASE_POOL_MAX: '0' })).toThrow();
   });
 
+  it('requires a UUID for the production owner because Minecraft names can change hands', (): void => {
+    const production = {
+      NODE_ENV: 'production',
+      CACHE_REDIS_URL: 'redis://images:6379',
+      DATABASE_URL: 'postgresql://test:test@database/test',
+      OIDC_ISSUER: 'https://login.example',
+      REDIS_URL: 'redis://redis:6379',
+    };
+    const ownerUuid = '853c80ef-3c37-49fd-aa49-938b674adae6';
+
+    expect(() => loadEnvironment({ ...production, DEVELOPER_OWNER: 'Notch' })).toThrow(
+      'must be a Minecraft UUID in production',
+    );
+    expect(loadEnvironment({ ...production, DEVELOPER_OWNER: ownerUuid }).developerOwner).toBe(
+      ownerUuid,
+    );
+    expect(
+      loadEnvironment({ ...production, DEVELOPER_OWNER: ownerUuid.replaceAll('-', '') })
+        .developerOwner,
+    ).toBe(ownerUuid.replaceAll('-', ''));
+    expect(loadEnvironment({ ...production, DEVELOPER_OWNER: '' }).developerOwner).toBeUndefined();
+    expect(loadEnvironment({ DEVELOPER_OWNER: 'Notch' }).developerOwner).toBe('Notch');
+  });
+
   it('loads explicit Minecraft and infrastructure settings', (): void => {
     const environment = loadEnvironment({
       NODE_ENV: 'production',

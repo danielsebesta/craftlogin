@@ -138,7 +138,7 @@ export const english = {
         },
         currentUser: {
           description:
-            'Return the Minecraft UUID and current username represented by the access token.',
+            'Return the Minecraft UUID and current username represented by the access token, plus the client ID the token was issued to.',
           summary: 'Get the current Minecraft user',
         },
         playerProfile: {
@@ -412,7 +412,8 @@ export const english = {
             {
               method: 'GET',
               path: '/api/users/@me',
-              detail: 'Read the UUID and username represented by an access token.',
+              detail:
+                'Read the UUID and username represented by an access token, plus the client ID it was issued to.',
             },
             {
               method: 'GET',
@@ -585,6 +586,21 @@ export const english = {
       redirectsSavedNotice: 'Redirect URIs updated.',
       redirectsSaveAction: 'Save redirect URIs',
       redirectsTitle: 'Redirect URIs',
+      skinDisableAction: 'Turn off skin sign-in',
+      skinDisabledNotice: 'Skin sign-in turned off.',
+      skinDisableHeading: 'Turn off skin sign-in?',
+      skinEnableAction: 'Allow skin sign-in',
+      skinEnabledNotice: 'Skin sign-in allowed.',
+      skinEnableHeading: 'Allow skin sign-in?',
+      skinIntro:
+        'Players can sign in to this application by uploading a temporarily marked copy of their skin.',
+      skinLinkLabelDisabled: 'Allow skin sign-in',
+      skinLinkLabelEnabled: 'Skin sign-in: on',
+      skinRisk:
+        'This method cannot warn the player. Anyone who persuades a player to upload a prepared skin can sign in as that player, so allow it only when a stolen sign-in would do little harm.',
+      skinTitle: 'Skin sign-in',
+      verificationResetHint:
+        'Saving removes the verified label until an administrator reviews this application again.',
       secretLabel: 'Client secret, shown once',
       secretLinkLabel: 'Reset secret',
       secretResetHeading: 'Client secret reset.',
@@ -1021,8 +1037,9 @@ export const english = {
       'Automatic status checks need JavaScript. You can still verify, then reload this page to confirm your account.',
     ownerBy: 'by',
     ownerLabel: 'Application publisher',
+    redirectDestinationLabel: 'You will return to',
     securityNote:
-      'Verify by joining the Minecraft server, changing your skin once, or signing in with Microsoft. CraftLogin never receives your Microsoft password and stores no Microsoft tokens.',
+      'Verify by joining the Minecraft server, signing in with Microsoft, or changing your skin once where the application allows it. CraftLogin never receives your Microsoft password and stores no Microsoft tokens.',
     status: {
       expired: 'This code expired. Reload this page for a new one.',
       networkError: 'The status check was interrupted. Retrying shortly.',
@@ -1105,10 +1122,10 @@ export const english = {
     motd: 'CraftLogin verification',
     motdDetail: 'Join with the code shown in your browser',
     success: 'Verification complete.\nYou can return to your browser.',
-    successWithCode: (application: string | undefined, code: string): string =>
+    successWithCode: (application: string | undefined, code: string, signInHost: string): string =>
       application === undefined
-        ? `Enter code ${code} on your CraftLogin sign-in page to finish.\nNever share this code. If someone sent you to this server, they may be stealing your sign-in.`
-        : `Signing in to ${application}.\nEnter code ${code} on your CraftLogin sign-in page to finish.\nNever share this code. If someone sent you to this server, they may be stealing your sign-in.`,
+        ? `Enter code ${code} on ${signInHost} to finish.\nNever share this code or enter it on any other site. If someone sent you to this server, they may be stealing your sign-in.`
+        : `Signing in to ${application}.\nEnter code ${code} on ${signInHost} to finish.\nNever share this code or enter it on any other site. If someone sent you to this server, they may be stealing your sign-in.`,
     unavailable:
       'This verification code is invalid or has expired.\nReturn to your browser and try again.',
     temporaryFailure:

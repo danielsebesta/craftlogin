@@ -130,6 +130,8 @@ export interface ClientDirectoryEntry {
   /** Current application icon version, absent when the client has no icon. */
   readonly iconHash?: string;
   readonly name: string;
+  /** Server-side opt-in; a client that has not chosen it never offers skin verification. */
+  readonly skinVerificationEnabled?: boolean;
   /** Manual verification label shown beside the app name on the consent screen. */
   readonly verified: boolean;
 }
@@ -195,6 +197,9 @@ export function registerInteractionRoutes(
           interactionId: interaction.interactionId,
           minecraftBaseDomain: options.minecraftBaseDomain,
           kind: interaction.kind,
+          ...(interaction.redirectHost === undefined
+            ? {}
+            : { redirectHost: interaction.redirectHost }),
           ...(account === undefined ? {} : { accountName: account.username }),
           ...(interaction.accountId === undefined
             ? {}

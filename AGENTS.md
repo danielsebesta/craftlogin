@@ -172,11 +172,11 @@ values, or password-equivalent material.
   and decisions have exactly one winner.
 - The final administrator cannot be removed or demoted. Preserve this invariant with a serializable
   database transaction; a read followed by a separate write is insufficient.
-- The optional `DEVELOPER_OWNER` environment variable (Minecraft name or UUID) designates the
-  operator account: it is re-granted as a verified administrator on every boot, cannot be demoted or
-  revoked while configured, owns the seeded Developer Console client, and drives the landing-page
-  avatar showcase. Removing the variable stops protection but does not strip a previously granted
-  role.
+- The optional `DEVELOPER_OWNER` environment variable (a UUID in production, because names can
+  change hands; a Minecraft name or UUID elsewhere) designates the operator account: it is
+  re-granted as a verified administrator on every boot, cannot be demoted or revoked while
+  configured, owns the seeded Developer Console client, and drives the landing-page avatar showcase.
+  Removing the variable stops protection but does not strip a previously granted role.
 - Session cookies are signed, `HttpOnly`, `Secure`, and `SameSite=Lax`. Rotate session identifiers
   after authentication or another privilege change. Enforce sliding expiry and a separate absolute
   lifetime.
@@ -198,8 +198,8 @@ The core Prisma models are:
   verification time. Do not add email, password, or unrelated PII.
 - `App`: internal ID, public client ID, nullable secret hash for public-client support, display
   name, exact-match redirect URI array, creation time, nullable developer ownership for legacy or
-  deliberately unassigned clients, and the optional verification request note/timestamp plus the
-  verification timestamp.
+  deliberately unassigned clients, the skin verification opt-in, and the optional verification
+  request note/timestamp plus the verification timestamp.
 - `Developer`: allowlisted Minecraft UUID, developer/admin role, creation time, and an optional
   verification timestamp. It is an access record, not a second identity profile, and must not gain
   email, password, or unrelated PII.
@@ -361,3 +361,22 @@ of the work tree.
   resolution.
 - CI must run isolated PostgreSQL and Redis integration suites and fail on high/critical image
   findings.
+
+## Identity and crash hardening invariants (2026-10-30)
+
+- Skin verification is a per-client, server-side opt-in that fails closed and never applies to the
+  Developer Console. `acr_values` can only narrow the methods offered; the browser carries it, so it
+  can never enable a method.
+- A session that does not satisfy `acr_values` must verify again. `acr` and `amr` stay in every ID
+  token, and the console checks `sub` and `amr` from the token response itself.
+- Consuming an authorization code keeps the artifact readable with `consumed` set, so a replay
+  reaches `oidc-provider` and revokes the grant.
+- Changing a verified application's redirect URIs or icon clears the verified label for every actor.
+- The sign-in page names the redirect host, and the in-game success message names the sign-in host.
+- Forward only the issuer host to `oidc-provider`; discovery and resume URLs are built from it.
+- Every Minecraft connection runs under `installConnectionGuard`: a throwing packet listener or an
+  invalid frame ends that connection only. Inbound frames are bounded, compression stays off because
+  the library inflates without an output limit, and connections must reach the world within a
+  timeout.
+- Do not add an `uncaughtException` handler to hide a failure; fail fast and let the restart policy
+  act.

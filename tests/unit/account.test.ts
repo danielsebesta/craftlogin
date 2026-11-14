@@ -843,6 +843,7 @@ async function buildServer(
       removeIcon: unavailable,
       resetSecret: unavailable,
       setIcon: unavailable,
+      setSkinVerification: unavailable,
       requestVerification: unavailable,
       updateRedirectUris: unavailable,
     },

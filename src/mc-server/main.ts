@@ -36,6 +36,7 @@ async function main(): Promise<void> {
         baseDomain: environment.minecraftBaseDomain,
         host: environment.minecraftHost,
         port: environment.minecraftPort,
+        signInHost: new URL(environment.oidcIssuer).host,
       },
       { logger, pendingCodes: verificationStore, resolver },
     );

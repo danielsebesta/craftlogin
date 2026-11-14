@@ -59,13 +59,21 @@ describe('PostgreSQL application verification', (): void => {
     expect(queued.verificationNote).toBe('Community project');
     expect(queued.verificationRequestedAt).toBeTypeOf('string');
     // The consent screen stays unlabelled until an administrator decides.
-    await expect(directory.findClient(clientId)).resolves.toEqual({ name, verified: false });
+    await expect(directory.findClient(clientId)).resolves.toEqual({
+      name,
+      skinVerificationEnabled: false,
+      verified: false,
+    });
 
     await expect(apps.decideVerification(app.id, 'approve')).resolves.toBe('applied');
     const verified = await findApp(apps, ownerUuid, clientId);
     expect(verified.verification).toBe('verified');
     expect(verified.verificationNote).toBeUndefined();
-    await expect(directory.findClient(clientId)).resolves.toEqual({ name, verified: true });
+    await expect(directory.findClient(clientId)).resolves.toEqual({
+      name,
+      skinVerificationEnabled: false,
+      verified: true,
+    });
 
     // Every decision requires its own starting state.
     await expect(apps.decideVerification(app.id, 'approve')).resolves.toBe('unavailable');
@@ -82,7 +90,11 @@ describe('PostgreSQL application verification', (): void => {
     const withdrawn = await findApp(apps, ownerUuid, clientId);
     expect(withdrawn.verification).toBe('none');
     expect(withdrawn.verificationRequestedAt).toBeUndefined();
-    await expect(directory.findClient(clientId)).resolves.toEqual({ name, verified: false });
+    await expect(directory.findClient(clientId)).resolves.toEqual({
+      name,
+      skinVerificationEnabled: false,
+      verified: false,
+    });
     // A withdrawn application can apply again, and rejection clears the queue.
     await expect(apps.requestVerification(app.id, ownerUuid, undefined)).resolves.toBe('applied');
     await expect(apps.decideVerification(app.id, 'reject')).resolves.toBe('applied');

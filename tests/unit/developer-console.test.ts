@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { DeveloperAuthentication } from '../../src/api/developer-authentication.js';
 import { ApiError } from '../../src/api/errors.js';
+import { escapeHtml } from '../../src/api/html.js';
 import { createApiServer } from '../../src/api/server.js';
 import { APP_ICON_MAX_BYTES } from '../../src/developers/app-icon.js';
 import type { ManagedApp } from '../../src/developers/app-management.js';
@@ -154,6 +155,81 @@ describe('Developer Console', (): void => {
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/developers/login');
     expect(fetchCalls).toEqual([]);
+  });
+
+  it('requests only methods that reach the player', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: false, allowlisted: true });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
+
+    expect(new URL(login.headers.location ?? '').searchParams.get('acr_values')).toBe(
+      'urn:craftlogin:minecraft-online-mode urn:craftlogin:microsoft-oauth',
+    );
+  });
+
+  it.each([
+    ['a skin marker', { authenticationMethods: ['minecraft_profile_skin'] }],
+    ['no method at all', { authenticationMethods: [] }],
+    ['a token for another subject', { idTokenSubject: '223e4567-e89b-42d3-a456-426614174000' }],
+  ])('refuses a console session backed by %s', async (_name, overrides): Promise<void> => {
+    const server = await buildServer({ authenticated: false, allowlisted: true, ...overrides });
+    const login = await server.inject({ method: 'GET', url: '/developers/login' });
+    const state = new URL(login.headers.location ?? '').searchParams.get('state');
+    const response = await server.inject({
+      headers: { cookie: cookiePair(login.headers['set-cookie']) },
+      method: 'GET',
+      url: `/developers/callback?code=console-code&state=${state ?? ''}`,
+    });
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe('/developers/login');
+    expect(setCookies(response.headers['set-cookie'])).not.toContain(
+      '__Host-craftlogin_developer_session=',
+    );
+  });
+
+  it('explains the risk and switches skin sign-in through a CSRF-protected form', async (): Promise<void> => {
+    const skinVerificationCalls: { enabled: boolean; id: string; role: string }[] = [];
+    const server = await buildServer({ authenticated: true, skinVerificationCalls });
+
+    const page = await server.inject({
+      method: 'GET',
+      url: `/developers/apps/${appId}/skin-verification`,
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain(escapeHtml(english.developer.app.skinRisk));
+    expect(page.body).toContain('name="enabled" value="true"');
+
+    const rejected = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: 'csrfToken=wrong&enabled=true',
+      url: `/developers/apps/${appId}/skin-verification`,
+    });
+    expect(rejected.statusCode).toBe(403);
+    expect(skinVerificationCalls).toEqual([]);
+
+    const saved = await server.inject({
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      payload: `csrfToken=${encodeURIComponent(developerSession.csrfToken)}&enabled=true`,
+      url: `/developers/apps/${appId}/skin-verification`,
+    });
+    expect(saved.statusCode).toBe(303);
+    expect(saved.headers.location).toBe('/developers?notice=skin-verification-enabled');
+    expect(skinVerificationCalls).toEqual([
+      { enabled: true, id: appId, role: developerSession.role },
+    ]);
+  });
+
+  it('offers to turn off skin sign-in once it is on', async (): Promise<void> => {
+    const server = await buildServer({ authenticated: true, skinVerificationEnabled: true });
+
+    const page = await server.inject({
+      method: 'GET',
+      url: `/developers/apps/${appId}/skin-verification`,
+    });
+
+    expect(page.body).toContain('name="enabled" value="false"');
   });
 
   it('restarts the login when the token exchange fails', async (): Promise<void> => {
@@ -744,6 +820,10 @@ describe('Developer Console', (): void => {
     readonly setIconOutcome?: boolean;
     readonly setVerifiedOutcome?: boolean;
     readonly tokenBehavior?: 'failure' | 'ok';
+    readonly authenticationMethods?: readonly string[];
+    readonly idTokenSubject?: string;
+    readonly skinVerificationCalls?: { enabled: boolean; id: string; role: string }[];
+    readonly skinVerificationEnabled?: boolean;
     readonly verificationChanges?: { uuid: string; verified: boolean }[];
     readonly verificationNote?: string;
   }): Promise<FastifyInstance> {
@@ -764,6 +844,7 @@ describe('Developer Console', (): void => {
       name: 'Local map client',
       ownerUuid: developerSession.userUuid,
       redirectUris: ['https://client.example/callback'],
+      skinVerificationEnabled: options.skinVerificationEnabled ?? false,
       verification: options.appVerification ?? 'none',
       ...(options.verificationNote === undefined
         ? {}
@@ -782,7 +863,14 @@ describe('Developer Console', (): void => {
       if (target.endsWith('/oauth2/token')) {
         expect(init?.method).toBe('POST');
         return Promise.resolve(
-          Response.json({ access_token: 'console-access-token', token_type: 'Bearer' }),
+          Response.json({
+            access_token: 'console-access-token',
+            id_token: consoleIdToken(
+              options.idTokenSubject ?? developerSession.userUuid,
+              options.authenticationMethods ?? ['minecraft_online_mode'],
+            ),
+            token_type: 'Bearer',
+          }),
         );
       }
       return Promise.resolve(Response.json({ sub: developerSession.userUuid }));
@@ -800,6 +888,10 @@ describe('Developer Console', (): void => {
         removeIcon: (candidateAppId) => {
           options.removeIconCalls?.push(candidateAppId);
           return Promise.resolve(options.removeIconOutcome ?? true);
+        },
+        setSkinVerification: (id, _actorUuid, role, enabled) => {
+          options.skinVerificationCalls?.push({ enabled, id, role });
+          return Promise.resolve(true);
         },
         setIcon: (candidateAppId, _actorUuid, _role, icon) => {
           options.setIconCalls?.push({
@@ -948,8 +1040,19 @@ function createAuthentication(
             ),
           ),
     requireAdministrator: (): void => undefined,
-    requireCsrf: (): void => undefined,
+    requireCsrf: (current, candidate): void => {
+      if (candidate !== current.csrfToken) {
+        throw new ApiError(403, 'forbidden', english.api.errors.csrfInvalid);
+      }
+    },
   };
+}
+
+// The console reads an ID token straight from the token endpoint over TLS, so
+// OIDC Core 3.1.3.7 lets it skip the signature; this fake needs only the payload.
+function consoleIdToken(subject: string, amr: readonly string[]): string {
+  const payload = Buffer.from(JSON.stringify({ amr, sub: subject })).toString('base64url');
+  return `header.${payload}.signature`;
 }
 
 function cookiePair(setCookie: string | string[] | undefined): string {

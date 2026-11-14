@@ -25,6 +25,9 @@ flow. Each maps to a distinct `acr`/`amr` in the resulting tokens:
   also accepts codes typed in chat or via `/verify`.
 - **Skin marker** (`urn:craftlogin:minecraft-profile-skin`) — the player uploads a generated marked
   copy of their current skin; CraftLogin verifies Mojang's signed texture and the embedded marker.
+  Off by default: the developer must opt each application in from the console, because this method
+  cannot warn a player who was talked into uploading a prepared skin. The Developer Console never
+  accepts it.
 - **Microsoft OAuth** (`urn:craftlogin:microsoft-oauth`) — one-shot sign-in through the
   personal-accounts endpoint with `XboxLive.signin` only, exchanged via Xbox Live, XSTS, and
   Minecraft Services after confirming a Java Edition entitlement. Provider tokens stay request-local
@@ -104,7 +107,9 @@ npm run admin:grant -- Notch
 Then open `/developers`. The console is a first-party OIDC client on the standard authorization flow
 — there is no parallel login. Administrators manage developer roles and application verification
 labels; developers create public or confidential clients with 64×64 PNG icons. `DEVELOPER_OWNER`
-optionally pins an operator account that cannot be demoted and is re-granted on every boot.
+optionally pins an operator account that cannot be demoted and is re-granted on every boot; in
+production it must be a UUID. Changing a verified application's redirect URIs or icon clears its
+verified label for every actor, including administrators, so the change goes through review.
 
 ## Container deployment
 
@@ -142,8 +147,19 @@ requires `CACHE_REDIS_URL` to reference a separate Redis server, not another dat
 server. For local host processes use `CACHE_REDIS_URL=redis://localhost:6380`.
 
 `DATABASE_POOL_MAX` defaults to 10 connections **per process**; budget the sum across replicas and
-leave capacity for migrations and operations. Configure `DEVELOPER_OWNER` as a stable UUID where
-possible: unresolved configured names now stop startup rather than silently removing protection.
+leave capacity for migrations and operations. Production requires `DEVELOPER_OWNER`, when set, to be
+a UUID: a name can change hands, and the owner is re-granted administrator on every boot. A name
+stops production startup, and outside production an unresolved name does too.
+
+### Security migration (2026-10-30)
+
+Before deploying: replace a `DEVELOPER_OWNER` name with the account's UUID, and apply
+`20261030120000_app_skin_verification_opt_in`. Skin sign-in becomes off for every existing client
+until its developer opts in again from the console. `/api/users/@me` gains `clientId`, the client
+the token was issued to. Console sessions created through a skin sign-in before this release stay
+valid until they expire; revoke them from the console or flush them if that matters to the
+deployment. Stop all old replicas before starting the new version: an old replica ignores the new
+consumption marker, so it could redeem an authorization code a new replica already consumed.
 
 ### Security migration (2026-10-07)
 

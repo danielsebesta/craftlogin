@@ -2,6 +2,7 @@ import type { ServerClient } from 'minecraft-protocol';
 import { z } from 'zod';
 
 import { english } from '../locales/en.js';
+import { abortConnection } from './connection-guard.js';
 import { disconnect } from './disconnect.js';
 import { extractChatCode } from './chat-code.js';
 import { sendVerifyCommand } from './verify-command.js';
@@ -104,7 +105,15 @@ export class MinecraftLobby {
     const lifetime = setTimeout((): void => {
       void disconnect(client, english.minecraft.lobbyTimeout, { tone: 'neutral' });
     }, this.config.lifetimeMs);
-    const countdown = setInterval(updateCountdown, 1_000);
+    const countdown = setInterval((): void => {
+      try {
+        updateCountdown();
+      } catch (error: unknown) {
+        // A timer has no caller to catch this, and it must not stop the process.
+        this.leave(client);
+        abortConnection(client, error);
+      }
+    }, 1_000);
     this.timers.set(client, { lifetime, countdown });
     // Vanilla has no camera-lock packet, so look changes are answered with the
     // spawn teleport's fixed yaw/pitch. Correcting on look packets — not a
@@ -158,7 +167,9 @@ export class MinecraftLobby {
     if (this.config.verifyCode !== undefined) {
       const code = extractChatCode(text, this.config.baseDomain);
       if (code !== null) {
-        void this.verifyChatCode(client, code);
+        this.verifyChatCode(client, code).catch((error: unknown): void => {
+          abortConnection(client, error);
+        });
         return;
       }
     }

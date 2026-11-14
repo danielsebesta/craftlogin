@@ -81,9 +81,10 @@ export class VerificationResolver {
       throw new VerificationResolutionError('User persistence failed', { cause: error });
     }
 
-    // The confirmation code exists only for the online-mode join path: skin
-    // and Microsoft verifications are proven in the user's own browser, where
-    // there is no encrypted channel to deliver a second secret through.
+    // Only the online-mode join has an encrypted channel to deliver a second
+    // secret through. Microsoft sign-in happens in the user's own browser. A skin
+    // marker has no channel back to the player at all, which is why clients must
+    // opt in to that method.
     const confirmCode = method === 'minecraft_online_mode' ? generateConfirmationCode() : undefined;
     const completed = await this.verificationStore.complete(
       claim,

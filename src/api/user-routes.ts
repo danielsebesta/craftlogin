@@ -47,7 +47,7 @@ export function registerUserRoutes(
       if (user === undefined) {
         throw new ApiError(401, 'unauthorized', english.api.errors.unauthorized);
       }
-      await reply.send(user);
+      await reply.send({ ...user, clientId: authentication.clientId });
     },
   );
 

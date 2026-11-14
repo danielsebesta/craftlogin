@@ -22,6 +22,7 @@ export interface InteractionPageInput {
   readonly accountName?: string;
   readonly accountAvatarUrl?: string;
   readonly owner?: InteractionOwner;
+  readonly redirectHost?: string;
   readonly skinChallenge?: SkinInteractionChallenge;
   readonly allowsSkinVerification?: boolean;
   readonly allowsOnlineVerification?: boolean;
@@ -120,6 +121,14 @@ export function renderInteractionPage(input: InteractionPageInput): string {
   return renderSignInPage({
     ...(input.accountAvatarUrl === undefined ? {} : { accountAvatarUrl: input.accountAvatarUrl }),
     ...(input.owner === undefined ? {} : { owner: input.owner }),
+    ...(input.redirectHost === undefined
+      ? {}
+      : {
+          redirectDestination: {
+            host: input.redirectHost,
+            label: strings.redirectDestinationLabel,
+          },
+        }),
     accountLabel: strings.signedInAs,
     accountLink: { href: '/account', label: strings.manageAccount },
     ...(input.accountName === undefined ? {} : { accountName: input.accountName }),

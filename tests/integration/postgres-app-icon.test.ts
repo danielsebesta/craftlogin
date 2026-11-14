@@ -74,6 +74,7 @@ describe('PostgreSQL application icons', (): void => {
     await expect(directory.findClient(clientId)).resolves.toEqual({
       iconHash: ICON_HASH,
       name: 'Icon test client',
+      skinVerificationEnabled: false,
       verified: false,
     });
 
