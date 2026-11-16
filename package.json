@@ -75,7 +75,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/debug": "4.1.13",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.6",
     "@types/oidc-provider": "9.13.1",
     "@types/pg": "8.23.1",
     "@vitest/coverage-v8": "5.1.0",
